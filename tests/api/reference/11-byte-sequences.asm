@@ -1,0 +1,30 @@
+const empty: bytes = bytes.new()
+const pushed: bytes = bytes.push(empty, 0x7f)
+const repeated: bytes = bytes.repeat(3, 0xaa)
+const little: bytes = bytes.le(0x12345678, 4)
+const combined: bytes = bytes.concat(pushed, little)
+const inserted: bytes = bytes.insert(combined, 1, b"XY")
+const replaced: bytes = bytes.replace(inserted, 3, 2, b"Z")
+const parsed: bytes = bytes.from_hex("DEadBEEF")
+const final: bytes = bytes.concat(replaced, bytes.concat(repeated, parsed))
+
+assert(len(empty) == 0)
+assert(bytes.eq(pushed, bytes.from_hex("7f")))
+assert(bytes.eq(repeated, bytes.from_hex("aaaaaa")))
+assert(bytes.eq(little, bytes.from_hex("78563412")))
+assert(bytes.eq(combined, bytes.from_hex("7f78563412")))
+assert(bytes.eq(inserted, bytes.from_hex("7f585978563412")))
+assert(bytes.eq(replaced, bytes.from_hex("7f58595a3412")))
+
+assert(bytes.eq(bytes.insert(b"AB", 2, b"C"), b"ABC"))
+assert(bytes.eq(bytes.replace(b"AB", 1, 0, b"-"), b"A-B"))
+assert(bytes.eq(bytes.replace(b"ABCD", 1, 2, bytes.new()), b"AD"))
+
+assert(bytes.eq(bytes.le(0x1234, 1), bytes.from_hex("34")))
+assert(bytes.eq(bytes.le(0x1234, 0), bytes.new()))
+assert(bytes.eq(bytes.from_hex(""), bytes.new()))
+
+assert(bytes.hex(final) == "7f58595a3412aaaaaadeadbeef")
+assert(bytes.eq(bytes.from_hex(bytes.hex(final)), final))
+
+emit.bytes(final)

@@ -1,0 +1,498 @@
+id	category	surface	implementation	fixture	note
+syntax.label	syntax	label:	appendLabel	start:	Source labels resolve through frontend symbols.
+syntax.isa_line	syntax	ISA instruction	.isa_instruction	mov rax, 1	Plain ISA text remains user-facing assembly syntax.
+syntax.const	syntax	const	parseValueDeclaration	const value = 1	Compile-time immutable Meta value declaration.
+syntax.let	syntax	let	parseValueDeclaration	let value = 2	Scoped compile-time mutable Meta value declaration.
+syntax.assignment	syntax	let assignment	parseAssignment	value = value + 1	Updates an existing mutable Meta value in the nearest scope.
+syntax.block	syntax	block	appendMetaBlockStatement	let value = 2	Scoped Meta block lifetime.
+syntax.fn	syntax	fn	parseMetaFunctionStart	fn emit_pair	User Meta function declaration.
+syntax.user_fn_call	syntax	user function call	lowerMetaFunctionCall	emit_pair(2)	User Meta function invocation.
+syntax.fn_return	syntax	fn return type	return_type_name	fn align_up(value: u64, align: u64) -> u64	Return-value Meta function declaration.
+syntax.return	syntax	return	MetaReturnStatement	return value	Returns from a return-value Meta function.
+syntax.user_fn_value_call	syntax	user function value call	call_user_function	align_up(3, 0x200)	User return-value Meta function expression call.
+syntax.if	syntax	if	parseMetaIfStart	if target.bits	Compile-time conditional expansion.
+syntax.if_else	syntax	} else {	looksLikeSameLineMetaElseStart	} else {	Same-line Meta else block after an if body.
+syntax.while	syntax	while	parseMetaWhileStart	while false	Compile-time conditional repetition.
+syntax.defer_let	syntax	defer let	DeferredStatement.value_decl	let cursor = payload	Finalization block local value declaration evaluated after output bytes are sealed.
+syntax.defer_assignment	syntax	defer assignment	DeferredStatement.assignment	cursor = cursor + 1	Finalization block local assignment for bounded sealed-image computation.
+syntax.defer_while	syntax	defer while	DeferredStatement.meta_while	while cursor < end	Finalization block bounded loop for sealed-image byte folds and backfills.
+syntax.for_range	syntax	for range	parseMetaForStart	for i in range	Compile-time range repetition.
+syntax.for_list	syntax	for list	parseMetaForSource	for byte in patched	Compile-time list iteration.
+syntax.defer	syntax	defer	appendMetaDeferStatement	defer {	Finalization block runs after final bytes and fixups are stable.
+syntax.late_layout	syntax	late_layout	appendLateLayoutStatement	late_layout {	Pre-seal late-layout block appends layout-changing format data before final bytes are sealed.
+syntax.struct	syntax	struct	parseStructStart	struct NaturalHeader	Natural layout binary struct.
+syntax.packed_struct	syntax	packed struct	parseStructStart	packed struct Header	Packed binary struct.
+syntax.union	syntax	union	parseStructStart	union ValueBits	C-style layout union with one active literal field.
+syntax.packed_union	syntax	packed union	parseStructStart	packed union PackedOdd	Packed C-style layout union without final natural size padding.
+syntax.struct_literal	syntax	struct literal	parseStructLiteralArgument	Header { tail: 0x4443 }	Compile-time struct value construction.
+syntax.struct_literal_builtin_arg	syntax	struct literal builtin argument	parseStructLiteralArgumentText	pack(Pair {	Inline aggregate literals can be passed directly to expression builtins.
+syntax.multiline_expr_args	syntax	multiline expression arguments	collectContinuedStatement	map.set(	Meta/API expression arguments can span lines when parentheses or aggregate braces are open.
+syntax.nested_struct_literal	syntax	nested struct literal	parseStructLiteralArgument	Point { x: 0x5566	Nested aggregate literal construction for struct and union fields.
+syntax.field_access	syntax	struct field access	evalFieldAccess	hdr.size	Compile-time struct field access.
+syntax.target_bits	syntax	target.bits	evalTargetCondition	target.bits	Target bit-width query.
+syntax.target_isa	syntax	target.isa	evalTargetCondition	target.isa	Target ISA query.
+api.include	api	include	call.callee, "include"	include("inline.inc")	Source-level include, replays each time.
+api.import	api	import	call.callee, "import"	import("defs.inc")	Source-level import-once.
+api.print	api	print	call.callee, "print"	print("diag"	Non-fatal note diagnostic.
+api.warn	api	warn	call.callee, "warn"	warn("careful"	Non-fatal warning diagnostic.
+api.err	api	err	call.callee, "err"	err("stop"	Fatal diagnostic.
+api.assert	api	assert	call.callee, "assert"	assert(true	Compile-time assertion.
+api.isa	api	isa	call.callee, "isa"	isa(	Append generated single-line ISA text as an instruction fragment.
+api.origin	api	origin	call.callee, "origin"	origin(	Base address for labels and current location.
+api.virtual_begin	api	virtual.begin	call.callee, "virtual.begin"	virtual.begin(	Isolated virtual output region start.
+api.virtual_end	api	virtual.end	call.callee, "virtual.end"	virtual.end()	Isolated virtual output region end.
+api.region_begin	api	region.begin	call.callee, "region.begin"	region.begin(	Start a logical output region with explicit origin and raw file offset.
+api.region_file_align	api	region.file_align	call.callee, "region.file_align"	region.file_align(	Align the active region's physical file size without advancing logical addresses.
+api.output_org	api	output.org	call.callee, "output.org"	output.org(	Start a new output area after the active potential file cursor.
+api.output_section	api	output.section	call.callee, "output.section"	output.section(	Start a new output area after the active real file cursor, trimming tail reserve.
+api.store_u8	api	store.u8	storeByteCount(call.callee)	store.u8(	Write one byte into module byte space or deferred final output image.
+api.store_u16	api	store.u16	storeByteCount(call.callee)	store.u16(	Write little-endian u16 into module byte space or deferred final output image.
+api.store_u32	api	store.u32	storeByteCount(call.callee)	store.u32(	Write little-endian u32 into module byte space or deferred final output image.
+api.store_u64	api	store.u64	storeByteCount(call.callee)	store.u64(	Write little-endian u64 into module byte space or deferred final output image.
+api.store_bytes	api	store.bytes	call.callee, "store.bytes"	store.bytes(	Write a byte block into module byte space or deferred final output image.
+api.x86_use16	api	x86.use16	call.callee, "x86.use16"	x86.use16()	x86 16-bit instruction mode.
+api.x86_use32	api	x86.use32	call.callee, "x86.use32"	x86.use32()	x86 32-bit instruction mode.
+api.x86_use64	api	x86.use64	call.callee, "x86.use64"	x86.use64()	x86 64-bit instruction mode.
+api.riscv_use32	api	riscv.use32	call.callee, "riscv.use32"	riscv.use32()	RISC-V xlen 32 mode.
+api.riscv_use64	api	riscv.use64	call.callee, "riscv.use64"	riscv.use64()	RISC-V xlen 64 mode.
+api.emit_u8	api	emit.u8	call.callee, "emit.u8"	emit.u8(	Emit one byte.
+api.emit_u16	api	emit.u16	call.callee, "emit.u16"	emit.u16(	Emit little-endian u16.
+api.emit_u32	api	emit.u32	call.callee, "emit.u32"	emit.u32(	Emit little-endian u32.
+api.emit_u64	api	emit.u64	call.callee, "emit.u64"	emit.u64(	Emit little-endian u64.
+api.db	api	db	dataEmitByteCount	db(	Emit byte values; string and bytes arguments are appended as raw bytes.
+api.dw	api	dw	dataEmitByteCount	dw(	Emit little-endian u16 values.
+api.dd	api	dd	dataEmitByteCount	dd(	Emit little-endian u32 values.
+api.dq	api	dq	dataEmitByteCount	dq(	Emit little-endian u64 values.
+api.emit_bytes	api	emit.bytes	call.callee, "emit.bytes"	emit.bytes(	Emit string or bytes value.
+api.emit_struct	api	emit.struct	call.callee, "emit.struct"	emit.struct(	Pack and emit binary struct value.
+api.reserve	api	reserve	call.callee, "reserve"	reserve(	Reserve logical hole.
+api.rb	api	rb	dataReserveScale	rb(	Reserve byte-sized logical storage.
+api.rw	api	rw	dataReserveScale	rw(	Reserve word-sized logical storage.
+api.rd	api	rd	dataReserveScale	rd(	Reserve dword-sized logical storage.
+api.rq	api	rq	dataReserveScale	rq(	Reserve qword-sized logical storage.
+api.pad	api	pad	call.callee, "pad"	pad(	Emit explicit fill bytes.
+api.pad_to	api	pad_to	call.callee, "pad_to"	pad_to(	Emit fill bytes up to file offset.
+api.align	api	align	call.callee, "align"	align(	Emit fill bytes up to alignment.
+format.format_pe32	format	format_pe32	fn format_pe32	format_pe32(	Create a declarative PE32 plan without caller-supplied section counts or rows.
+format.format_pe64	format	format_pe64	fn format_pe64	format_pe64(	Create a declarative PE64 plan without caller-supplied section counts or rows.
+format.format_section	format	format_section	fn format_section	format_section(	Declare a named section with one purpose and explicit permission flags.
+format.format_entry	format	format_entry	fn format_entry	format_entry(	Bind an executable entry address after the label has been defined.
+format.format_begin	format	format_begin	fn format_begin	format_begin(	Emit headers and exact table-row counts derived from a declarative plan.
+format.format_section_begin	format	format_section_begin	fn format_section_begin	format_section_begin(	Open a declared PE, COFF, or ELF object section by name.
+format.format_section_end	format	format_section_end	fn format_section_end	format_section_end(	Close a declared PE, COFF, or ELF object section by name.
+format.format_finish	format	format_finish	fn format_finish	format_finish(	Finalize entry fields and plan-owned tables after payload emission.
+format.format_pe_exe	format	format_pe_exe	const format_pe_exe	format_pe_exe	Select PE executable output.
+format.format_pe_dll	format	format_pe_dll	const format_pe_dll	format_pe_dll	Select PE DLL output.
+format.format_pe_console	format	format_pe_console	const format_pe_console	format_pe_console	Select the PE console subsystem.
+format.format_pe_gui	format	format_pe_gui	const format_pe_gui	format_pe_gui	Select the PE GUI subsystem.
+format.format_pe_nx	format	format_pe_nx	const format_pe_nx	format_pe_nx	Enable PE NX_COMPAT.
+format.format_pe_aslr_auto	format	format_pe_aslr_auto	const format_pe_aslr_auto	format_pe_aslr_auto	Enable PE ASLR flags when a fixups section is declared.
+format.format_pe_aslr_required	format	format_pe_aslr_required	const format_pe_aslr_required	format_pe_aslr_required	Require a fixups section and enable PE ASLR flags.
+format.format_pe_aslr_disabled	format	format_pe_aslr_disabled	const format_pe_aslr_disabled	format_pe_aslr_disabled	Keep PE ASLR flags disabled.
+format.format_code	format	format_code	const format_code	format_code	Declare a code section purpose.
+format.format_data	format	format_data	const format_data	format_data	Declare an initialized-data section purpose.
+format.format_uninitialized_data	format	format_uninitialized_data	const format_uninitialized_data	format_uninitialized_data	Declare an uninitialized-data section purpose.
+format.format_imports	format	format_imports	const format_imports	format_imports	Declare an import-directory section purpose.
+format.format_exports	format	format_exports	const format_exports	format_exports	Declare an export-directory section purpose.
+format.format_resources	format	format_resources	const format_resources	format_resources	Declare a resource-directory section purpose.
+format.format_fixups	format	format_fixups	const format_fixups	format_fixups	Declare a base-relocation fixups section purpose.
+format.format_readable	format	format_readable	const format_readable	format_readable	Mark a declared section readable.
+format.format_writeable	format	format_writeable	const format_writeable	format_writeable	Mark a declared section writeable.
+format.format_executable	format	format_executable	const format_executable	format_executable	Mark a declared section executable.
+format.format_discardable	format	format_discardable	const format_discardable	format_discardable	Mark a declared section discardable.
+format.format_pe_import_section	format	format_pe_import_section	fn format_pe_import_section	format_pe_import_section(	Emit a declared PE import section and register directory backfill.
+format.format_pe_export_section	format	format_pe_export_section	fn format_pe_export_section	format_pe_export_section(	Emit a declared PE export section and register directory backfill.
+format.format_pe_resource_section	format	format_pe_resource_section	fn format_pe_resource_section	format_pe_resource_section(	Build a declared PE resource section from a compiled resource file.
+format.format_pe_reloc_add	format	format_pe_reloc_add	fn format_pe_reloc_add	format_pe_reloc_add(	Add a PE32 HIGHLOW or PE64 DIR64 relocation from the plan bitness.
+format.format_pe_reloc_section	format	format_pe_reloc_section	fn format_pe_reloc_section	format_pe_reloc_section(	Emit grouped PE base relocations in the declared fixups section.
+format.format_pe_checksum	format	format_pe_checksum	fn format_pe_checksum	format_pe_checksum(	Register a final checksum over the complete PE file image.
+format.format_coff32	format	format_coff32	fn format_coff32	format_coff32(	Create an i386 COFF object plan with automatic section rows.
+format.format_coff64	format	format_coff64	fn format_coff64	format_coff64(	Create an AMD64 COFF object plan with automatic section rows.
+format.format_coff_public	format	format_coff_public	fn format_coff_public	format_coff_public(	Declare a public COFF symbol without caller-supplied symbol indexes.
+format.format_coff_extern	format	format_coff_extern	fn format_coff_extern	format_coff_extern(	Declare an external COFF symbol without caller-supplied symbol indexes.
+format.format_coff_reloc	format	format_coff_reloc	fn format_coff_reloc	format_coff_reloc(	Declare a named COFF relocation without caller-supplied section or symbol indexes.
+format.format_coff_tables	format	format_coff_tables	fn format_coff_tables	format_coff_tables(	Attach COFF symbols and relocations to an object plan.
+format.format_elf32	format	format_elf32	fn format_elf32	format_elf32(	Create an ELF32 executable plan with automatic program-header count.
+format.format_elf64	format	format_elf64	fn format_elf64	format_elf64(	Create an ELF64 executable or PIE plan with automatic program-header count.
+format.format_segment	format	format_segment	fn format_segment	format_segment(	Declare a named ELF LOAD segment and permissions.
+format.format_segment_begin	format	format_segment_begin	fn format_segment_begin	format_segment_begin(	Open a declared ELF LOAD segment by name.
+format.format_segment_end	format	format_segment_end	fn format_segment_end	format_segment_end(	Close a declared ELF LOAD segment and commit its exact physical extent; PT_LOAD p_align remains 4096.
+format.format_elf_exec	format	format_elf_exec	const format_elf_exec	format_elf_exec	Select fixed-address ELF executable output.
+format.format_elf_pie	format	format_elf_pie	const format_elf_pie	format_elf_pie	Select ELF64 position-independent executable output.
+format.format_load	format	format_load	const format_load	format_load	Declare an ELF PT_LOAD segment purpose.
+format.format_elfexe_import_plt	format	format_elfexe_import_plt	fn format_elfexe_import_plt	format_elfexe_import_plt(	Declare an ELF64 executable PLT/GOT import by library and symbol name.
+format.format_elfexe_tables	format	format_elfexe_tables	fn format_elfexe_tables	format_elfexe_tables(	Attach ELF64 executable imports and generate dynamic metadata at finish.
+format.format_elfobj32	format	format_elfobj32	fn format_elfobj32	format_elfobj32(	Create an ELF32 relocatable-object plan with automatic section indexes.
+format.format_elfobj64	format	format_elfobj64	fn format_elfobj64	format_elfobj64(	Create an ELF64 relocatable-object plan with automatic section indexes.
+format.format_elfobj_public	format	format_elfobj_public	fn format_elfobj_public	format_elfobj_public(	Declare a public ELF object symbol without caller-supplied symbol indexes.
+format.format_elfobj_extern	format	format_elfobj_extern	fn format_elfobj_extern	format_elfobj_extern(	Declare an undefined ELF object symbol without caller-supplied symbol indexes.
+format.format_elfobj_reloc	format	format_elfobj_reloc	fn format_elfobj_reloc	format_elfobj_reloc(	Declare an ELF object relocation by section and symbol name.
+format.format_elfobj_tables	format	format_elfobj_tables	fn format_elfobj_tables	format_elfobj_tables(	Attach ELF object symbols and relocations to a plan.
+format.format_elf64_so	format	format_elf64_so	fn format_elf64_so	format_elf64_so(	Create an ELF64 shared-object plan with automatic program and section tables.
+format.format_elfso_export	format	format_elfso_export	fn format_elfso_export	format_elfso_export(	Declare an exported ELF64 shared-object function symbol.
+format.format_elfso_import_plt	format	format_elfso_import_plt	fn format_elfso_import_plt	format_elfso_import_plt(	Declare an ELF64 shared-object PLT/GOT import.
+format.format_elfso_tables	format	format_elfso_tables	fn format_elfso_tables	format_elfso_tables(	Attach ELF64 shared-object exports and imports to a plan.
+format.pe_begin32	format	pe_begin32	fn pe_begin32	pe_begin32(	Emit PE32 DOS stub and NT signature with 32-bit image base.
+format.pe32_exe	format	pe32_exe	fn pe32_exe	pe32_exe(	Advanced PE32 helper with a caller-supplied section count.
+format.pe32_section	format	pe32_section	fn pe32_section	pe32_section(	Advanced PE32 section opener with a caller-supplied row and standard layout math.
+format.pe32_end_section	format	pe32_end_section	fn pe32_end_section	pe32_end_section(	Advanced PE32 section closer with a caller-supplied row.
+format.pe32_finish_text	format	pe32_finish_text	fn pe32_finish_text	pe32_finish_text(	Advanced PE32 text-section finalizer with explicit row and layout labels.
+format.pe32_finish_import_section	format	pe32_finish_import_section	fn pe32_finish_import_section	pe32_finish_import_section(	Advanced PE32 import-section finalizer for an explicit section row.
+format.pe32_finish_export_section	format	pe32_finish_export_section	fn pe32_finish_export_section	pe32_finish_export_section(	Advanced PE32 export-section finalizer for an explicit section row.
+format.pe32_finish_reloc_section	format	pe32_finish_reloc_section	fn pe32_finish_reloc_section	pe32_finish_reloc_section(	Advanced PE32 base-relocation finalizer that enables DYNAMIC_BASE.
+format.pe32_finish_resource_section	format	pe32_finish_resource_section	fn pe32_finish_resource_section	pe32_finish_resource_section(	Advanced PE32 resource-section finalizer for an explicit section row.
+format.pe32_rx	format	pe32_rx	const pe32_rx	pe32_rx	Advanced PE32 readable executable permission preset.
+format.pe_begin_dll32	format	pe_begin_dll32	fn pe_begin_dll32	pe_begin_dll32(	Emit PE32 DLL DOS stub and NT signature with 32-bit image base.
+format.pe_headers32	format	pe_headers32	fn pe_headers32	pe_headers32(	Emit PE32 COFF header, optional header, data directories, and section rows.
+format.pe_headers_dll32	format	pe_headers_dll32	fn pe_headers_dll32	pe_headers_dll32(	Emit PE32 DLL COFF header, optional header, data directories, and section rows.
+format.pe_begin_section32	format	pe_begin_section32	fn pe_begin_section32	pe_begin_section32(	Start a PE32 logical region at RVA-backed VA and raw file offset.
+format.pe_row32_foa	format	pe_row32_foa	fn pe_row32_foa	pe_row32_foa(	Return PE32 section header row file offset for finalizer backfill.
+format.pe_begin64	format	pe_begin64	fn pe_begin64	pe_begin64(	Emit PE64 DOS stub and NT signature with 64-bit image base.
+format.pe64_exe	format	pe64_exe	fn pe64_exe	pe64_exe(	Advanced PE64 helper with a caller-supplied section count.
+format.pe64_section	format	pe64_section	fn pe64_section	pe64_section(	Advanced PE64 section opener with a caller-supplied row and standard layout math.
+format.pe64_end_section	format	pe64_end_section	fn pe64_end_section	pe64_end_section(	Advanced PE64 section closer with a caller-supplied row.
+format.pe64_finish_text	format	pe64_finish_text	fn pe64_finish_text	pe64_finish_text(	Advanced PE64 text-section finalizer with explicit row and layout labels.
+format.pe64_finish_import_section	format	pe64_finish_import_section	fn pe64_finish_import_section	pe64_finish_import_section(	Advanced PE64 import-section finalizer for an explicit section row.
+format.pe64_finish_export_section	format	pe64_finish_export_section	fn pe64_finish_export_section	pe64_finish_export_section(	Advanced PE64 export-section finalizer for an explicit section row.
+format.pe64_finish_reloc_section	format	pe64_finish_reloc_section	fn pe64_finish_reloc_section	pe64_finish_reloc_section(	Advanced PE64 base-relocation finalizer that enables HIGH_ENTROPY_VA and DYNAMIC_BASE.
+format.pe_reloc_add_highlow_at	format	pe_reloc_add_highlow_at	fn pe_reloc_add_highlow_at	pe_reloc_add_highlow_at(	Add a PE32 HIGHLOW relocation by computing the RVA from an explicit section RVA, label address, and section start.
+format.pe_reloc_add_dir64_at	format	pe_reloc_add_dir64_at	fn pe_reloc_add_dir64_at	pe_reloc_add_dir64_at(	Add a PE64 DIR64 relocation by computing the RVA from an explicit section RVA, label address, and section start.
+format.pe_reloc_rva	format	pe_reloc_rva	fn pe_reloc_rva	pe_reloc_rva(	Compute a PE relocation RVA from a section RVA, label address, and section start.
+format.pe_reloc_assert_sorted	format	pe_reloc_assert_sorted	fn pe_reloc_assert_sorted	pe_reloc_assert_sorted(	Assert that explicit PE base-relocation records are sorted by RVA.
+format.pe_reloc_emit_grouped_sorted	format	pe_reloc_emit_grouped_sorted	fn pe_reloc_emit_grouped_sorted	pe_reloc_emit_grouped_sorted(	Emit PE base-relocation page blocks from explicit records already sorted by RVA.
+format.pe_reloc_page_rva	format	pe_reloc_page_rva	fn pe_reloc_page_rva	pe_reloc_page_rva(	Return the 4K-aligned PE base-relocation page RVA for an input RVA.
+format.pe_reloc_type_offset	format	pe_reloc_type_offset	fn pe_reloc_type_offset	pe_reloc_type_offset(	Encode a PE base-relocation type/offset word from an RVA and relocation type.
+format.pe64_finish_resource_section	format	pe64_finish_resource_section	fn pe64_finish_resource_section	pe64_finish_resource_section(	User-facing PE64 resource section finalizer for section row, resource data directory, image size, and initialized-data size.
+format.pe_rx	format	pe_rx	const pe_rx	pe_rx	User-facing PE readable executable section permission preset.
+format.pe_begin_dll64	format	pe_begin_dll64	fn pe_begin_dll64	pe_begin_dll64(	Emit PE64 DLL DOS stub and NT signature with 64-bit image base.
+format.pe_headers64	format	pe_headers64	fn pe_headers64	pe_headers64(	Emit PE64 COFF header, optional header, data directories, and section rows.
+format.pe_headers_dll64	format	pe_headers_dll64	fn pe_headers_dll64	pe_headers_dll64(	Emit PE64 DLL COFF header, optional header, data directories, and section rows.
+format.pe_begin_section64	format	pe_begin_section	fn pe_begin_section	pe_begin_section(	Start a PE64 logical region at RVA-backed VA and raw file offset.
+format.pe_row64_foa	format	pe_row_foa	fn pe_row_foa	pe_row_foa(	Return PE64 section header row file offset for finalizer backfill.
+format.pe_end_section	format	pe_end_section	fn pe_end_section	pe_end_section(	Pad active PE section region to explicit raw size.
+format.pe_opt_checksum_foa	format	pe_opt_checksum_foa	const pe_opt_checksum_foa	pe_opt_checksum_foa	PE optional-header CheckSum field file offset shared by PE32 and PE32+.
+format.pe_checksum_begin	format	pe_checksum_begin	fn pe_checksum_begin	pe_checksum_begin(	Clear OptionalHeader.CheckSum and fold the final physical PE header region.
+format.pe_checksum_add_region	format	pe_checksum_add_region	fn pe_checksum_add_region	pe_checksum_add_region(	Fold one final physical PE section region into the checksum accumulator.
+format.pe_checksum_finish	format	pe_checksum_finish	fn pe_checksum_finish	pe_checksum_finish(	Add final physical file size and store OptionalHeader.CheckSum.
+format.pe_finalize_u32	format	pe_finalize_u32	fn pe_finalize_u32	pe_finalize_u32(	Register a deferred PE u32 patch at a final output address.
+format.pe_finalize_section64	format	pe_finalize_section64	fn pe_finalize_section64	pe_finalize_section64(	Register deferred PE64 section row backfill for name, RVA, raw offset, sizes, and characteristics.
+format.pe_finalize_section32	format	pe_finalize_section32	fn pe_finalize_section32	pe_finalize_section32(	Register deferred PE32 section row backfill for name, RVA, raw offset, sizes, and characteristics.
+format.pe_finalize_entry	format	pe_finalize_entry	fn pe_finalize_entry	pe_finalize_entry(	Register deferred PE entry RVA backfill from a label and section base.
+format.pe_finalize_image_size	format	pe_finalize_image_size	fn pe_finalize_image_size	pe_finalize_image_size(	Register deferred PE SizeOfImage backfill from the last section RVA plus logical extent.
+format.pe_finalize_code_size	format	pe_finalize_code_size	fn pe_finalize_code_size	pe_finalize_code_size(	Register deferred PE SizeOfCode backfill from the physical region file size.
+format.pe_finalize_init_data_size	format	pe_finalize_init_data_size	fn pe_finalize_init_data_size	pe_finalize_init_data_size(	Register deferred PE SizeOfInitializedData backfill from the physical region file size.
+format.pe_finalize_base_of_code	format	pe_finalize_base_of_code	fn pe_finalize_base_of_code	pe_finalize_base_of_code(	Register deferred PE BaseOfCode backfill.
+format.pe_finalize_base_of_data32	format	pe_finalize_base_of_data32	fn pe_finalize_base_of_data32	pe_finalize_base_of_data32(	Register deferred PE32 BaseOfData backfill.
+format.pe_finalize_data_dir64	format	pe_finalize_data_dir64	fn pe_finalize_data_dir64	pe_finalize_data_dir64(	Register deferred PE64 data-directory RVA and size backfill.
+format.pe_finalize_data_dir32	format	pe_finalize_data_dir32	fn pe_finalize_data_dir32	pe_finalize_data_dir32(	Register deferred PE32 data-directory RVA and size backfill.
+format.pe_finalize_import_dir64	format	pe_finalize_import_dir64	fn pe_finalize_import_dir64	pe_finalize_import_dir64(	Register deferred PE64 import directory data-directory backfill.
+format.pe_finalize_import_dir32	format	pe_finalize_import_dir32	fn pe_finalize_import_dir32	pe_finalize_import_dir32(	Register deferred PE32 import directory data-directory backfill.
+format.pe_finalize_export_dir64	format	pe_finalize_export_dir64	fn pe_finalize_export_dir64	pe_finalize_export_dir64(	Register deferred PE64 export directory data-directory backfill.
+format.pe_finalize_export_dir32	format	pe_finalize_export_dir32	fn pe_finalize_export_dir32	pe_finalize_export_dir32(	Register deferred PE32 export directory data-directory backfill.
+format.pe_finalize_resource_dir64	format	pe_finalize_resource_dir64	fn pe_finalize_resource_dir64	pe_finalize_resource_dir64(	Register deferred PE64 resource directory data-directory backfill.
+format.pe_finalize_resource_dir32	format	pe_finalize_resource_dir32	fn pe_finalize_resource_dir32	pe_finalize_resource_dir32(	Register deferred PE32 resource directory data-directory backfill.
+format.pe_resource_directory	format	pe_resource_directory	fn pe_resource_directory	pe_resource_directory(	Emit one PE IMAGE_RESOURCE_DIRECTORY row.
+format.pe_resource_directory_entry	format	pe_resource_directory_entry	fn pe_resource_directory_entry	pe_resource_directory_entry(	Emit one PE IMAGE_RESOURCE_DIRECTORY_ENTRY row.
+format.pe_resource_data_entry	format	pe_resource_data_entry	fn pe_resource_data_entry	pe_resource_data_entry(	Emit one PE IMAGE_RESOURCE_DATA_ENTRY row.
+format.pe_resource_emit_single_numeric	format	pe_resource_emit_single_numeric	fn pe_resource_emit_single_numeric	pe_resource_emit_single_numeric(	Emit a minimal numeric type/id/language PE resource tree.
+format.pe_resource_emit_from_res	format	pe_resource_emit_from_res	fn pe_resource_emit_from_res	pe_resource_emit_from_res(	Parse one compiled .res file and emit a deterministic PE type/name/language resource tree.
+format.pe_resource_finish_single_numeric	format	pe_resource_finish_single_numeric	fn pe_resource_finish_single_numeric	pe_resource_finish_single_numeric(	Finalize the minimal PE resource data entry for an explicit numeric resource tree.
+format.pe_import_new	format	pe_import_new	fn pe_import_new	pe_import_new(	Create an immutable PE import set.
+format.pe_import_use32	format	pe_import_use32	fn pe_import_use32	pe_import_use32(	Add a named PE32 import using the function name as the IAT slot label.
+format.pe_import_use64	format	pe_import_use64	fn pe_import_use64	pe_import_use64(	Add a named PE64 import using the function name as the IAT slot label.
+format.pe_import_use32_as	format	pe_import_use32_as	fn pe_import_use32_as	pe_import_use32_as(	Add a named PE32 import with an explicit IAT slot label.
+format.pe_import_use64_as	format	pe_import_use64_as	fn pe_import_use64_as	pe_import_use64_as(	Add a named PE64 import with an explicit IAT slot label.
+format.pe_import_use32_ordinal_as	format	pe_import_use32_ordinal_as	fn pe_import_use32_ordinal_as	pe_import_use32_ordinal_as(	Add a PE32 ordinal import with an explicit IAT slot label.
+format.pe_import_use64_ordinal_as	format	pe_import_use64_ordinal_as	fn pe_import_use64_ordinal_as	pe_import_use64_ordinal_as(	Add a PE64 ordinal import with an explicit IAT slot label.
+format.pe_import_descriptor	format	pe_import_descriptor	fn pe_import_descriptor	pe_import_descriptor(	Emit one PE import descriptor row.
+format.pe_import_descriptor_null	format	pe_import_descriptor_null	fn pe_import_descriptor_null	pe_import_descriptor_null(	Emit the terminating null PE import descriptor row.
+format.pe_import_thunk32_name	format	pe_import_thunk32_name	fn pe_import_thunk32_name	pe_import_thunk32_name(	Emit a PE32 name import thunk.
+format.pe_import_thunk64_name	format	pe_import_thunk64_name	fn pe_import_thunk64_name	pe_import_thunk64_name(	Emit a PE64 name import thunk.
+format.pe_import_thunk32_ordinal	format	pe_import_thunk32_ordinal	fn pe_import_thunk32_ordinal	pe_import_thunk32_ordinal(	Emit a PE32 ordinal import thunk.
+format.pe_import_thunk64_ordinal	format	pe_import_thunk64_ordinal	fn pe_import_thunk64_ordinal	pe_import_thunk64_ordinal(	Emit a PE64 ordinal import thunk.
+format.pe_import_thunk32_null	format	pe_import_thunk32_null	fn pe_import_thunk32_null	pe_import_thunk32_null(	Emit a terminating PE32 null thunk.
+format.pe_import_thunk64_null	format	pe_import_thunk64_null	fn pe_import_thunk64_null	pe_import_thunk64_null(	Emit a terminating PE64 null thunk.
+format.pe_import_hint_name	format	pe_import_hint_name	fn pe_import_hint_name	pe_import_hint_name(	Emit a PE hint/name import entry.
+format.pe_import_emit32	format	pe_import_emit32	fn pe_import_emit32	pe_import_emit32(	Emit PE32 import lookup, address, name, DLL, and descriptor data for an import set.
+format.pe_import_emit64	format	pe_import_emit64	fn pe_import_emit64	pe_import_emit64(	Emit PE64 import lookup, address, name, DLL, and descriptor data for an import set.
+format.pe_import_descriptors	format	pe_import_descriptors	label.define("pe_import_descriptors")	pe_import_descriptors	Generated label for the start of the PE import descriptor table.
+format.pe_export_new	format	pe_export_new	fn pe_export_new	pe_export_new(	Create an immutable PE export list.
+format.pe_export_use32	format	pe_export_use32	fn pe_export_use32	pe_export_use32(	Add a PE32 export mapping from target label name to public export name.
+format.pe_export_use64	format	pe_export_use64	fn pe_export_use64	pe_export_use64(	Add a PE64 export mapping from target label name to public export name.
+format.pe_export_emit32	format	pe_export_emit32	fn pe_export_emit32	pe_export_emit32(	Emit PE32 export directory, address table, name table, ordinal table, and names.
+format.pe_export_emit64	format	pe_export_emit64	fn pe_export_emit64	pe_export_emit64(	Emit PE64 export directory, address table, name table, ordinal table, and names.
+format.pe_export_directory	format	pe_export_directory	fn pe_export_directory	pe_export_directory(	Emit one PE IMAGE_EXPORT_DIRECTORY row.
+format.pe_export_label_rva	format	pe_export_label_rva	fn pe_export_label_rva	pe_export_label_rva(	Convert a generated PE export label to an RVA inside .edata.
+format.pe_export_name_label	format	pe_export_name_label	fn pe_export_name_label	pe_export_name_label(	Generate deterministic labels for PE export name strings.
+format.align_up	format	align_up	fn align_up	align_up(	Align an integer up to the requested boundary for format layout calculations.
+format.elfexe_begin32	format	elfexe_begin32	fn elfexe_begin32	elfexe_begin32(	Emit ELF32 executable header and program header placeholders.
+format.elfexe_begin64	format	elfexe_begin64	fn elfexe_begin64	elfexe_begin64(	Emit ELF64 executable header and program header placeholders.
+format.elfexe_begin_segment32	format	elfexe_begin_segment32	fn elfexe_begin_segment32	elfexe_begin_segment32(	Start an ELF32 PT_LOAD logical region at explicit FOA-backed VA.
+format.elfexe_begin_segment64	format	elfexe_begin_segment64	fn elfexe_begin_segment64	elfexe_begin_segment64(	Start an ELF64 PT_LOAD logical region at explicit FOA-backed VA.
+format.elfexe_end_segment	format	elfexe_end_segment	fn elfexe_end_segment	elfexe_end_segment(	Pad active ELF segment region to explicit raw size.
+format.elfexe_import_new	format	elfexe_import_new	fn elfexe_import_new	elfexe_import_new(	Create an immutable ELF executable import list.
+format.elfexe_import_use64	format	elfexe_import_use64	fn elfexe_import_use64	elfexe_import_use64(	Add an ELF64 executable import using the symbol name as the slot label.
+format.elfexe_import_use64_as	format	elfexe_import_use64_as	fn elfexe_import_use64_as	elfexe_import_use64_as(	Add an ELF64 executable import with an explicit slot label.
+format.elfexe_import_use64_plt	format	elfexe_import_use64_plt	fn elfexe_import_use64_plt	elfexe_import_use64_plt(	Add an ELF64 executable lazy import using derived GOTPLT and PLT labels.
+format.elfexe_import_use64_plt_as	format	elfexe_import_use64_plt_as	fn elfexe_import_use64_plt_as	elfexe_import_use64_plt_as(	Add an ELF64 executable lazy import with explicit GOTPLT and PLT labels.
+format.elfexe_import_rel32	format	elfexe_import_rel32	fn elfexe_import_rel32	elfexe_import_rel32(	Return an x86-64 rel32 displacement for ELF executable PLT stubs.
+format.elfexe_import_plt_size	format	elfexe_import_plt_size	fn elfexe_import_plt_size	elfexe_import_plt_size(	Compute ELF64 executable PLT table size for lazy imports.
+format.elfexe_import_gotplt_size	format	elfexe_import_gotplt_size	fn elfexe_import_gotplt_size	elfexe_import_gotplt_size(	Compute ELF64 executable GOTPLT table size for lazy imports.
+format.elfexe_import_rela_plt_size	format	elfexe_import_rela_plt_size	fn elfexe_import_rela_plt_size	elfexe_import_rela_plt_size(	Compute ELF64 executable .rela.plt table size for lazy imports.
+format.elfexe_import_dynamic_plt_size	format	elfexe_import_dynamic_plt_size	fn elfexe_import_dynamic_plt_size	elfexe_import_dynamic_plt_size(	Compute ELF64 executable dynamic table size with PLT/GOT lazy import rows.
+format.elfexe_import_r_info64	format	elfexe_import_r_info64	fn elfexe_import_r_info64	elfexe_import_r_info64(	Pack ELF64 executable import symbol index and relocation type into r_info.
+format.elfexe_import_rela64	format	elfexe_import_rela64	fn elfexe_import_rela64	elfexe_import_rela64(	Emit an ELF64 executable RELA dynamic relocation entry.
+format.elfexe_import_dyn64	format	elfexe_import_dyn64	fn elfexe_import_dyn64	elfexe_import_dyn64(	Emit an ELF64 executable dynamic table entry.
+format.elfexe_import_sym64	format	elfexe_import_sym64	fn elfexe_import_sym64	elfexe_import_sym64(	Emit an ELF64 executable dynamic symbol entry.
+format.elfexe_import_st_info	format	elfexe_import_st_info	fn elfexe_import_st_info	elfexe_import_st_info(	Pack ELF symbol binding and type into st_info.
+format.elfexe_import_emit_slots64	format	elfexe_import_emit_slots64	fn elfexe_import_emit_slots64	elfexe_import_emit_slots64(	Emit writable ELF64 executable import slots.
+format.elfexe_import_emit_plt64	format	elfexe_import_emit_plt64	fn elfexe_import_emit_plt64	elfexe_import_emit_plt64(	Emit ELF64 executable x86-64 PLT stubs for lazy imports.
+format.elfexe_import_emit_gotplt64	format	elfexe_import_emit_gotplt64	fn elfexe_import_emit_gotplt64	elfexe_import_emit_gotplt64(	Emit ELF64 executable GOTPLT reserved entries and lazy import slots.
+format.elfexe_import_emit_dynstr64	format	elfexe_import_emit_dynstr64	fn elfexe_import_emit_dynstr64	elfexe_import_emit_dynstr64(	Emit ELF64 executable import dynamic string table contents.
+format.elfexe_import_emit_dynsym64	format	elfexe_import_emit_dynsym64	fn elfexe_import_emit_dynsym64	elfexe_import_emit_dynsym64(	Emit ELF64 executable import dynamic symbol entries.
+format.elfexe_import_emit_rela64	format	elfexe_import_emit_rela64	fn elfexe_import_emit_rela64	elfexe_import_emit_rela64(	Emit ELF64 executable import RELA table entries.
+format.elfexe_import_emit_rela_plt64	format	elfexe_import_emit_rela_plt64	fn elfexe_import_emit_rela_plt64	elfexe_import_emit_rela_plt64(	Emit ELF64 executable .rela.plt R_X86_64_JUMP_SLOT relocation entries.
+format.elfexe_import_emit_dynamic64	format	elfexe_import_emit_dynamic64	fn elfexe_import_emit_dynamic64	elfexe_import_emit_dynamic64(	Emit ELF64 executable import dynamic table entries.
+format.elfexe_import_emit_dynamic64_plt	format	elfexe_import_emit_dynamic64_plt	fn elfexe_import_emit_dynamic64_plt	elfexe_import_emit_dynamic64_plt(	Emit ELF64 executable dynamic rows including PLTGOT, PLTRELSZ, PLTREL, and JMPREL.
+format.elfexe_import_hash	format	elfexe_import_hash	fn elfexe_import_hash	elfexe_import_hash(	Emit a minimal SYSV hash table for ELF64 executable imports.
+format.elfexe_import_hash_size	format	elfexe_import_hash_size	fn elfexe_import_hash_size	elfexe_import_hash_size(	Compute ELF64 executable import SYSV hash table size.
+format.elfexe_import_dynstr_size	format	elfexe_import_dynstr_size	fn elfexe_import_dynstr_size	elfexe_import_dynstr_size(	Compute ELF64 executable import dynamic string table size.
+format.elfexe_import_names_size	format	elfexe_import_names_size	fn elfexe_import_names_size	elfexe_import_names_size(	Compute combined ELF64 executable import symbol-name string size.
+format.elfexe_import_libraries	format	elfexe_import_libraries	fn elfexe_import_libraries	elfexe_import_libraries(	Return the unique ELF64 executable needed-library list for an import set.
+format.elf32_phdr_foa	format	elf32_phdr_foa	fn elf32_phdr_foa	elf32_phdr_foa(	Return ELF32 program header file offset for finalizer backfill.
+format.elf64_phdr_foa	format	elf64_phdr_foa	fn elf64_phdr_foa	elf64_phdr_foa(	Return ELF64 program header file offset for finalizer backfill.
+format.elf32_first_segment_foa	format	elf32_first_segment_foa	fn elf32_first_segment_foa	elf32_first_segment_foa(	Compute first ELF32 load segment file offset after headers.
+format.elf64_first_segment_foa	format	elf64_first_segment_foa	fn elf64_first_segment_foa	elf64_first_segment_foa(	Compute first ELF64 load segment file offset after headers.
+format.elf_segment_vaddr	format	elf_segment_vaddr	fn elf_segment_vaddr	elf_segment_vaddr(	Convert ELF base plus file offset into simple flat executable VA.
+format.elfexe_finalize_entry32	format	elfexe_finalize_entry32	fn elfexe_finalize_entry32	elfexe_finalize_entry32(	Register deferred ELF32 executable entry address backfill.
+format.elfexe_finalize_entry64	format	elfexe_finalize_entry64	fn elfexe_finalize_entry64	elfexe_finalize_entry64(	Register deferred ELF64 executable entry address backfill.
+format.elfexe_finalize_phdr32	format	elfexe_finalize_phdr32	fn elfexe_finalize_phdr32	elfexe_finalize_phdr32(	Register deferred ELF32 program-header row backfill.
+format.elfexe_finalize_phdr64	format	elfexe_finalize_phdr64	fn elfexe_finalize_phdr64	elfexe_finalize_phdr64(	Register deferred ELF64 program-header row backfill.
+format.elfexe_finalize_region32	format	elfexe_finalize_region32	fn elfexe_finalize_region32	elfexe_finalize_region32(	Register deferred ELF32 non-LOAD program-header backfill from file-backed region facts.
+format.elfexe_finalize_region64	format	elfexe_finalize_region64	fn elfexe_finalize_region64	elfexe_finalize_region64(	Register deferred ELF64 non-LOAD program-header backfill from file-backed region facts.
+format.elfexe_finalize_load32	format	elfexe_finalize_load32	fn elfexe_finalize_load32	elfexe_finalize_load32(	Register deferred ELF32 PT_LOAD row backfill from a segment extent.
+format.elfexe_finalize_load64	format	elfexe_finalize_load64	fn elfexe_finalize_load64	elfexe_finalize_load64(	Register deferred ELF64 PT_LOAD row backfill from a segment extent.
+format.elf32_exe	format	elf32_exe	fn elf32_exe	elf32_exe(	User-facing ELF32 executable facade that emits ELF header and program-header placeholders.
+format.elf32_first_foa	format	elf32_first_foa	fn elf32_first_foa	elf32_first_foa(	User-facing ELF32 first load-segment file offset helper for a known segment count.
+format.elf32_segment	format	elf32_segment	fn elf32_segment	elf32_segment(	User-facing ELF32 PT_LOAD region opener at a file-offset-backed virtual address.
+format.elf32_end_segment	format	elf32_end_segment	fn elf32_end_segment	elf32_end_segment(	User-facing ELF32 segment closer that aligns file bytes automatically.
+format.elf32_finish_load	format	elf32_finish_load	fn elf32_finish_load	elf32_finish_load(	User-facing ELF32 load-segment finalizer with p_memsz covering both file-backed bytes and logical reserve.
+format.elf32_finish_note	format	elf32_finish_note	fn elf32_finish_note	elf32_finish_note(	User-facing ELF32 PT_NOTE finalizer from file-backed region facts.
+format.elf32_finish_gnu_stack	format	elf32_finish_gnu_stack	fn elf32_finish_gnu_stack	elf32_finish_gnu_stack(	User-facing ELF32 PT_GNU_STACK finalizer with explicit current file offset and zero sizes.
+format.elf32_finish_gnu_eh_frame	format	elf32_finish_gnu_eh_frame	fn elf32_finish_gnu_eh_frame	elf32_finish_gnu_eh_frame(	User-facing ELF32 PT_GNU_EH_FRAME finalizer from file-backed region facts.
+format.elf32_finish_gnu_relro	format	elf32_finish_gnu_relro	fn elf32_finish_gnu_relro	elf32_finish_gnu_relro(	User-facing ELF32 PT_GNU_RELRO finalizer from file-backed region facts.
+format.elf32_rx	format	elf32_rx	const elf32_rx	elf32_rx	User-facing ELF32 readable executable segment permission preset.
+format.elf64_exe	format	elf64_exe	fn elf64_exe	elf64_exe(	User-facing ELF64 executable facade that emits ELF header and program-header placeholders.
+format.elf64_pie	format	elf64_pie	fn elf64_pie	elf64_pie(	User-facing ELF64 position-independent executable facade using ET_DYN and base-relative virtual addresses.
+format.elf64_pie_first_foa	format	elf64_pie_first_foa	fn elf64_pie_first_foa	elf64_pie_first_foa(	Return the first ELF64 PIE load-segment file offset for a known segment count.
+format.elf64_pie_segment	format	elf64_pie_segment	fn elf64_pie_segment	elf64_pie_segment(	Open an ELF64 PIE PT_LOAD region whose virtual address equals its file offset.
+format.elf64_pie_end_segment	format	elf64_pie_end_segment	fn elf64_pie_end_segment	elf64_pie_end_segment(	Close and file-align the active ELF64 PIE segment.
+format.elf64_pie_finish_load	format	elf64_pie_finish_load	fn elf64_pie_finish_load	elf64_pie_finish_load(	Backfill the ELF64 PIE entry and PT_LOAD row with p_memsz covering file-backed bytes and logical reserve.
+format.elf64_first_foa	format	elf64_first_foa	fn elf64_first_foa	elf64_first_foa(	User-facing ELF64 first load-segment file offset helper for a known segment count.
+format.elf64_segment	format	elf64_segment	fn elf64_segment	elf64_segment(	User-facing ELF64 PT_LOAD region opener at a file-offset-backed virtual address.
+format.elf64_end_segment	format	elf64_end_segment	fn elf64_end_segment	elf64_end_segment(	User-facing ELF64 segment closer that aligns file bytes automatically.
+format.elf64_finish_load	format	elf64_finish_load	fn elf64_finish_load	elf64_finish_load(	User-facing ELF64 load-segment finalizer with p_memsz covering both file-backed bytes and logical reserve.
+format.elf64_finish_note	format	elf64_finish_note	fn elf64_finish_note	elf64_finish_note(	User-facing ELF64 PT_NOTE finalizer from file-backed region facts.
+format.elf64_finish_gnu_stack	format	elf64_finish_gnu_stack	fn elf64_finish_gnu_stack	elf64_finish_gnu_stack(	User-facing ELF64 PT_GNU_STACK finalizer with explicit current file offset and zero sizes.
+format.elf64_finish_gnu_eh_frame	format	elf64_finish_gnu_eh_frame	fn elf64_finish_gnu_eh_frame	elf64_finish_gnu_eh_frame(	User-facing ELF64 PT_GNU_EH_FRAME finalizer from file-backed region facts.
+format.elf64_finish_gnu_relro	format	elf64_finish_gnu_relro	fn elf64_finish_gnu_relro	elf64_finish_gnu_relro(	User-facing ELF64 PT_GNU_RELRO finalizer from file-backed region facts.
+format.elf_rx	format	elf_rx	const elf_rx	elf_rx	User-facing ELF readable executable segment permission preset.
+format.elfobj_begin32	format	elfobj_begin32	fn elfobj_begin32	elfobj_begin32(	Emit an ELF32 relocatable object header.
+format.elfobj_begin64	format	elfobj_begin64	fn elfobj_begin64	elfobj_begin64(	Emit an ELF64 relocatable object header.
+format.elfobj_begin32_deferred	format	elfobj_begin32_deferred	fn elfobj_begin32_deferred	elfobj_begin32_deferred(	Emit an ELF32 relocatable object header with section-header fields patched later.
+format.elfobj_begin64_deferred	format	elfobj_begin64_deferred	fn elfobj_begin64_deferred	elfobj_begin64_deferred(	Emit an ELF64 relocatable object header with section-header fields patched later.
+format.elfobj_begin_section	format	elfobj_begin_section	fn elfobj_begin_section	elfobj_begin_section(	Start an ELF object section raw logical region.
+format.elfobj_end_section	format	elfobj_end_section	fn elfobj_end_section	elfobj_end_section(	Pad active ELF object section region to explicit raw size.
+format.elfobj_patch_header32	format	elfobj_patch_header32	fn elfobj_patch_header32	elfobj_patch_header32(	Register deferred ELF32 object section-header offset/count backfill.
+format.elfobj_patch_header64	format	elfobj_patch_header64	fn elfobj_patch_header64	elfobj_patch_header64(	Register deferred ELF64 object section-header offset/count backfill.
+format.elfobj_shdr32	format	elfobj_shdr32	fn elfobj_shdr32	elfobj_shdr32(	Emit an ELF32 section header row.
+format.elfobj_shdr64	format	elfobj_shdr64	fn elfobj_shdr64	elfobj_shdr64(	Emit an ELF64 section header row.
+format.elfobj_sym32	format	elfobj_sym32	fn elfobj_sym32	elfobj_sym32(	Emit an ELF32 symbol table entry.
+format.elfobj_sym64	format	elfobj_sym64	fn elfobj_sym64	elfobj_sym64(	Emit an ELF64 symbol table entry.
+format.elfobj_rel32	format	elfobj_rel32	fn elfobj_rel32	elfobj_rel32(	Emit an ELF32 REL relocation entry.
+format.elfobj_rela64	format	elfobj_rela64	fn elfobj_rela64	elfobj_rela64(	Emit an ELF64 RELA relocation entry.
+format.elfobj_reloc_offset	format	elfobj_reloc_offset	fn elfobj_reloc_offset	elfobj_reloc_offset(	Return an ELF object section-relative relocation offset from a section start and label.
+format.elfobj32_rel_count	format	elfobj32_rel_count	fn elfobj32_rel_count	elfobj32_rel_count(	Count record-aligned ELF32 REL relocation entries between two labels.
+format.elfobj64_rela_count	format	elfobj64_rela_count	fn elfobj64_rela_count	elfobj64_rela_count(	Count record-aligned ELF64 RELA relocation entries between two labels.
+format.elfobj_rel32_at	format	elfobj_rel32_at	fn elfobj_rel32_at	elfobj_rel32_at(	Emit an ELF32 REL relocation entry at a label inside a section.
+format.elfobj_rel32_386_32_at	format	elfobj_rel32_386_32_at	fn elfobj_rel32_386_32_at	elfobj_rel32_386_32_at(	Emit an ELF32 R_386_32 relocation entry at a label inside a section.
+format.elfobj_rel32_386_pc32_at	format	elfobj_rel32_386_pc32_at	fn elfobj_rel32_386_pc32_at	elfobj_rel32_386_pc32_at(	Emit an ELF32 R_386_PC32 relocation entry at a label inside a section.
+format.elfobj_rela64_at	format	elfobj_rela64_at	fn elfobj_rela64_at	elfobj_rela64_at(	Emit an ELF64 RELA relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_64_at	format	elfobj_rela64_x86_64_64_at	fn elfobj_rela64_x86_64_64_at	elfobj_rela64_x86_64_64_at(	Emit an ELF64 R_X86_64_64 relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_pc32_at	format	elfobj_rela64_x86_64_pc32_at	fn elfobj_rela64_x86_64_pc32_at	elfobj_rela64_x86_64_pc32_at(	Emit an ELF64 R_X86_64_PC32 relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_plt32_at	format	elfobj_rela64_x86_64_plt32_at	fn elfobj_rela64_x86_64_plt32_at	elfobj_rela64_x86_64_plt32_at(	Emit an ELF64 R_X86_64_PLT32 relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_gotpcrel_at	format	elfobj_rela64_x86_64_gotpcrel_at	fn elfobj_rela64_x86_64_gotpcrel_at	elfobj_rela64_x86_64_gotpcrel_at(	Emit an ELF64 R_X86_64_GOTPCREL relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_32_at	format	elfobj_rela64_x86_64_32_at	fn elfobj_rela64_x86_64_32_at	elfobj_rela64_x86_64_32_at(	Emit an ELF64 R_X86_64_32 relocation entry at a label inside a section.
+format.elfobj_rela64_x86_64_32s_at	format	elfobj_rela64_x86_64_32s_at	fn elfobj_rela64_x86_64_32s_at	elfobj_rela64_x86_64_32s_at(	Emit an ELF64 R_X86_64_32S relocation entry at a label inside a section.
+format.elfobj_st_info	format	elfobj_st_info	fn elfobj_st_info	elfobj_st_info(	Pack ELF symbol binding and type into st_info.
+format.elfobj_r_info32	format	elfobj_r_info32	fn elfobj_r_info32	elfobj_r_info32(	Pack ELF32 symbol index and relocation type into r_info.
+format.elfobj_r_info64	format	elfobj_r_info64	fn elfobj_r_info64	elfobj_r_info64(	Pack ELF64 symbol index and relocation type into r_info.
+format.elfobj32_shdr_foa	format	elfobj32_shdr_foa	fn elfobj32_shdr_foa	elfobj32_shdr_foa(	Return an ELF32 section header file offset.
+format.elfobj64_shdr_foa	format	elfobj64_shdr_foa	fn elfobj64_shdr_foa	elfobj64_shdr_foa(	Return an ELF64 section header file offset.
+format.elfobj32_rel_foa	format	elfobj32_rel_foa	fn elfobj32_rel_foa	elfobj32_rel_foa(	Return an ELF32 REL relocation file offset.
+format.elfobj64_rela_foa	format	elfobj64_rela_foa	fn elfobj64_rela_foa	elfobj64_rela_foa(	Return an ELF64 RELA relocation file offset.
+format.elfso_begin64	format	elfso_begin64	fn elfso_begin64	elfso_begin64(	Emit an ELF64 ET_DYN shared object header and program header placeholders.
+format.elfso_begin_region	format	elfso_begin_region	fn elfso_begin_region	elfso_begin_region(	Start an ELF shared object logical region at an explicit file offset.
+format.elfso_end_region	format	elfso_end_region	fn elfso_end_region	elfso_end_region(	Pad the active ELF shared object region to its explicit raw size.
+format.elfso_phdr64	format	elfso_phdr64	fn elfso_phdr64	elfso_phdr64(	Emit an ELF64 shared object program header row.
+format.elfso_shdr64	format	elfso_shdr64	fn elfso_shdr64	elfso_shdr64(	Emit an ELF64 shared object section header row.
+format.elfso_sym64	format	elfso_sym64	fn elfso_sym64	elfso_sym64(	Emit an ELF64 dynamic symbol table entry.
+format.elfso_dyn64	format	elfso_dyn64	fn elfso_dyn64	elfso_dyn64(	Emit an ELF64 dynamic table entry.
+format.elfso_hash_one	format	elfso_hash_one	fn elfso_hash_one	elfso_hash_one(	Emit a minimal SYSV hash table for one exported symbol.
+format.elfso_align_up	format	elfso_align_up	fn elfso_align_up	elfso_align_up(	Align an ELF shared object file offset upward.
+format.elfso64_phdr_foa	format	elfso64_phdr_foa	fn elfso64_phdr_foa	elfso64_phdr_foa(	Return an ELF64 SO program header file offset for finalizer backfill.
+format.elfso64_shdr_foa	format	elfso64_shdr_foa	fn elfso64_shdr_foa	elfso64_shdr_foa(	Return an ELF64 SO section header file offset.
+format.elfso64_dyn_foa	format	elfso64_dyn_foa	fn elfso64_dyn_foa	elfso64_dyn_foa(	Return an ELF64 SO dynamic entry file offset for finalizer checks.
+format.elfso_st_info	format	elfso_st_info	fn elfso_st_info	elfso_st_info(	Pack ELF symbol binding and type into st_info for dynamic symbols.
+format.elfso_finalize_phdr64	format	elfso_finalize_phdr64	fn elfso_finalize_phdr64	elfso_finalize_phdr64(	Register deferred ELF64 shared-object program-header row backfill.
+format.elfso_finalize_load64	format	elfso_finalize_load64	fn elfso_finalize_load64	elfso_finalize_load64(	Register deferred ELF64 shared-object load segment backfill.
+format.elfso_finalize_dynamic64	format	elfso_finalize_dynamic64	fn elfso_finalize_dynamic64	elfso_finalize_dynamic64(	Register deferred ELF64 shared-object PT_DYNAMIC row backfill.
+format.elf_export_new	format	elf_export_new	fn elf_export_new	elf_export_new(	Create an immutable ELF64 SO export list.
+format.elf_export_use64	format	elf_export_use64	fn elf_export_use64	elf_export_use64(	Add an ELF64 SO exported function symbol.
+format.elf_export_emit_dynsym64	format	elf_export_emit_dynsym64	fn elf_export_emit_dynsym64	elf_export_emit_dynsym64(	Emit ELF64 SO dynamic symbol entries for exports.
+format.elf_export_emit_dynstr64	format	elf_export_emit_dynstr64	fn elf_export_emit_dynstr64	elf_export_emit_dynstr64(	Emit ELF64 SO dynamic string table contents for exports and SONAME.
+format.elf_export_emit_dynamic64	format	elf_export_emit_dynamic64	fn elf_export_emit_dynamic64	elf_export_emit_dynamic64(	Emit ELF64 SO export-only dynamic table entries.
+format.elf_export_hash	format	elf_export_hash	fn elf_export_hash	elf_export_hash(	Emit a minimal SYSV hash table for exported ELF64 SO symbols.
+format.elf_export_hash_size	format	elf_export_hash_size	fn elf_export_hash_size	elf_export_hash_size(	Compute ELF64 SO export SYSV hash table size.
+format.elf_export_dynstr_size	format	elf_export_dynstr_size	fn elf_export_dynstr_size	elf_export_dynstr_size(	Compute ELF64 SO export dynamic string table size.
+format.elf_export_names_size	format	elf_export_names_size	fn elf_export_names_size	elf_export_names_size(	Compute combined ELF64 SO export symbol-name string size.
+format.elfso_import_new	format	elfso_import_new	fn elfso_import_new	elfso_import_new(	Create an immutable ELF SO import list.
+format.elfso_import_use64	format	elfso_import_use64	fn elfso_import_use64	elfso_import_use64(	Add an ELF64 SO import using the symbol name as the slot label.
+format.elfso_import_use64_as	format	elfso_import_use64_as	fn elfso_import_use64_as	elfso_import_use64_as(	Add an ELF64 SO import with an explicit slot label.
+format.elfso_import_use64_plt	format	elfso_import_use64_plt	fn elfso_import_use64_plt	elfso_import_use64_plt(	Add an ELF64 SO lazy import using derived GOTPLT and PLT labels.
+format.elfso_import_use64_plt_as	format	elfso_import_use64_plt_as	fn elfso_import_use64_plt_as	elfso_import_use64_plt_as(	Add an ELF64 SO lazy import with explicit GOTPLT and PLT labels.
+format.elfso_import_rel32	format	elfso_import_rel32	fn elfso_import_rel32	elfso_import_rel32(	Return an x86-64 rel32 displacement for ELF SO PLT stubs.
+format.elfso_import_plt_size	format	elfso_import_plt_size	fn elfso_import_plt_size	elfso_import_plt_size(	Compute ELF64 SO PLT table size for lazy imports.
+format.elfso_import_gotplt_size	format	elfso_import_gotplt_size	fn elfso_import_gotplt_size	elfso_import_gotplt_size(	Compute ELF64 SO GOTPLT table size for lazy imports.
+format.elfso_import_rela_plt_size	format	elfso_import_rela_plt_size	fn elfso_import_rela_plt_size	elfso_import_rela_plt_size(	Compute ELF64 SO .rela.plt table size for lazy imports.
+format.elfso_import_dynamic_plt_size	format	elfso_import_dynamic_plt_size	fn elfso_import_dynamic_plt_size	elfso_import_dynamic_plt_size(	Compute ELF64 SO dynamic table size with PLT/GOT lazy import rows.
+format.elfso_import_r_info64	format	elfso_import_r_info64	fn elfso_import_r_info64	elfso_import_r_info64(	Pack ELF64 symbol index and relocation type into r_info.
+format.elfso_import_rela64	format	elfso_import_rela64	fn elfso_import_rela64	elfso_import_rela64(	Emit an ELF64 SO RELA dynamic relocation entry.
+format.elfso_import_emit_slots64	format	elfso_import_emit_slots64	fn elfso_import_emit_slots64	elfso_import_emit_slots64(	Emit writable ELF64 SO import slots.
+format.elfso_import_emit_plt64	format	elfso_import_emit_plt64	fn elfso_import_emit_plt64	elfso_import_emit_plt64(	Emit ELF64 SO x86-64 PLT stubs for lazy imports.
+format.elfso_import_emit_gotplt64	format	elfso_import_emit_gotplt64	fn elfso_import_emit_gotplt64	elfso_import_emit_gotplt64(	Emit ELF64 SO GOTPLT reserved entries and lazy import slots.
+format.elfso_import_emit_dynstr64	format	elfso_import_emit_dynstr64	fn elfso_import_emit_dynstr64	elfso_import_emit_dynstr64(	Emit ELF64 SO import dynamic string table contents.
+format.elfso_import_emit_dynsym64	format	elfso_import_emit_dynsym64	fn elfso_import_emit_dynsym64	elfso_import_emit_dynsym64(	Emit ELF64 SO import dynamic symbol entries.
+format.elfso_import_emit_rela64	format	elfso_import_emit_rela64	fn elfso_import_emit_rela64	elfso_import_emit_rela64(	Emit ELF64 SO import RELA table entries.
+format.elfso_import_emit_dynamic64	format	elfso_import_emit_dynamic64	fn elfso_import_emit_dynamic64	elfso_import_emit_dynamic64(	Emit ELF64 SO import dynamic table entries.
+format.elfso_import_emit_rela_plt64	format	elfso_import_emit_rela_plt64	fn elfso_import_emit_rela_plt64	elfso_import_emit_rela_plt64(	Emit ELF64 SO .rela.plt R_X86_64_JUMP_SLOT relocation entries.
+format.elfso_import_emit_dynamic64_plt	format	elfso_import_emit_dynamic64_plt	fn elfso_import_emit_dynamic64_plt	elfso_import_emit_dynamic64_plt(	Emit ELF64 SO dynamic rows including PLTGOT, PLTRELSZ, PLTREL, and JMPREL.
+format.elfso_import_hash	format	elfso_import_hash	fn elfso_import_hash	elfso_import_hash(	Emit a minimal SYSV hash table for ELF64 SO imports.
+format.elfso_import_hash_size	format	elfso_import_hash_size	fn elfso_import_hash_size	elfso_import_hash_size(	Compute ELF64 SO import SYSV hash table size.
+format.elfso_import_dynstr_size	format	elfso_import_dynstr_size	fn elfso_import_dynstr_size	elfso_import_dynstr_size(	Compute ELF64 SO import dynamic string table size.
+format.elfso_import_names_size	format	elfso_import_names_size	fn elfso_import_names_size	elfso_import_names_size(	Compute combined ELF64 SO import symbol-name string size.
+format.elfso_import_libraries	format	elfso_import_libraries	fn elfso_import_libraries	elfso_import_libraries(	Return the unique ELF64 SO needed-library list for an import set.
+format.coff_begin32	format	coff_begin32	fn coff_begin32	coff_begin32(	Emit a 32-bit MS COFF object header with section rows.
+format.coff32_obj	format	coff32_obj	fn coff32_obj	coff32_obj(	User-facing i386 COFF object facade that emits file header and section-row placeholders.
+format.coff32_section	format	coff32_section	fn coff32_section	coff32_section(	User-facing i386 COFF section opener at the current file offset.
+format.coff32_end_section	format	coff32_end_section	fn coff32_end_section	coff32_end_section(	User-facing i386 COFF section closer that aligns file bytes automatically.
+format.coff32_finish_section	format	coff32_finish_section	fn coff32_finish_section	coff32_finish_section(	User-facing i386 COFF section-row finalizer.
+format.coff32_rx	format	coff32_rx	const coff32_rx	coff32_rx	User-facing i386 COFF readable executable section permission preset.
+format.coff_begin64	format	coff_begin64	fn coff_begin64	coff_begin64(	Emit an AMD64 MS COFF object header with section rows.
+format.coff64_obj	format	coff64_obj	fn coff64_obj	coff64_obj(	User-facing AMD64 COFF object facade that emits file header and section-row placeholders.
+format.coff64_section	format	coff64_section	fn coff64_section	coff64_section(	User-facing AMD64 COFF section opener at the current file offset.
+format.coff64_end_section	format	coff64_end_section	fn coff64_end_section	coff64_end_section(	User-facing AMD64 COFF section closer that aligns file bytes automatically.
+format.coff64_finish_section	format	coff64_finish_section	fn coff64_finish_section	coff64_finish_section(	User-facing AMD64 COFF section-row finalizer.
+format.coff_rx	format	coff_rx	const coff_rx	coff_rx	User-facing COFF readable executable section permission preset.
+format.coff_begin_section	format	coff_begin_section	fn coff_begin_section	coff_begin_section(	Start a COFF raw logical region with explicit file offset.
+format.coff_end_section	format	coff_end_section	fn coff_end_section	coff_end_section(	Pad active COFF section region to explicit raw size.
+format.coff_symbol	format	coff_symbol	fn coff_symbol	coff_symbol(	Emit a short-name COFF symbol table entry.
+format.coff_public	format	coff_public	fn coff_public	coff_public(	Emit an external public COFF symbol table entry.
+format.coff_static	format	coff_static	fn coff_static	coff_static(	Emit a static COFF symbol table entry.
+format.coff_extrn	format	coff_extrn	fn coff_extrn	coff_extrn(	Emit an undefined external COFF symbol table entry.
+format.coff_sym_class_weak_external	format	coff_sym_class_weak_external	const coff_sym_class_weak_external	coff_sym_class_weak_external	COFF weak external storage class.
+format.coff_weak_search_no_library	format	coff_weak_search_no_library	const coff_weak_search_no_library	coff_weak_search_no_library	COFF weak external no-library search characteristic.
+format.coff_weak_search_library	format	coff_weak_search_library	const coff_weak_search_library	coff_weak_search_library	COFF weak external library search characteristic.
+format.coff_weak_search_alias	format	coff_weak_search_alias	const coff_weak_search_alias	coff_weak_search_alias	COFF weak external alias search characteristic.
+format.coff_weak_external_alias	format	coff_weak_external_alias	fn coff_weak_external_alias	coff_weak_external_alias(	Emit a short-name COFF weak external base symbol and SEARCH_ALIAS auxiliary row.
+format.coff_reloc	format	coff_reloc	fn coff_reloc	coff_reloc(	Emit an explicit COFF relocation record.
+format.coff_reloc_offset	format	coff_reloc_offset	fn coff_reloc_offset	coff_reloc_offset(	Compute a COFF section-relative relocation offset from section start and relocation label.
+format.coff_reloc_count	format	coff_reloc_count	fn coff_reloc_count	coff_reloc_count(	Compute the number of COFF relocation records between two table labels.
+format.coff_reloc_at	format	coff_reloc_at	fn coff_reloc_at	coff_reloc_at(	Emit an explicit COFF relocation record at a label inside a section.
+format.coff_reloc_amd64_addr64_at	format	coff_reloc_amd64_addr64_at	fn coff_reloc_amd64_addr64_at	coff_reloc_amd64_addr64_at(	Emit an AMD64 ADDR64 COFF relocation at a label inside a section.
+format.coff_reloc_amd64_addr32_at	format	coff_reloc_amd64_addr32_at	fn coff_reloc_amd64_addr32_at	coff_reloc_amd64_addr32_at(	Emit an AMD64 ADDR32 COFF relocation at a label inside a section.
+format.coff_reloc_amd64_addr32nb_at	format	coff_reloc_amd64_addr32nb_at	fn coff_reloc_amd64_addr32nb_at	coff_reloc_amd64_addr32nb_at(	Emit an AMD64 ADDR32NB COFF relocation at a label inside a section.
+format.coff_reloc_amd64_rel32_at	format	coff_reloc_amd64_rel32_at	fn coff_reloc_amd64_rel32_at	coff_reloc_amd64_rel32_at(	Emit an AMD64 REL32 COFF relocation at a label inside a section.
+format.coff_reloc_i386_dir32_at	format	coff_reloc_i386_dir32_at	fn coff_reloc_i386_dir32_at	coff_reloc_i386_dir32_at(	Emit an i386 DIR32 COFF relocation at a label inside a section.
+format.coff_reloc_i386_dir32nb_at	format	coff_reloc_i386_dir32nb_at	fn coff_reloc_i386_dir32nb_at	coff_reloc_i386_dir32nb_at(	Emit an i386 DIR32NB COFF relocation at a label inside a section.
+format.coff_reloc_i386_rel32_at	format	coff_reloc_i386_rel32_at	fn coff_reloc_i386_rel32_at	coff_reloc_i386_rel32_at(	Emit an i386 REL32 COFF relocation at a label inside a section.
+format.coff_end_symbols	format	coff_end_symbols	fn coff_end_symbols	coff_end_symbols(	Emit the COFF string table size header.
+format.coff_section_row_foa	format	coff_section_row_foa	fn coff_section_row_foa	coff_section_row_foa(	Return COFF section header row file offset for finalizer backfill.
+format.coff_first_raw_foa	format	coff_first_raw_foa	fn coff_first_raw_foa	coff_first_raw_foa(	Compute first raw section file offset after COFF headers.
+format.coff_next_foa	format	coff_next_foa	fn coff_next_foa	coff_next_foa(	Compute the next aligned COFF file offset.
+format.coff_symbol_foa	format	coff_symbol_foa	fn coff_symbol_foa	coff_symbol_foa(	Return COFF symbol table entry file offset.
+format.coff_reloc_foa	format	coff_reloc_foa	fn coff_reloc_foa	coff_reloc_foa(	Return COFF relocation table entry file offset.
+format.coff_reloc_table_end_foa	format	coff_reloc_table_end_foa	fn coff_reloc_table_end_foa	coff_reloc_table_end_foa(	Return COFF relocation table end file offset.
+format.coff_string_table_foa	format	coff_string_table_foa	fn coff_string_table_foa	coff_string_table_foa(	Return COFF string table file offset.
+format.coff_finalize_section	format	coff_finalize_section	fn coff_finalize_section	coff_finalize_section(	Register deferred COFF section row backfill without relocations.
+format.coff_finalize_section_reloc	format	coff_finalize_section_reloc	fn coff_finalize_section_reloc	coff_finalize_section_reloc(	Register deferred COFF section row backfill with relocation table fields.
+format.coff64_finish_section_reloc	format	coff64_finish_section_reloc	fn coff64_finish_section_reloc	coff64_finish_section_reloc(	User-facing AMD64 COFF section-row finalizer with relocation table fields.
+expr.sizeof	expr	sizeof	call.name, "sizeof"	sizeof(	Binary layout size query.
+expr.offset_of	expr	offset_of	call.name, "offset_of"	offset_of(	Binary layout field offset query.
+expr.lengthof	expr	lengthof	call.name, "lengthof"	lengthof(	Length query for bytes/string/integer text.
+expr.len	expr	len	meta_std.isBuiltinName(name); "len"	len(	Length query for string, bytes, list, and map values.
+expr.to_string	expr	to_string	meta_std.isBuiltinName(name); "to_string"	to_string(	Convert scalar or bytes value to compile-time string.
+expr.trim	expr	trim	meta_std.isBuiltinName(name); "trim"	trim(	Trim ASCII whitespace from string.
+expr.lower	expr	lower	meta_std.isBuiltinName(name); "lower"	lower(	ASCII lowercase string helper.
+expr.upper	expr	upper	meta_std.isBuiltinName(name); "upper"	upper(	ASCII uppercase string helper.
+expr.starts_with	expr	starts_with	meta_std.isBuiltinName(name); "starts_with"	starts_with(	String prefix check.
+expr.ends_with	expr	ends_with	meta_std.isBuiltinName(name); "ends_with"	ends_with(	String suffix check.
+expr.contains	expr	contains	meta_std.isBuiltinName(name); "contains"	contains(	String or bytes containment check.
+expr.replace	expr	replace	meta_std.isBuiltinName(name); "replace"	replace(	Replace all non-empty string needle matches.
+expr.split	expr	split	meta_std.isBuiltinName(name); "split"	split(	Split string into compile-time list of strings.
+expr.join	expr	join	meta_std.isBuiltinName(name); "join"	join(	Join compile-time list of strings into string.
+expr.sym_join	expr	sym.join	meta_std.isBuiltinName(name); "sym.join"	sym.join(	Concatenate scalar values into a dynamic symbol name.
+expr.sym_unique	expr	sym.unique	call.name, "sym.unique"	sym.unique(	Generate a deterministic unique symbol name during Meta lowering.
+expr.bytes_new	expr	bytes.new	meta_std.isBuiltinName(name); "bytes.new"	bytes.new(	Create empty bytes value.
+expr.bytes_push	expr	bytes.push	meta_std.isBuiltinName(name); "bytes.push"	bytes.push(	Append one byte to bytes value.
+expr.bytes_concat	expr	bytes.concat	meta_std.isBuiltinName(name); "bytes.concat"	bytes.concat(	Concatenate bytes values.
+expr.bytes_repeat	expr	bytes.repeat	meta_std.isBuiltinName(name); "bytes.repeat"	bytes.repeat(	Repeat one byte into bytes value.
+expr.bytes_le	expr	bytes.le	meta_std.isBuiltinName(name); "bytes.le"	bytes.le(	Encode integer as little-endian bytes.
+expr.bytes_insert	expr	bytes.insert	meta_std.isBuiltinName(name); "bytes.insert"	bytes.insert(	Insert bytes into bytes value.
+expr.bytes_replace	expr	bytes.replace	meta_std.isBuiltinName(name); "bytes.replace"	bytes.replace(	Replace byte range in bytes value.
+expr.bytes_eq	expr	bytes.eq	meta_std.isBuiltinName(name); "bytes.eq"	bytes.eq(	Explicit bytes equality helper.
+expr.bytes_hex	expr	bytes.hex	meta_std.isBuiltinName(name); "bytes.hex"	bytes.hex(	Format bytes as lowercase hexadecimal string.
+expr.bytes_from_hex	expr	bytes.from_hex	meta_std.isBuiltinName(name); "bytes.from_hex"	bytes.from_hex(	Parse lowercase or uppercase hexadecimal string into bytes.
+expr.list_new	expr	list.new	meta_std.isBuiltinName(name); "list.new"	list.new(	Create empty compile-time list value.
+expr.list_of	expr	list.of	meta_std.isBuiltinName(name); "list.of"	list.of(	Create compile-time list from values.
+expr.list_push	expr	list.push	meta_std.isBuiltinName(name); "list.push"	list.push(	Return list with one appended value.
+expr.list_concat	expr	list.concat	meta_std.isBuiltinName(name); "list.concat"	list.concat(	Concatenate compile-time list values.
+expr.list_get	expr	list.get	meta_std.isBuiltinName(name); "list.get"	list.get(	Read cloned list element by index.
+expr.list_set	expr	list.set	meta_std.isBuiltinName(name); "list.set"	list.set(	Return list with one replaced element.
+expr.list_slice	expr	list.slice	meta_std.isBuiltinName(name); "list.slice"	list.slice(	Return cloned list range.
+expr.list_eq	expr	list.eq	meta_std.isBuiltinName(name); "list.eq"	list.eq(	Deep list equality helper.
+expr.map_new	expr	map.new	meta_std.isBuiltinName(name); "map.new"	map.new(	Create empty compile-time map value.
+expr.map_set	expr	map.set	meta_std.isBuiltinName(name); "map.set"	map.set(	Return map with string key set to cloned value.
+expr.map_has	expr	map.has	meta_std.isBuiltinName(name); "map.has"	map.has(	Test whether map contains a string key.
+expr.map_get	expr	map.get	meta_std.isBuiltinName(name); "map.get"	map.get(	Read cloned map value by string key.
+expr.map_get_or	expr	map.get_or	meta_std.isBuiltinName(name); "map.get_or"	map.get_or(	Read map value or cloned default.
+expr.map_keys	expr	map.keys	meta_std.isBuiltinName(name); "map.keys"	map.keys(	Return map keys as list of strings.
+expr.map_values	expr	map.values	meta_std.isBuiltinName(name); "map.values"	map.values(	Return map values as cloned list.
+expr.map_eq	expr	map.eq	meta_std.isBuiltinName(name); "map.eq"	map.eq(	Deep key-order independent map equality helper.
+expr.tokens_of	expr	tokens.of	meta_std.isBuiltinName(name); "tokens.of"	tokens.of(	Tokenize ISA-shaped DSL text into a list of token strings.
+expr.tokens_join	expr	tokens.join	meta_std.isBuiltinName(name); "tokens.join"	tokens.join(	Render token string list back into DSL text.
+expr.match_tokens	expr	match.tokens	meta_std.isBuiltinName(name); "match.tokens"	match.tokens(	Match token pattern and return ok plus capture map.
+expr.fs_exists	expr	fs.exists	api-matrix-meta-data: "fs.exists"	fs.exists(	Test whether a source-relative file is available through the controlled resolver.
+expr.fs_read_text	expr	fs.read_text	api-matrix-meta-data: "fs.read_text"	fs.read_text(	Read a source-relative text file through the controlled resolver.
+expr.fs_read_bytes	expr	fs.read_bytes	api-matrix-meta-data: "fs.read_bytes"	fs.read_bytes(	Read a source-relative binary file through the controlled resolver.
+expr.toml_parse	expr	toml.parse	api-matrix-meta-data: "toml.parse"	toml.parse(	Parse TOML text or bytes into Meta map/list/scalar values.
+expr.toml_file	expr	toml.file	api-matrix-meta-data: "toml.file"	toml.file(	Read and parse a source-relative TOML file through the controlled resolver.
+expr.json_parse	expr	json.parse	api-matrix-meta-data: "json.parse"	json.parse(	Parse JSON text or bytes into Meta map/list/scalar values.
+expr.json_file	expr	json.file	api-matrix-meta-data: "json.file"	json.file(	Read and parse a source-relative JSON file through the controlled resolver.
+expr.pack	expr	pack	call.name, "pack"	pack(	Pack compile-time struct value into bytes.
+expr.here	expr	here	call.name, "here"	here()	Current address query.
+expr.region_base	expr	region_base	call.name, "region_base"	region_base()	Active output region origin query.
+expr.file_offset	expr	file_offset	call.name, "file_offset"	file_offset()	Active output file offset query.
+expr.file_cursor_real	expr	file_cursor_real	call.name, "file_cursor_real"	file_cursor_real()	Active file cursor after materialized output bytes.
+expr.file_cursor_potential	expr	file_cursor_potential	call.name, "file_cursor_potential"	file_cursor_potential()	Active file cursor implied by the logical output position.
+expr.tail_reserve_size	expr	tail_reserve_size	call.name, "tail_reserve_size"	tail_reserve_size()	Active unmaterialized tail reserve size.
+expr.region_file_offset	expr	region_file_offset	call.name, "region_file_offset"	region_file_offset(	Finalizer-time raw file offset for the region containing an address.
+expr.region_file_size	expr	region_file_size	call.name, "region_file_size"	region_file_size(	Finalizer-time physical file size for the region containing an address.
+expr.region_logical_size	expr	region_logical_size	call.name, "region_logical_size"	region_logical_size(	Finalizer-time logical size for the region containing an address.
+expr.label_addr	expr	label_addr	call.name, "label_addr"	label_addr(	Label address query.
+api.label_define	api	label.define	call.callee, "label.define"	label.define(	Define a dynamic label at the current output location.
+expr.load_u8	expr	load.u8	call.name, "load.u8"	load.u8(	Read one byte from module byte space or deferred final output image.
+expr.load_u16	expr	load.u16	call.name, "load.u16"	load.u16(	Read little-endian u16 from module byte space or deferred final output image.
+expr.load_u32	expr	load.u32	call.name, "load.u32"	load.u32(	Read little-endian u32 from module byte space or deferred final output image.
+expr.load_u64	expr	load.u64	call.name, "load.u64"	load.u64(	Read little-endian u64 from module byte space or deferred final output image.
+expr.load_bytes	expr	load.bytes	call.name, "load.bytes"	load.bytes(	Read byte block from module byte space or deferred final output image.

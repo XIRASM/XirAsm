@@ -1,0 +1,43 @@
+import("../../include/format/coff64.inc");
+
+const section_count: u16 = 2
+const symbol_count: u64 = 3
+const text_raw: u64 = coff_first_raw_foa(section_count)
+
+coff64_obj(section_count, symbol_count);
+
+coff64_section(".text");
+text_start:
+main:
+    mov eax, 42
+    ret
+reserve(0x20000);
+text_end:
+coff64_end_section();
+
+coff64_section(".rdata");
+rdata_start:
+    emit.u8(0x42);
+rdata_end:
+coff64_end_section();
+
+coff64_symbols();
+symbol_table_start:
+coff_symbol(coff_name_text, 0, 1, coff_sym_class_static, coff_sym_type_null);
+coff_symbol(coff_name_rdata, 0, 2, coff_sym_class_static, coff_sym_type_null);
+coff_symbol(coff_name_main, main - text_start, 1, coff_sym_class_external, coff_sym_type_function);
+coff_end_symbols(symbol_count);
+
+coff64_finish_section(0, coff_name_text, text_start, coff_rx);
+coff64_finish_section(1, coff_name_rdata, rdata_start, coff_ro);
+
+defer {
+    assert(load.u16(region_base()) == coff_machine_amd64);
+    assert(load.u32(region_base() + 8) == region_file_offset(symbol_table_start));
+    assert(load.u32(region_base() + coff_section_row_foa(0) + coff_sec_raw_ptr_foa) == text_raw);
+    assert(load.u32(region_base() + coff_section_row_foa(0) + coff_sec_raw_size_foa) == 8);
+    assert(load.u32(region_base() + coff_section_row_foa(1) + coff_sec_raw_ptr_foa) == text_raw + 8);
+    assert(load.u32(region_base() + coff_section_row_foa(1) + coff_sec_raw_size_foa) == 4);
+    assert(region_file_size(text_start) == 8);
+    assert(region_logical_size(text_start) == text_end - text_start);
+}

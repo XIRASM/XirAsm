@@ -1,0 +1,9 @@
+{
+  "name": "JSON",
+  "bits": 64,
+  "ok": true,
+  "values": [1, 2, 3],
+  "nested": {
+    "tag": "OK"
+  }
+}

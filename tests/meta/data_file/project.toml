@@ -1,0 +1,5 @@
+name = "cfg"
+
+[target]
+bits = 64
+include = "auto.inc"

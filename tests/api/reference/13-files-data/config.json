@@ -1,0 +1,10 @@
+{
+  "name": "JSON",
+  "bits": 64,
+  "enabled": true,
+  "values": [1, 2, 3],
+  "nested": {
+    "tag": "OK"
+  },
+  "nothing": null
+}

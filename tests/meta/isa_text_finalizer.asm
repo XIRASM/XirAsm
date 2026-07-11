@@ -1,0 +1,3 @@
+defer {
+    isa("ret");
+}

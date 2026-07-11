@@ -1,0 +1,673 @@
+const std = @import("std");
+const backend = @import("xirasm_backend");
+
+const fixup = @import("fixup.zig");
+const fragment = @import("fragment.zig");
+const isa_text = @import("isa_text.zig");
+const source = @import("source.zig");
+const target = @import("target.zig");
+
+const Allocator = std.mem.Allocator;
+
+pub const AdapterError = Allocator.Error || error{
+    AmbiguousMemorySize,
+    BackendUnsupported,
+    CmpR64ImmediateOutOfRange,
+    HighRegisterNotAllowed,
+    ImpossibleAddressSize,
+    InvalidMemoryScale,
+    InstructionTooLarge,
+    InvalidInstructionText,
+    InvalidRspIndexRegister,
+    InvalidModeBits,
+    UnsupportedOperandSyntax,
+    UnsupportedPrefixes,
+};
+
+pub const FixupFact = struct {
+    target: []u8,
+    kind: fixup.FixupKind,
+    offset: u32,
+    width_bits: u16,
+    span: source.SourceSpan,
+
+    pub fn deinit(self: *FixupFact, allocator: Allocator) void {
+        allocator.free(self.target);
+        self.* = undefined;
+    }
+};
+
+pub const InstructionFacts = struct {
+    bytes: []u8,
+    min_size: u32,
+    max_size: u32,
+    current_size: u32,
+    fixups: []FixupFact = &.{},
+    relaxable: bool = false,
+
+    pub fn deinit(self: *InstructionFacts, allocator: Allocator) void {
+        allocator.free(self.bytes);
+        for (self.fixups) |*stored_fixup| {
+            stored_fixup.deinit(allocator);
+        }
+        allocator.free(self.fixups);
+        self.* = undefined;
+    }
+};
+
+const ResolverContext = struct {
+    isa: target.Isa,
+    mode_bits: u16,
+};
+
+const X86ResolverContext = struct {
+    isa: target.Isa,
+    mode_bits: u16,
+    allocator: Allocator,
+    span: source.SourceSpan,
+    fixups: *std.ArrayList(FixupFact),
+};
+
+pub fn encodeInstruction(
+    allocator: Allocator,
+    instruction: fragment.IsaInstructionFragment,
+    options: target.Target,
+) AdapterError!InstructionFacts {
+    return switch (instruction.target.isa()) {
+        .x86_64 => encodeX86Instruction(allocator, instruction, options),
+        .riscv64 => encodeRiscvInstruction(allocator, instruction, options),
+        .spirv => error.BackendUnsupported,
+    };
+}
+
+fn encodeX86Instruction(
+    allocator: Allocator,
+    instruction: fragment.IsaInstructionFragment,
+    options: target.Target,
+) AdapterError!InstructionFacts {
+    const mode_bits = try x86ModeBits(instruction, options);
+    var parsed = isa_text.parseInstructionText(allocator, instruction.text) catch |err| return mapIsaTextError(err);
+    defer parsed.deinit(allocator);
+
+    var fixups: std.ArrayList(FixupFact) = .empty;
+    errdefer {
+        clearFixupFacts(&fixups, allocator);
+        fixups.deinit(allocator);
+    }
+
+    var context = backend.x86.EncodeContext.init(mode_bits);
+    const encoded_mnemonic = applyX86MnemonicPrefixes(&context, parsed.mnemonic, parsed.operands);
+
+    var resolver_context: X86ResolverContext = .{
+        .isa = instruction.target.isa(),
+        .mode_bits = mode_bits,
+        .allocator = allocator,
+        .span = instruction.span,
+        .fixups = &fixups,
+    };
+    const resolver: backend.x86.ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = unknownX86ExpressionResolver,
+    };
+
+    var encoded = backend.x86.encodeBuiltinUnitsWithResolver(
+        allocator,
+        encoded_mnemonic.mnemonic,
+        encoded_mnemonic.operandSlice(),
+        context,
+        false,
+        resolver,
+    ) catch |err| return mapX86EncodeError(err);
+    if (fixups.items.len != 0 and isX86BranchMnemonic(encoded_mnemonic.mnemonic)) {
+        encoded.deinit(allocator);
+        clearFixupFacts(&fixups, allocator);
+        const current_known = false;
+        context = context
+            .withBranchRelaxationHint(.near)
+            .withBranchRelaxationCurrentKnown(&current_known);
+        encoded = backend.x86.encodeBuiltinUnitsWithResolver(
+            allocator,
+            encoded_mnemonic.mnemonic,
+            encoded_mnemonic.operandSlice(),
+            context,
+            false,
+            resolver,
+        ) catch |err| return mapX86EncodeError(err);
+    }
+    defer encoded.deinit(allocator);
+
+    const bytes = backend.x86.materializeOutput(allocator, encoded.units()) catch return error.BackendUnsupported;
+    errdefer allocator.free(bytes);
+    try applyX86BackendFixups(allocator, fixups.items, encoded.units());
+    applyX86BranchFallbackFixup(fixups.items, parsed.mnemonic, bytes.len);
+
+    const current_size = sizeToU32(bytes.len) catch return error.InstructionTooLarge;
+    const symbolic_operands = try fixups.toOwnedSlice(allocator);
+    errdefer deinitFixupFacts(symbolic_operands, allocator);
+    return .{
+        .bytes = bytes,
+        .min_size = if (encoded.branch_relaxation_decision == .rel8) current_size else current_size,
+        .max_size = current_size,
+        .current_size = current_size,
+        .fixups = symbolic_operands,
+        .relaxable = symbolic_operands.len != 0 or encoded.branch_relaxation_decision != null,
+    };
+}
+
+const X86EncodedMnemonic = struct {
+    mnemonic: []const u8,
+    operands: []const []const u8,
+    lock_operands: [4][]const u8 = undefined,
+    lock_operand_count: usize = 0,
+    use_lock_operands: bool = false,
+
+    fn operandSlice(self: *const X86EncodedMnemonic) []const []const u8 {
+        if (self.use_lock_operands) return self.lock_operands[0..self.lock_operand_count];
+        return self.operands;
+    }
+};
+
+fn applyX86MnemonicPrefixes(
+    context: *backend.x86.EncodeContext,
+    mnemonic: []const u8,
+    operands: []const []const u8,
+) X86EncodedMnemonic {
+    if (operands.len == 0) return .{ .mnemonic = mnemonic, .operands = operands };
+
+    if (std.ascii.eqlIgnoreCase(mnemonic, "lock")) {
+        const split = std.mem.indexOfAny(u8, operands[0], " \t");
+        const locked_mnemonic = if (split) |index| operands[0][0..index] else operands[0];
+        const first_operand = if (split) |index|
+            std.mem.trim(u8, operands[0][index + 1 ..], " \t\r\n")
+        else
+            "";
+
+        var result: X86EncodedMnemonic = .{
+            .mnemonic = locked_mnemonic,
+            .operands = &.{},
+            .use_lock_operands = true,
+        };
+        const first_operand_count: usize = if (first_operand.len == 0) 0 else 1;
+        if (first_operand_count + operands.len - 1 > result.lock_operands.len) {
+            return .{ .mnemonic = mnemonic, .operands = operands };
+        }
+        context.* = context.withLock(true);
+        if (first_operand.len != 0) {
+            result.lock_operands[0] = first_operand;
+        }
+        for (operands[1..], 0..) |operand, index| {
+            result.lock_operands[first_operand_count + index] = operand;
+        }
+        result.lock_operand_count = first_operand_count + operands.len - 1;
+        return result;
+    }
+
+    if (x86RepPrefixFromMnemonic(mnemonic)) |rep_prefix| {
+        context.* = context.withRepPrefix(rep_prefix);
+        return .{
+            .mnemonic = operands[0],
+            .operands = operands[1..],
+        };
+    }
+
+    return .{ .mnemonic = mnemonic, .operands = operands };
+}
+
+fn x86RepPrefixFromMnemonic(mnemonic: []const u8) ?backend.x86.RepPrefixKind {
+    if (std.ascii.eqlIgnoreCase(mnemonic, "rep")) return .rep;
+    if (std.ascii.eqlIgnoreCase(mnemonic, "repe")) return .repe;
+    if (std.ascii.eqlIgnoreCase(mnemonic, "repz")) return .repe;
+    if (std.ascii.eqlIgnoreCase(mnemonic, "repne")) return .repne;
+    if (std.ascii.eqlIgnoreCase(mnemonic, "repnz")) return .repne;
+    return null;
+}
+
+fn x86ModeBits(instruction: fragment.IsaInstructionFragment, options: target.Target) AdapterError!u8 {
+    const mode_bits = instruction.target.bits() orelse options.bits() orelse return error.InvalidModeBits;
+    if (mode_bits != 16 and mode_bits != 32 and mode_bits != 64) return error.InvalidModeBits;
+    return @intCast(mode_bits);
+}
+
+fn encodeRiscvInstruction(
+    allocator: Allocator,
+    instruction: fragment.IsaInstructionFragment,
+    options: target.Target,
+) AdapterError!InstructionFacts {
+    const xlen = try riscvXLen(instruction, options);
+    var parsed = isa_text.parseInstructionText(allocator, instruction.text) catch |err| return mapIsaTextError(err);
+    defer parsed.deinit(allocator);
+
+    const symbolic_operands = try collectRiscvSymbolicOperands(
+        allocator,
+        parsed.operands,
+        instruction.span,
+    );
+    errdefer deinitFixupFacts(symbolic_operands, allocator);
+    const has_symbolic_operand = symbolic_operands.len != 0;
+
+    var resolver_context: ResolverContext = .{
+        .isa = instruction.target.isa(),
+        .mode_bits = xlen,
+    };
+    const resolver: ?backend.riscv.source.ExpressionResolver = if (has_symbolic_operand) .{
+        .context = &resolver_context,
+        .resolveFn = unknownRiscvExpressionResolver,
+    } else null;
+
+    const encoded = backend.riscv.encodeInstructionText(instruction.text, xlen, resolver) catch return error.BackendUnsupported;
+    const encoded_bytes = encoded.asSlice();
+    const bytes = try allocator.dupe(u8, encoded_bytes);
+    errdefer allocator.free(bytes);
+
+    const current_size = sizeToU32(bytes.len) catch return error.InstructionTooLarge;
+    return .{
+        .bytes = bytes,
+        .min_size = current_size,
+        .max_size = current_size,
+        .current_size = current_size,
+        .fixups = symbolic_operands,
+        .relaxable = has_symbolic_operand,
+    };
+}
+
+fn riscvXLen(instruction: fragment.IsaInstructionFragment, options: target.Target) AdapterError!u8 {
+    const xlen = instruction.target.bits() orelse options.bits() orelse return error.InvalidModeBits;
+    if (xlen != 32 and xlen != 64) return error.InvalidModeBits;
+    return @intCast(xlen);
+}
+
+fn collectRiscvSymbolicOperands(
+    allocator: Allocator,
+    operands: []const []const u8,
+    span: source.SourceSpan,
+) AdapterError![]FixupFact {
+    var facts: std.ArrayList(FixupFact) = .empty;
+    errdefer {
+        for (facts.items) |*stored_fixup| stored_fixup.deinit(allocator);
+        facts.deinit(allocator);
+    }
+
+    for (operands) |operand| {
+        if (try riscvSymbolicTargetFromOperand(allocator, operand)) |target_text| {
+            errdefer allocator.free(target_text);
+            try facts.append(allocator, .{
+                .target = target_text,
+                .kind = .absolute,
+                .offset = 0,
+                .width_bits = 64,
+                .span = span,
+            });
+        }
+    }
+
+    return facts.toOwnedSlice(allocator);
+}
+
+fn applyX86BackendFixups(allocator: Allocator, facts: []FixupFact, units: []const backend.x86.EncodeUnit) AdapterError!void {
+    var fixup_index: usize = 0;
+    var byte_offset: u32 = 0;
+    for (units) |unit| {
+        const unit_size = if (unit.fixup) |backend_fixup| backend_fixup.size else unit.bytes.len;
+        if (unit.fixup) |backend_fixup| {
+            if (fixup_index >= facts.len) return error.BackendUnsupported;
+            facts[fixup_index].kind = switch (backend_fixup.kind) {
+                .absolute => .absolute,
+                .relative => .pc_relative,
+                .segment => return error.BackendUnsupported,
+            };
+            const effective_addend = try x86BackendFixupAddend(byte_offset, backend_fixup);
+            try applyX86BackendFixupAddend(allocator, &facts[fixup_index], effective_addend);
+            facts[fixup_index].offset = byte_offset;
+            facts[fixup_index].width_bits = try fixupWidthBits(backend_fixup.size);
+            fixup_index += 1;
+        } else if (fixup_index < facts.len and unit.note != null and std.mem.eql(u8, unit.note.?, "rip-relative displacement")) {
+            facts[fixup_index].kind = .pc_relative;
+            facts[fixup_index].offset = byte_offset;
+            facts[fixup_index].width_bits = try fixupWidthBits(try sizeToU8(unit.bytes.len));
+            fixup_index += 1;
+        }
+        byte_offset = std.math.add(u32, byte_offset, try sizeToU32(unit_size)) catch return error.InstructionTooLarge;
+    }
+}
+
+fn x86BackendFixupAddend(byte_offset: u32, backend_fixup: backend.x86.Fixup) AdapterError!i64 {
+    if (backend_fixup.kind != .relative) return backend_fixup.toffset;
+
+    const fixup_end = std.math.add(i64, @intCast(byte_offset), @as(i64, @intCast(backend_fixup.size))) catch return error.BackendUnsupported;
+    const relbase_delta = std.math.sub(i64, fixup_end, backend_fixup.relbase) catch return error.BackendUnsupported;
+    return std.math.add(i64, backend_fixup.toffset, relbase_delta) catch return error.BackendUnsupported;
+}
+
+fn applyX86BackendFixupAddend(allocator: Allocator, fact: *FixupFact, addend: i64) AdapterError!void {
+    if (addend == 0) return;
+
+    const old_target = fact.target;
+    const magnitude = signedMagnitude(addend);
+    const new_target = try std.fmt.allocPrint(allocator, "{s} {c} {}", .{
+        old_target,
+        if (addend < 0) @as(u8, '-') else @as(u8, '+'),
+        magnitude,
+    });
+    allocator.free(old_target);
+    fact.target = new_target;
+}
+
+fn signedMagnitude(value: i64) u64 {
+    if (value >= 0) return @intCast(value);
+    const raw: u64 = @bitCast(value);
+    return (~raw) + 1;
+}
+
+fn applyX86BranchFallbackFixup(facts: []FixupFact, mnemonic: []const u8, encoded_size: usize) void {
+    if (facts.len != 1) return;
+    if (facts[0].kind != .absolute or facts[0].offset != 0 or facts[0].width_bits != 64) return;
+    if (!isX86BranchMnemonic(mnemonic)) return;
+    if (encoded_size == 2) {
+        facts[0].kind = .pc_relative;
+        facts[0].offset = 1;
+        facts[0].width_bits = 8;
+    } else if (encoded_size == 5) {
+        facts[0].kind = .pc_relative;
+        facts[0].offset = 1;
+        facts[0].width_bits = 32;
+    }
+}
+
+fn isX86BranchMnemonic(mnemonic: []const u8) bool {
+    if (std.ascii.eqlIgnoreCase(mnemonic, "jmp")) return true;
+    if (std.ascii.eqlIgnoreCase(mnemonic, "call")) return true;
+    if (mnemonic.len < 2) return false;
+    if (mnemonic[0] != 'j' and mnemonic[0] != 'J') return false;
+    return true;
+}
+
+fn fixupWidthBits(byte_size: u8) AdapterError!u16 {
+    if (byte_size == 0 or byte_size > 8) return error.BackendUnsupported;
+    return std.math.mul(u16, byte_size, 8) catch return error.BackendUnsupported;
+}
+
+fn deinitFixupFacts(facts: []FixupFact, allocator: Allocator) void {
+    for (facts) |*stored_fixup| stored_fixup.deinit(allocator);
+    allocator.free(facts);
+}
+
+fn clearFixupFacts(facts: *std.ArrayList(FixupFact), allocator: Allocator) void {
+    for (facts.items) |*stored_fixup| stored_fixup.deinit(allocator);
+    facts.clearRetainingCapacity();
+}
+
+fn riscvSymbolicTargetFromOperand(
+    allocator: Allocator,
+    operand: []const u8,
+) AdapterError!?[]u8 {
+    var found_symbol: ?[]const u8 = null;
+    var tokenizer = std.mem.tokenizeAny(u8, operand, " \t\r\n,[]()+-*/%&|^<>:");
+    while (tokenizer.next()) |token| {
+        if (!isa_text.looksLikeSymbolReference(token)) continue;
+        if (isa_text.isKnownRiscvWord(token)) continue;
+        if (parseRiscvIntegerProbe(token)) continue;
+        if (found_symbol != null) {
+            return try allocator.dupe(u8, std.mem.trim(u8, operand, " \t\r\n"));
+        }
+        found_symbol = token;
+    }
+
+    const symbol = found_symbol orelse return null;
+    if (riscvOperandUsesOnlyHintsAndOneSymbol(operand, symbol)) return try allocator.dupe(u8, symbol);
+    return try allocator.dupe(u8, std.mem.trim(u8, operand, " \t\r\n"));
+}
+
+fn riscvOperandUsesOnlyHintsAndOneSymbol(
+    operand: []const u8,
+    symbol: []const u8,
+) bool {
+    var found_symbol = false;
+    var tokenizer = std.mem.tokenizeAny(u8, operand, " \t\r\n,");
+    while (tokenizer.next()) |token| {
+        if (isa_text.isKnownRiscvWord(token)) continue;
+        if (parseRiscvIntegerProbe(token)) continue;
+        if (!std.mem.eql(u8, token, symbol)) return false;
+        if (found_symbol) return false;
+        found_symbol = true;
+    }
+    return found_symbol;
+}
+
+fn parseRiscvIntegerProbe(token: []const u8) bool {
+    if (std.fmt.parseInt(i64, token, 0)) |_| {
+        return true;
+    } else |_| {
+        return false;
+    }
+}
+
+fn mapIsaTextError(err: isa_text.ParseError) AdapterError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.InvalidInstructionText => error.InvalidInstructionText,
+    };
+}
+
+fn mapX86EncodeError(err: backend.x86.EncodeError) AdapterError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.AmbiguousMemorySize => error.AmbiguousMemorySize,
+        error.CmpR64ImmediateOutOfRange => error.CmpR64ImmediateOutOfRange,
+        error.HighRegisterNotAllowed => error.HighRegisterNotAllowed,
+        error.ImpossibleAddressSize => error.ImpossibleAddressSize,
+        error.InvalidMemoryScale => error.InvalidMemoryScale,
+        error.InvalidRspIndexRegister => error.InvalidRspIndexRegister,
+        error.UnsupportedOperandSyntax => error.UnsupportedOperandSyntax,
+        error.UnsupportedPrefixes => error.UnsupportedPrefixes,
+        else => error.BackendUnsupported,
+    };
+}
+
+fn unknownX86ExpressionResolver(context: *anyopaque, text: []const u8) backend.x86.ExpressionResolveError!?backend.x86.ResolvedExpr {
+    const resolver_context: *X86ResolverContext = @ptrCast(@alignCast(context));
+    if (resolver_context.isa != .x86_64) {
+        return null;
+    }
+    if (resolver_context.mode_bits != 16 and resolver_context.mode_bits != 32 and resolver_context.mode_bits != 64) {
+        return null;
+    }
+    const target_text = std.mem.trim(u8, text, " \t\r\n");
+    if (target_text.len == 0) return null;
+    const owned_target = try resolver_context.allocator.dupe(u8, target_text);
+    errdefer resolver_context.allocator.free(owned_target);
+    try resolver_context.fixups.append(resolver_context.allocator, .{
+        .target = owned_target,
+        .kind = .absolute,
+        .offset = 0,
+        .width_bits = 64,
+        .span = resolver_context.span,
+    });
+    return .{
+        .value = 0,
+        .known = false,
+        .current_known = false,
+        .simple = false,
+        .symbolic = true,
+    };
+}
+
+fn unknownRiscvExpressionResolver(context: *anyopaque, text: []const u8) backend.riscv.source.SourceError!?i64 {
+    const resolver_context: *const ResolverContext = @ptrCast(@alignCast(context));
+    if (resolver_context.isa != .riscv64) {
+        return null;
+    }
+    if (resolver_context.mode_bits != 32 and resolver_context.mode_bits != 64) {
+        return null;
+    }
+    if (text.len == 0) return null;
+    return 0;
+}
+
+fn sizeToU32(size: usize) error{InstructionTooLarge}!u32 {
+    if (size > std.math.maxInt(u32)) return error.InstructionTooLarge;
+    return @intCast(size);
+}
+
+fn sizeToU8(size: usize) error{InstructionTooLarge}!u8 {
+    if (size > std.math.maxInt(u8)) return error.InstructionTooLarge;
+    return @intCast(size);
+}
+
+fn testEncodeInstruction(
+    text: []const u8,
+    instruction_target: target.Target,
+    options: target.Target,
+) !InstructionFacts {
+    const owned_text = try std.testing.allocator.dupe(u8, text);
+    defer std.testing.allocator.free(owned_text);
+
+    return encodeInstruction(
+        std.testing.allocator,
+        .{
+            .section = .{ .index = 0 },
+            .target = instruction_target,
+            .text = owned_text,
+            .min_size = 0,
+            .max_size = 0,
+            .current_size = 0,
+            .span = source.unknown_span,
+        },
+        options,
+    );
+}
+
+test "backend adapter encodes fixed x86 instruction bytes" {
+    const cases = [_]struct {
+        text: []const u8,
+        bytes: []const u8,
+    }{
+        .{ .text = "mov rax, 1", .bytes = &.{ 0xB8, 0x01, 0x00, 0x00, 0x00 } },
+        .{ .text = "add rax, 2", .bytes = &.{ 0x48, 0x83, 0xC0, 0x02 } },
+        .{ .text = "rep movsb", .bytes = &.{ 0xF3, 0xA4 } },
+        .{ .text = "ret", .bytes = &.{0xC3} },
+    };
+
+    for (cases) |case| {
+        var facts = try testEncodeInstruction(case.text, target.Target.default, target.Target.default);
+        defer facts.deinit(std.testing.allocator);
+
+        try std.testing.expectEqualSlices(u8, case.bytes, facts.bytes);
+        try std.testing.expectEqual(@as(u32, @intCast(case.bytes.len)), facts.current_size);
+        try std.testing.expect(!facts.relaxable);
+        try std.testing.expectEqual(@as(usize, 0), facts.fixups.len);
+    }
+}
+
+test "backend adapter lets backend parser own x86 vector operands" {
+    const x86_target = try target.Target.initX86(64);
+    const cases = [_]struct {
+        text: []const u8,
+        bytes: []const u8,
+    }{
+        .{ .text = "vaddps xmm0, xmm1, xmm2", .bytes = &.{ 0xc5, 0xf0, 0x58, 0xc2 } },
+        .{ .text = "pshufb xmm1, xmm2", .bytes = &.{ 0x66, 0x0f, 0x38, 0x00, 0xca } },
+        .{ .text = "pextrb eax, xmm1, 2", .bytes = &.{ 0x66, 0x0f, 0x3a, 0x14, 0xc8, 0x02 } },
+        .{ .text = "vpshufb xmm1, xmm2, xmm3", .bytes = &.{ 0xc4, 0xe2, 0x69, 0x00, 0xcb } },
+        .{ .text = "vinsertps xmm1, xmm2, xmm3, 4", .bytes = &.{ 0xc4, 0xe3, 0x69, 0x21, 0xcb, 0x04 } },
+    };
+
+    for (cases) |case| {
+        var facts = try testEncodeInstruction(case.text, x86_target, x86_target);
+        defer facts.deinit(std.testing.allocator);
+
+        try std.testing.expectEqual(@as(usize, 0), facts.fixups.len);
+        try std.testing.expectEqual(false, facts.relaxable);
+        try std.testing.expectEqualSlices(u8, case.bytes, facts.bytes);
+    }
+}
+
+test "backend adapter marks symbolic x86 jump relaxable" {
+    var facts = try testEncodeInstruction("jmp target", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expect(facts.current_size > 0);
+    try std.testing.expect(facts.relaxable);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u32, 1), facts.fixups[0].offset);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+}
+
+test "backend adapter maps symbolic x86 conditional jump to near relative fixup" {
+    var facts = try testEncodeInstruction("jne target", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0x0F, 0x85, 0xFA, 0xFF, 0xFF, 0xFF }, facts.bytes);
+    try std.testing.expect(facts.relaxable);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u32, 2), facts.fixups[0].offset);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+}
+
+test "backend adapter strips x86 branch size hints from fixup target" {
+    var facts = try testEncodeInstruction("jmp short target", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expect(facts.relaxable);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target", facts.fixups[0].target);
+}
+
+test "backend adapter records symbolic expression fixup facts" {
+    var facts = try testEncodeInstruction("mov rax, target + 4", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expect(facts.current_size > 0);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target + 4", facts.fixups[0].target);
+}
+
+test "backend adapter maps x86 rip-relative memory fixups to displacement bytes" {
+    var facts = try testEncodeInstruction("mov eax, [rel target]", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0x8B, 0x05, 0xFA, 0xFF, 0xFF, 0xFF }, facts.bytes);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u32, 2), facts.fixups[0].offset);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+}
+
+test "backend adapter preserves x86 rip-relative memory fixup addends" {
+    var facts = try testEncodeInstruction("mov eax, [rel target + 4]", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0x8B, 0x05, 0xFE, 0xFF, 0xFF, 0xFF }, facts.bytes);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target + 4", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u32, 2), facts.fixups[0].offset);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+}
+
+test "backend adapter accounts for x86 rip-relative relbase after immediate tails" {
+    var facts = try testEncodeInstruction("cmp qword [rel target + 4], 0x48474645", target.Target.default, target.Target.default);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0x48, 0x81, 0x3D, 0xF9, 0xFF, 0xFF, 0xFF, 0x45, 0x46, 0x47, 0x48 }, facts.bytes);
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("target", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u32, 3), facts.fixups[0].offset);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+}
+
+test "backend adapter encodes fixed riscv instruction bytes" {
+    const riscv_target = try target.Target.initRiscv(64);
+    var facts = try testEncodeInstruction("addi x1, x0, 1", riscv_target, riscv_target);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0x93, 0x00, 0x10, 0x00 }, facts.bytes);
+    try std.testing.expectEqual(@as(u32, 4), facts.current_size);
+    try std.testing.expect(!facts.relaxable);
+    try std.testing.expectEqual(@as(usize, 0), facts.fixups.len);
+}

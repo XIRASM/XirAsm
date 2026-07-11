@@ -1,0 +1,6 @@
+name = "TOML"
+enabled = true
+values = [4, 5]
+
+[target]
+bits = 32
