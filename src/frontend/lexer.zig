@@ -170,7 +170,6 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
     const first_word = firstWord(trimmed);
     return std.mem.eql(u8, first_word, "let") or
         std.mem.eql(u8, first_word, "const") or
-        std.mem.eql(u8, first_word, "var") or
         std.mem.eql(u8, first_word, "fn") or
         std.mem.eql(u8, first_word, "meta") or
         std.mem.eql(u8, first_word, "packed") or
@@ -184,7 +183,6 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
         std.mem.eql(u8, first_word, "break") or
         std.mem.eql(u8, first_word, "continue") or
         std.mem.eql(u8, first_word, "struct") or
-        std.mem.eql(u8, first_word, "enum") or
         std.mem.eql(u8, first_word, "union") or
         looksLikeAssignment(trimmed) or
         std.mem.startsWith(u8, trimmed, "@");

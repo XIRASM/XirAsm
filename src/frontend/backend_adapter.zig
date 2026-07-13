@@ -11,7 +11,6 @@ const Allocator = std.mem.Allocator;
 
 pub const AdapterError = Allocator.Error || error{
     AmbiguousMemorySize,
-    BackendUnsupported,
     BackendFixupCountMismatch,
     BackendFixupOffsetOverflow,
     BackendOutputMaterializationFailed,

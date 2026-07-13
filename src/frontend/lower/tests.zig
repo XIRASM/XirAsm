@@ -152,6 +152,143 @@ test "value functions may update local let bindings only" {
     );
 }
 
+test "collection mutation updates let bindings without aliasing" {
+    var module = try lowerSource(
+        std.testing.allocator,
+        \\let items: list = list.of(1)
+        \\const snapshot: list = items
+        \\list.push_mut(items, list.of(2));
+        \\list.set_mut(items, 0, 3);
+        \\let cfg: map = map.new()
+        \\map.set_mut(cfg, "items", items);
+        \\list.set_mut(items, 0, 4);
+        \\assert(list.eq(snapshot, list.of(1)));
+        \\assert(list.eq(items, list.of(4, list.of(2))));
+        \\assert(list.eq(map.get(cfg, "items"), list.of(3, list.of(2))));
+        \\emit.u8(list.get(items, 0));
+        \\
+    ,
+        .{},
+    );
+    defer module.deinit();
+
+    const items_id = module.symbols.lookup("items") orelse return error.MissingSymbol;
+    const items_symbol = try module.symbols.get(items_id);
+    switch (items_symbol.binding) {
+        .value => |binding| {
+            const items = try binding.value.expectList();
+            try std.testing.expectEqual(@as(u64, 4), try items.items[0].expectInteger());
+            try std.testing.expectEqual(@as(u64, 2), try items.items[1].list.items[0].expectInteger());
+        },
+        else => return error.UnexpectedSymbolBinding,
+    }
+}
+
+test "collection mutation uses nearest local and survives argument scope growth" {
+    var module = try lowerSource(
+        std.testing.allocator,
+        \\fn produce() -> integer {
+        \\    let scratch: list = list.of(1)
+        \\    list.push_mut(scratch, 2);
+        \\    return len(scratch)
+        \\}
+        \\fn build() -> list {
+        \\    let items: list = list.of(7)
+        \\    if true {
+        \\        let items: list = list.of(8)
+        \\        list.push_mut(items, 9);
+        \\        assert(list.eq(items, list.of(8, 9)));
+        \\    }
+        \\    list.push_mut(items, produce());
+        \\    return items
+        \\}
+        \\const result: list = build()
+        \\assert(list.eq(result, list.of(7, 2)));
+        \\emit.u8(list.get(result, 1));
+        \\
+    ,
+        .{},
+    );
+    defer module.deinit();
+}
+
+fn expectCollectionMutationDiagnostic(source_text: []const u8, expected: []const u8) !void {
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+    try std.testing.expectError(
+        error.FrontendDiagnostics,
+        lowerSourceIntoModule(std.testing.allocator, &module, source_text),
+    );
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    try std.testing.expectEqualStrings(expected, module.diagnostics.items.items[0].message);
+    try std.testing.expect(module.diagnostics.items.items[0].span.start < module.diagnostics.items.items[0].span.end);
+}
+
+test "collection mutation rejects invalid targets and arguments precisely" {
+    try expectCollectionMutationDiagnostic(
+        "const items: list = list.new()\nlist.push_mut(items, 1);\n",
+        "cannot mutate a const collection binding",
+    );
+    try expectCollectionMutationDiagnostic(
+        "let items: list = list.new()\nif true {\nconst items: list = list.new()\nlist.push_mut(items, 1);\n}\n",
+        "cannot mutate a const collection binding",
+    );
+    try expectCollectionMutationDiagnostic(
+        "list.push_mut(missing, 1);\n",
+        "collection mutation target must resolve to a let binding",
+    );
+    try expectCollectionMutationDiagnostic(
+        "list.push_mut(list.new(), 1);\n",
+        "collection mutation target must be a direct let binding",
+    );
+    try expectCollectionMutationDiagnostic(
+        "let value = 1\nlist.push_mut(value, 2);\n",
+        "list.push_mut target must have type list",
+    );
+    try expectCollectionMutationDiagnostic(
+        "let items: list = list.new()\nlist.set_mut(items, 0, 1);\n",
+        "list.set_mut index is outside the target list",
+    );
+    try expectCollectionMutationDiagnostic(
+        "let cfg: map = map.new()\nmap.set_mut(cfg, 1, 2);\n",
+        "map.set_mut key must have type string",
+    );
+    try expectCollectionMutationDiagnostic(
+        "let items: list = list.new()\nlist.push_mut(items);\n",
+        "invalid collection mutation argument count",
+    );
+}
+
+test "collection mutation is unavailable during deferred and late layout execution" {
+    try std.testing.expectError(
+        error.FinalizerCannotChangeLayout,
+        lowerSource(
+            std.testing.allocator,
+            "let items: list = list.new()\ndefer {\nlist.push_mut(items, 1);\n}\n",
+            .{},
+        ),
+    );
+    try std.testing.expectError(
+        error.InvalidLateLayout,
+        lowerSource(
+            std.testing.allocator,
+            "let items: list = list.new()\nlate_layout {\nlist.push_mut(items, 1);\n}\n",
+            .{},
+        ),
+    );
+}
+
+test "collection mutation is not an expression API" {
+    try std.testing.expectError(
+        error.InvalidExpression,
+        lowerSource(
+            std.testing.allocator,
+            "let items: list = list.new()\nconst result = list.push_mut(items, 1)\n",
+            .{},
+        ),
+    );
+}
+
 test "lowering records Meta diagnostic API messages" {
     var module = try lowerSource(
         std.testing.allocator,
@@ -1569,6 +1706,12 @@ fn checkLowerPipelineAllocationFailures(allocator: std.mem.Allocator) !void {
         \\    emit.u8(value + 1);
         \\}
         \\const header: Header = Header { offset: align_up(3, 4) };
+        \\let items: list = list.of(1)
+        \\list.push_mut(items, list.of(2));
+        \\list.set_mut(items, 0, 3);
+        \\let properties: map = map.new()
+        \\map.set_mut(properties, "items", items);
+        \\assert(list.eq(map.get(properties, "items"), list.of(3, list.of(2))));
         \\emit.struct(header);
         \\emit_pair(1);
         \\for item in list.of(2, 3) {

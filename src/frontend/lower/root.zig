@@ -11,6 +11,7 @@ const target = @import("../target.zig");
 const value_mod = @import("../value.zig");
 const aggregate_literal = @import("aggregate_literal.zig");
 const arguments = @import("arguments.zig");
+const collection_mutation = @import("collection_mutation.zig");
 const contracts = @import("contracts.zig");
 const context_mod = @import("context.zig");
 const data_emission = @import("data_emission.zig");
@@ -253,6 +254,10 @@ fn lowerStatement(
             try type_declaration.lower(allocator, module, declaration, typeDeclarationCallbacks());
         },
         .api_call => |call| {
+            if (collection_mutation.mutationKind(call.callee)) |mutation| {
+                try collection_mutation.lower(module, context, active.*, call, mutation, collectionMutationCallbacks());
+                return;
+            }
             if (context.value_function_depth != 0 and api_mod.apiCallHasOutputSideEffect(call.callee)) return error.SideEffectInValueFunction;
             try api_mod.lowerApiCall(allocator, module, active, output_stack, call, context, apiCallbacks());
         },
@@ -681,6 +686,12 @@ fn valueBindingCallbacks() value_binding.Callbacks {
     return .{
         .eval_integer_at_context = evalIntegerAtContext,
         .eval_value_at_context = evalValueAtContext,
+    };
+}
+
+fn collectionMutationCallbacks() collection_mutation.Callbacks {
+    return .{
+        .value_arg_at_context = valueArgAtContext,
     };
 }
 

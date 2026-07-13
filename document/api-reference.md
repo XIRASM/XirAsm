@@ -2198,9 +2198,10 @@ The byte helpers reject:
 
 ### Chapter 12: Lists and Maps
 
-Lists and maps are immutable compile-time collections. Operations that add,
+Lists and maps are compile-time value collections. Expression helpers that add,
 replace, or combine values return a new collection and leave every input
-unchanged.
+unchanged. Explicit mutation statements are available for direct `let`
+bindings when an algorithm needs incremental construction.
 
 #### List Functions
 
@@ -2214,6 +2215,13 @@ unchanged.
 | `list.set(value, index, item)` | `list` | Replaces one item. |
 | `list.slice(value, start, count)` | `list` | Returns a contiguous range. |
 | `list.eq(left, right)` | `bool` | Tests ordered, recursive list equality. |
+
+The statement APIs mutate a direct `let` binding and return no value:
+
+| Statement | Description |
+| --- | --- |
+| `list.push_mut(target, item);` | Appends a cloned item to `target`. |
+| `list.set_mut(target, index, item);` | Replaces an existing item with a cloned value. |
 
 `list.get` and `list.set` require an index smaller than the list length.
 `list.slice` accepts a starting index from zero through the list length, but
@@ -2253,6 +2261,10 @@ lists, maps, structs, strings, and byte sequences recursively.
 | `map.values(value)` | `list` | Returns values in matching insertion order. |
 | `map.eq(left, right)` | `bool` | Tests recursive map equality without considering key order. |
 
+`map.set_mut(target, key, item);` inserts or replaces a cloned value in a
+direct `let`-bound map. The key must be a string. Replacing a key keeps its
+insertion position.
+
 Map keys are strings. Adding a new key appends an entry to the insertion order.
 Replacing an existing key keeps its position. Consequently, `map.keys` and
 `map.values` return parallel lists whose indexes refer to the same entries.
@@ -2289,6 +2301,20 @@ emit.u8(map.get(complete, "mode"))
 
 This emits `40`. `map.eq` compares keys and nested values, but does not require
 the maps to have the same insertion order.
+
+#### Mutable Collection Binding Rules
+
+The target of `list.push_mut`, `list.set_mut`, or `map.set_mut` must be a direct
+identifier that resolves to the nearest `let` binding. The target cannot be a
+`const`, temporary expression, call result, field access, or value of the wrong
+collection type. Top-level `let` bindings are valid during ordinary lowering.
+Inside a value function, only bindings local to that invocation may be
+mutated. These statements are not expression calls and are unavailable in
+`defer` and `late_layout` blocks.
+
+Inserted values are deep-cloned before the mutation commits. A prior clone of
+the target and a collection inserted into another target therefore remain
+independent. Allocation failure leaves the target unchanged.
 
 #### Error Conditions
 

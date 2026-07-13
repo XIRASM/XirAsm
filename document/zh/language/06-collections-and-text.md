@@ -15,7 +15,7 @@ XIRASM 为这些用途提供了四种常见值类型：
 
 这些类型都属于编译期值。创建字符串、字节序列、列表或映射并不会写出任何内容。只有把值传给输出接口，它的内容才会成为生成文件的一部分。
 
-字符串、字节序列、列表和映射通过会产生新值的辅助接口进行操作。`list.push` 或 `map.set` 之类的操作会返回一个新值，而不是就地修改原值。这样既能明确表示每个中间状态，也能安全地重复使用已有值。
+字符串、字节序列、列表和映射都提供会产生新值的辅助接口。`list.push` 或 `map.set` 之类的操作会返回一个新值，而不是就地修改原值。列表和映射还提供显式的语句接口，用于逐步更新由 `let` 绑定的集合。通过这些接口插入的值仍会被深拷贝，因此不同绑定之间不会产生隐式别名。
 
 ## 用字符串表示源文本
 
@@ -174,6 +174,35 @@ for value in patched {
 - `len(value)` 返回元素数量。
 
 列表自身包含元素顺序，因此可以自然地配合 `for` 使用。节描述、表格行、字节块以及其他必须按确定顺序处理的数据都适合使用列表。
+
+## 更新由 `let` 绑定的集合
+
+当一个局部算法需要逐步构造列表或映射时，可以使用可变语句接口：
+
+```asm
+let items: list = list.of(1, 2)
+list.push_mut(items, 3);
+list.set_mut(items, 0, 4);
+
+let options: map = map.new()
+map.set_mut(options, "arch", "x64");
+map.set_mut(options, "items", items);
+```
+
+第一个参数必须是由 `let` 绑定的直接标识符。`const` 绑定、临时表达式、函数调用结果、字段访问、未定义名称以及类型不匹配的集合都会被拒绝。词法查找选择最近的绑定，因此块内的同名 `let` 会遮蔽外层绑定。普通 lowering 阶段可以更新顶层 `let`；值函数只能更新本次调用内部的局部 `let`。
+
+`list.push_mut` 追加一个深拷贝后的元素；`list.set_mut` 替换已有的从零开始的索引；`map.set_mut` 添加或替换字符串键对应的值，替换已有键时不会改变它的插入位置。这些接口是语句，不会产生表达式结果，也不能在 `defer` 或 `late_layout` 块中使用。
+
+深拷贝仍然是值隔离边界：
+
+```asm
+let items: list = list.of(1)
+const snapshot: list = items
+list.push_mut(items, 2);
+
+assert(list.eq(snapshot, list.of(1)));
+assert(list.eq(items, list.of(1, 2)));
+```
 
 ## 列表可以保存更复杂的值
 

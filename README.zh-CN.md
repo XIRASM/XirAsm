@@ -123,6 +123,11 @@ cd hello-linux
 xirasm build
 ```
 
+## 编辑器支持
+
+独立的 [XIRASM VS Code 扩展](https://codeberg.org/kukuyun/xirasm-vscode)
+提供语法高亮、补全、导航与编译器诊断。
+
 ## 文档
 
 - [完整中文文档 PDF](document/zh/pdf/xirasm-documentation-zh-CN.pdf) - 合并语言指南、
@@ -136,7 +141,7 @@ xirasm build
 
 ## 状态
 
-当前版本：**0.2.3**
+当前版本：**0.2.5**
 
 XIRASM 仍处于 1.0 之前，公开 API 在稳定版之前可能继续收敛。
 

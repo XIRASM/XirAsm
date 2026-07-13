@@ -313,6 +313,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/api/user-api-matrix.tsv"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower/root.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/collection_mutation.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower/api.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower/deferred.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower/late_layout.zig"));
@@ -450,6 +451,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_cursor_facts.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/string_bytes_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/list_helpers.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/collection_mutation.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/split_join_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/map_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/token_match_helpers.asm"));
@@ -476,7 +478,6 @@ pub fn build(b: *std.Build) void {
 
     const release_boundary_step = b.step("test-release-boundary", "Validate release candidate path, docs, and brand boundary");
     const run_release_boundary = b.addRunArtifact(release_boundary_checker);
-    run_release_boundary.addFileArg(b.path(".gitignore"));
     run_release_boundary.addFileArg(b.path("build.zig"));
     run_release_boundary.addFileArg(b.path("build.zig.zon"));
     run_release_boundary.addFileArg(b.path("LICENSE"));
@@ -1225,7 +1226,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/12-lists-maps.asm",
         "api-reference-12-lists-maps.bin",
         "x64",
-        "00101112aa030404044003",
+        "00101112aa030404044003030204",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -3794,6 +3795,16 @@ pub fn build(b: *std.Build) void {
         "meta-list-helpers.bin",
         "x64",
         "01aa03044f4b3412",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/collection_mutation.asm",
+        "meta-collection-mutation.bin",
+        "x64",
+        "040203020702",
     );
     addAsmFixture(
         b,

@@ -1,6 +1,6 @@
 // Tail reserve advances logical region size but is not materialized in flat
 // file bytes. A following initialized byte makes the reserve a middle gap.
-// This is the custom-format boundary equivalent of fasmg section/rb trimming.
+// This is the custom-format boundary for section-tail reserve trimming.
 
 region.begin("payload", 0x5000, 0);
 

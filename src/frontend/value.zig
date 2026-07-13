@@ -22,6 +22,12 @@ pub const ValueType = enum {
     map,
 };
 
+pub const MutableValueLookup = union(enum) {
+    missing,
+    immutable,
+    value: *Value,
+};
+
 pub fn valueTypeFromName(name: []const u8) ?ValueType {
     if (std.mem.eql(u8, name, "void")) return .void;
     if (std.mem.eql(u8, name, "bool")) return .boolean;
@@ -125,6 +131,9 @@ pub const StructValue = struct {
 pub const ListValue = struct {
     items: []Value,
 
+    pub const PushError = std.mem.Allocator.Error || error{CollectionTooLarge};
+    pub const SetError = std.mem.Allocator.Error || error{IndexOutOfBounds};
+
     pub fn deinit(self: *ListValue, allocator: std.mem.Allocator) void {
         for (self.items) |*item| {
             item.deinit(allocator);
@@ -137,6 +146,26 @@ pub const ListValue = struct {
         return .{
             .items = try cloneValueSlice(allocator, self.items),
         };
+    }
+
+    pub fn pushCloned(self: *ListValue, allocator: std.mem.Allocator, item: Value) PushError!void {
+        var cloned = try item.clone(allocator);
+        errdefer cloned.deinit(allocator);
+
+        const old_len = self.items.len;
+        const new_len = std.math.add(usize, old_len, 1) catch return error.CollectionTooLarge;
+        self.items = try allocator.realloc(self.items, new_len);
+        self.items[old_len] = cloned;
+    }
+
+    pub fn setCloned(self: *ListValue, allocator: std.mem.Allocator, index: usize, item: Value) SetError!void {
+        if (index >= self.items.len) return error.IndexOutOfBounds;
+        var replacement = try item.clone(allocator);
+        errdefer replacement.deinit(allocator);
+
+        var previous = self.items[index];
+        self.items[index] = replacement;
+        previous.deinit(allocator);
     }
 };
 
@@ -163,6 +192,8 @@ pub const MapEntry = struct {
 
 pub const MapValue = struct {
     entries: []MapEntry,
+
+    pub const MutationError = std.mem.Allocator.Error || error{CollectionTooLarge};
 
     pub fn deinit(self: *MapValue, allocator: std.mem.Allocator) void {
         for (self.entries) |*entry| {
@@ -191,8 +222,38 @@ pub const MapValue = struct {
     }
 
     pub fn entryByKey(self: MapValue, key: []const u8) ?*const MapEntry {
-        for (self.entries) |*entry| {
-            if (std.mem.eql(u8, entry.key, key)) return entry;
+        const index = self.entryIndexByKey(key) orelse return null;
+        return &self.entries[index];
+    }
+
+    pub fn setCloned(self: *MapValue, allocator: std.mem.Allocator, key: []const u8, value: Value) MutationError!void {
+        if (self.entryIndexByKey(key)) |index| {
+            var replacement = try value.clone(allocator);
+            errdefer replacement.deinit(allocator);
+
+            var previous = self.entries[index].value;
+            self.entries[index].value = replacement;
+            previous.deinit(allocator);
+            return;
+        }
+
+        const owned_key = try allocator.dupe(u8, key);
+        errdefer allocator.free(owned_key);
+        var owned_value = try value.clone(allocator);
+        errdefer owned_value.deinit(allocator);
+
+        const old_len = self.entries.len;
+        const new_len = std.math.add(usize, old_len, 1) catch return error.CollectionTooLarge;
+        self.entries = try allocator.realloc(self.entries, new_len);
+        self.entries[old_len] = .{
+            .key = owned_key,
+            .value = owned_value,
+        };
+    }
+
+    fn entryIndexByKey(self: MapValue, key: []const u8) ?usize {
+        for (self.entries, 0..) |entry, index| {
+            if (std.mem.eql(u8, entry.key, key)) return index;
         }
         return null;
     }
@@ -600,6 +661,84 @@ test "value owns and clones nested map bindings" {
     try std.testing.expect(original_nested.entries.ptr != cloned_nested.entries.ptr);
     const nested_list = try cloned_nested.entries[0].value.expectList();
     try std.testing.expectEqual(@as(u64, 2), try nested_list.items[0].expectInteger());
+}
+
+test "list mutation clones appended and replacement values" {
+    var list: ListValue = .{
+        .items = try std.testing.allocator.dupe(Value, &.{Value.int(1)}),
+    };
+    defer list.deinit(std.testing.allocator);
+
+    var nested: Value = .{
+        .list = .{ .items = try std.testing.allocator.dupe(Value, &.{Value.int(2)}) },
+    };
+    defer nested.deinit(std.testing.allocator);
+
+    try list.pushCloned(std.testing.allocator, nested);
+    try list.setCloned(std.testing.allocator, 0, nested);
+    try std.testing.expectError(error.IndexOutOfBounds, list.setCloned(std.testing.allocator, 2, Value.int(3)));
+
+    nested.list.items[0] = Value.int(9);
+    try std.testing.expectEqual(@as(u64, 2), try list.items[0].list.items[0].expectInteger());
+    try std.testing.expectEqual(@as(u64, 2), try list.items[1].list.items[0].expectInteger());
+}
+
+test "map mutation inserts and replaces cloned values" {
+    var map: MapValue = .{ .entries = try std.testing.allocator.alloc(MapEntry, 0) };
+    defer map.deinit(std.testing.allocator);
+
+    var nested: Value = .{
+        .list = .{ .items = try std.testing.allocator.dupe(Value, &.{Value.int(4)}) },
+    };
+    defer nested.deinit(std.testing.allocator);
+
+    try map.setCloned(std.testing.allocator, "items", nested);
+    try map.setCloned(std.testing.allocator, "items", Value.int(7));
+    try map.setCloned(std.testing.allocator, "other", nested);
+
+    try std.testing.expectEqual(@as(usize, 2), map.entries.len);
+    try std.testing.expectEqual(@as(u64, 7), try map.entryByKey("items").?.value.expectInteger());
+    nested.list.items[0] = Value.int(9);
+    try std.testing.expectEqual(@as(u64, 4), try map.entryByKey("other").?.value.list.items[0].expectInteger());
+}
+
+fn checkCollectionMutationAllocationFailures(allocator: std.mem.Allocator) !void {
+    var list: ListValue = .{
+        .items = try allocator.dupe(Value, &.{Value.int(1)}),
+    };
+    defer list.deinit(allocator);
+    var map: MapValue = .{ .entries = try allocator.alloc(MapEntry, 0) };
+    defer map.deinit(allocator);
+    var nested: Value = .{
+        .list = .{ .items = try allocator.dupe(Value, &.{Value.int(2)}) },
+    };
+    defer nested.deinit(allocator);
+
+    list.pushCloned(allocator, nested) catch |err| {
+        try std.testing.expectEqual(@as(usize, 1), list.items.len);
+        return err;
+    };
+    list.setCloned(allocator, 0, nested) catch |err| {
+        try std.testing.expectEqual(@as(u64, 1), try list.items[0].expectInteger());
+        return err;
+    };
+    map.setCloned(allocator, "first", nested) catch |err| {
+        try std.testing.expectEqual(@as(usize, 0), map.entries.len);
+        return err;
+    };
+    map.setCloned(allocator, "first", nested) catch |err| {
+        try std.testing.expectEqual(@as(usize, 1), map.entries.len);
+        try std.testing.expectEqual(@as(u64, 2), try map.entries[0].value.list.items[0].expectInteger());
+        return err;
+    };
+}
+
+test "collection mutation handles every allocation failure transactionally" {
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        checkCollectionMutationAllocationFailures,
+        .{},
+    );
 }
 
 test "value stores type bindings" {

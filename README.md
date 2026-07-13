@@ -131,6 +131,11 @@ cd hello-linux
 xirasm build
 ```
 
+## Editor Support
+
+The standalone [XIRASM VS Code extension](https://codeberg.org/kukuyun/xirasm-vscode)
+provides highlighting, completion, navigation, and compiler-backed diagnostics.
+
 ## Documentation
 
 - [Language Guide](document/language.md) - learn the compile-time language and
@@ -144,7 +149,7 @@ xirasm build
 
 ## Status
 
-Current version: **0.2.3**
+Current version: **0.2.5**
 
 XIRASM is pre-1.0 software. Public APIs may still be refined before the stable
 release.

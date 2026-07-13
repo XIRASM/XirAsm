@@ -153,6 +153,18 @@ pub const SymbolStore = struct {
         }
     }
 
+    pub fn lookupMutableValue(self: *SymbolStore, name: []const u8) value_mod.MutableValueLookup {
+        const id = self.lookup(name) orelse return .missing;
+        const stored = &self.items.items[id.index];
+        return switch (stored.binding) {
+            .value => |*binding| if (binding.mutability == .let)
+                .{ .value = &binding.value }
+            else
+                .immutable,
+            .unknown, .absolute, .label => .missing,
+        };
+    }
+
     pub fn lookup(self: *const SymbolStore, name: []const u8) ?SymbolId {
         for (self.items.items, 0..) |symbol, index| {
             if (std.mem.eql(u8, symbol.name, name)) {

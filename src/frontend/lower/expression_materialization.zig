@@ -33,7 +33,6 @@ fn mapPassError(err: pass.PassError) LowerError {
         error.OffsetOverflow => error.OffsetOverflow,
         error.TooManyFixups => error.TooManyFixups,
         error.FrontendDiagnostics => error.FrontendDiagnostics,
-        error.BackendUnsupported,
         error.InstructionTooLarge,
         error.InvalidFixupTarget,
         error.InvalidInstructionText,

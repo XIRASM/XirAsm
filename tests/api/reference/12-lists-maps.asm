@@ -66,3 +66,18 @@ for key in keys {
 
 emit.u8(map.get(updated, "mode"))
 emit.u8(len(values))
+
+let mutable_list: list = list.of(1)
+const mutable_snapshot: list = mutable_list
+list.push_mut(mutable_list, 2);
+list.set_mut(mutable_list, 0, 3);
+
+let mutable_map: map = map.new()
+map.set_mut(mutable_map, "items", mutable_list);
+list.set_mut(mutable_list, 0, 4);
+
+assert(list.eq(mutable_snapshot, list.of(1)))
+assert(list.eq(map.get(mutable_map, "items"), list.of(3, 2)))
+emit.u8(list.get(map.get(mutable_map, "items"), 0))
+emit.u8(list.get(map.get(mutable_map, "items"), 1))
+emit.u8(list.get(mutable_list, 0))

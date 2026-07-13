@@ -459,13 +459,16 @@ expr.bytes_from_hex	expr	bytes.from_hex	meta_std.isBuiltinName(name); "bytes.fro
 expr.list_new	expr	list.new	meta_std.isBuiltinName(name); "list.new"	list.new(	Create empty compile-time list value.
 expr.list_of	expr	list.of	meta_std.isBuiltinName(name); "list.of"	list.of(	Create compile-time list from values.
 expr.list_push	expr	list.push	meta_std.isBuiltinName(name); "list.push"	list.push(	Return list with one appended value.
+api.list_push_mut	api	list.push_mut	api-matrix-lower: "list.push_mut"; mutationKind(call.callee)	list.push_mut(	Append a cloned value to a direct let-bound list in place.
 expr.list_concat	expr	list.concat	meta_std.isBuiltinName(name); "list.concat"	list.concat(	Concatenate compile-time list values.
 expr.list_get	expr	list.get	meta_std.isBuiltinName(name); "list.get"	list.get(	Read cloned list element by index.
 expr.list_set	expr	list.set	meta_std.isBuiltinName(name); "list.set"	list.set(	Return list with one replaced element.
+api.list_set_mut	api	list.set_mut	api-matrix-lower: "list.set_mut"; mutationKind(call.callee)	list.set_mut(	Replace one element of a direct let-bound list in place.
 expr.list_slice	expr	list.slice	meta_std.isBuiltinName(name); "list.slice"	list.slice(	Return cloned list range.
 expr.list_eq	expr	list.eq	meta_std.isBuiltinName(name); "list.eq"	list.eq(	Deep list equality helper.
 expr.map_new	expr	map.new	meta_std.isBuiltinName(name); "map.new"	map.new(	Create empty compile-time map value.
 expr.map_set	expr	map.set	meta_std.isBuiltinName(name); "map.set"	map.set(	Return map with string key set to cloned value.
+api.map_set_mut	api	map.set_mut	api-matrix-lower: "map.set_mut"; mutationKind(call.callee)	map.set_mut(	Insert or replace a cloned value in a direct let-bound map.
 expr.map_has	expr	map.has	meta_std.isBuiltinName(name); "map.has"	map.has(	Test whether map contains a string key.
 expr.map_get	expr	map.get	meta_std.isBuiltinName(name); "map.get"	map.get(	Read cloned map value by string key.
 expr.map_get_or	expr	map.get_or	meta_std.isBuiltinName(name); "map.get_or"	map.get_or(	Read map value or cloned default.

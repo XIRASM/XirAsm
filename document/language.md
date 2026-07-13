@@ -1272,10 +1272,12 @@ These are compile-time values. Creating a string, byte sequence, list, or map
 does not emit output. Pass the value to an output API when its contents should
 become part of the generated file.
 
-Strings, byte sequences, lists, and maps use value-producing helpers. An
+Strings, byte sequences, lists, and maps have value-producing helpers. An
 operation such as `list.push` or `map.set` returns a new value rather than
-modifying the original value in place. This makes intermediate states explicit
-and safe to reuse.
+modifying the original value in place. Lists and maps also provide explicit
+statement APIs for updating a direct `let` binding when building every
+intermediate collection would obscure the algorithm. Values inserted through
+those APIs are still cloned, so separately bound collections do not alias.
 
 ### Strings for Source-Level Text
 
@@ -1430,6 +1432,45 @@ Other common list operations are:
 Lists work naturally with `for` because their order is part of the value.
 They are a good choice for section descriptions, table rows, byte chunks, and
 any other data that must be processed in a defined sequence.
+
+### Updating `let`-Bound Collections
+
+Use the mutation statement APIs when one local algorithm incrementally builds
+a list or map:
+
+```asm
+let items: list = list.of(1, 2)
+list.push_mut(items, 3);
+list.set_mut(items, 0, 4);
+
+let options: map = map.new()
+map.set_mut(options, "arch", "x64");
+map.set_mut(options, "items", items);
+```
+
+The first argument must be a direct identifier bound with `let`. A `const`
+binding, temporary expression, function result, field access, missing name, or
+value of the wrong collection type is rejected. Lexical lookup uses the
+nearest binding, so a block-local `let` shadows an outer binding. Top-level
+`let` values may be updated during ordinary lowering; a value function may
+update only its own local `let` bindings.
+
+`list.push_mut` appends one cloned item. `list.set_mut` replaces the item at an
+existing zero-based index. `map.set_mut` inserts or replaces a string-keyed
+entry while preserving the position of an existing key. Mutation statements
+do not produce expression values and are unavailable in `defer` and
+`late_layout` blocks.
+
+Cloning remains the isolation boundary:
+
+```asm
+let items: list = list.of(1)
+const snapshot: list = items
+list.push_mut(items, 2);
+
+assert(list.eq(snapshot, list.of(1)));
+assert(list.eq(items, list.of(1, 2)));
+```
 
 ### Lists Can Hold Larger Values
 

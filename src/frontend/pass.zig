@@ -10,7 +10,6 @@ const module_mod = @import("module.zig");
 const Allocator = std.mem.Allocator;
 
 pub const PassError = Allocator.Error || error{
-    BackendUnsupported,
     FrontendDiagnostics,
     FragmentTooLarge,
     InstructionTooLarge,
@@ -197,15 +196,6 @@ pub fn encodeInstructionFragments(
                             diagnostic.Severity.err,
                             instruction.span,
                             "backend could not materialize instruction output",
-                        );
-                        return error.FrontendDiagnostics;
-                    },
-                    error.BackendUnsupported => {
-                        try module.diagnostics.add(
-                            allocator,
-                            diagnostic.Severity.err,
-                            instruction.span,
-                            "backend instruction form is not supported by the frontend adapter",
                         );
                         return error.FrontendDiagnostics;
                     },

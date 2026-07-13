@@ -1,8 +1,0 @@
-{
-  "//": "Bind shared assembly suffixes to XIRASM in this workspace when another extension claims them globally.",
-  "files.associations": {
-    "*.xir": "xirasm",
-    "*.asm": "xirasm",
-    "*.inc": "xirasm"
-  }
-}

@@ -24,6 +24,13 @@ const banned_brand_tokens = [_][]const u8{
     &[_]u8{ 'g', 'a', 's' },
     &[_]u8{ 'y', 'a', 's', 'm' },
     &[_]u8{ 'z', 'a', 's', 'm', 'g' },
+    &[_]u8{ 'c', 'o', 'd', 'e', 'x' },
+    &[_]u8{ 'c', 'h', 'a', 't', 'g', 'p', 't' },
+    &[_]u8{ 'o', 'p', 'e', 'n', 'a', 'i' },
+    &[_]u8{ 'c', 'l', 'a', 'u', 'd', 'e' },
+    &[_]u8{ 'a', 'n', 't', 'h', 'r', 'o', 'p', 'i', 'c' },
+    &[_]u8{ 'g', 'e', 'm', 'i', 'n', 'i' },
+    &[_]u8{ 'c', 'o', 'p', 'i', 'l', 'o', 't' },
 };
 
 const banned_docs_dir = [_]u8{ 'd', 'o', 'c', 's' };
@@ -86,8 +93,7 @@ fn readFile(allocator: Allocator, io: Io, path: []const u8) ![]u8 {
 }
 
 fn validateReleasePath(stderr: *Io.Writer, path: []const u8) !bool {
-    const allowed = pathIs(path, ".gitignore") or
-        pathIs(path, "build.zig") or
+    const allowed = pathIs(path, "build.zig") or
         pathIs(path, "build.zig.zon") or
         pathIs(path, "LICENSE") or
         pathIs(path, "README.md") or
@@ -103,8 +109,6 @@ fn validateReleasePath(stderr: *Io.Writer, path: []const u8) !bool {
 }
 
 fn validateBannedPathReferences(stderr: *Io.Writer, file: FileText) !bool {
-    if (pathIs(file.path, ".gitignore")) return false;
-
     var failed = false;
     if (containsPathReference(file.bytes, banned_local_dir[0..])) {
         try stderr.print("release boundary banned .local reference: {s}\n", .{file.path});
