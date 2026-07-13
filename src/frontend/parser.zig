@@ -94,6 +94,10 @@ pub const Parser = struct {
                         try appendMetaDeferStatement(self, &statements, token);
                     } else if (looksLikeMetaIfStart(token.text)) {
                         try appendMetaIfStatement(self, &statements, token);
+                    } else if (looksLikeMetaBreak(token.text)) {
+                        try statements.append(self.allocator, .{ .meta_break = .{ .span = token.span } });
+                    } else if (looksLikeMetaContinue(token.text)) {
+                        try statements.append(self.allocator, .{ .meta_continue = .{ .span = token.span } });
                     } else if (looksLikeValueDeclaration(token.text)) {
                         try appendValueDeclaration(&statements, self.allocator, token);
                     } else if (looksLikeAssignment(token.text)) {
@@ -363,7 +367,7 @@ fn appendMetaIfStatement(
                 }
             },
             .meta_line => {
-                if (looksLikeMetaElseStart(token.text)) {
+                if (looksLikeMetaElseStart(token.text) or looksLikeMetaElseIfStart(token.text)) {
                     if (saw_else) return error.InvalidMetaIf;
                     saw_else = true;
                     active_body = &else_body;
@@ -387,7 +391,7 @@ fn consumeSameLineElse(
     else_body: *ast.StatementList,
     token: lexer.Token,
 ) ParseError!bool {
-    if (!looksLikeSameLineMetaElseStart(token.text)) return false;
+    if (!looksLikeSameLineMetaElseStart(token.text) and !looksLikeSameLineMetaElseIfStart(token.text)) return false;
     try appendMetaElseBody(parser, else_body, token);
     return true;
 }
@@ -397,6 +401,10 @@ fn appendMetaElseBody(
     else_body: *ast.StatementList,
     start_token: lexer.Token,
 ) ParseError!void {
+    if (looksLikeMetaElseIfStart(start_token.text) or looksLikeSameLineMetaElseIfStart(start_token.text)) {
+        try appendMetaElseIf(parser, else_body, start_token);
+        return;
+    }
     if (!looksLikeMetaElseStart(start_token.text) and !looksLikeSameLineMetaElseStart(start_token.text)) return error.InvalidMetaIf;
 
     while (!parser.lexer.done()) {
@@ -409,6 +417,26 @@ fn appendMetaElseBody(
     }
 
     return error.UnexpectedEndOfMetaIf;
+}
+
+fn appendMetaElseIf(
+    parser: *Parser,
+    else_body: *ast.StatementList,
+    token: lexer.Token,
+) ParseError!void {
+    const trimmed = std.mem.trim(u8, token.text, " \t");
+    const if_text = if (std.mem.startsWith(u8, trimmed, "} else if "))
+        trimmed["} else ".len..]
+    else
+        trimmed["else ".len..];
+    const nested_token: lexer.Token = .{
+        .kind = .meta_line,
+        .text = if_text,
+        .span = token.span,
+        .line = token.line,
+        .column = token.column,
+    };
+    try appendMetaIfStatement(parser, else_body, nested_token);
 }
 
 fn appendMetaWhileStatement(
@@ -623,6 +651,10 @@ fn appendExecutableStatement(
                 try appendMetaDeferStatement(parser, statements, statement_token);
             } else if (looksLikeMetaIfStart(statement_token.text)) {
                 try appendMetaIfStatement(parser, statements, statement_token);
+            } else if (looksLikeMetaBreak(statement_token.text)) {
+                try statements.append(parser.allocator, .{ .meta_break = .{ .span = statement_token.span } });
+            } else if (looksLikeMetaContinue(statement_token.text)) {
+                try statements.append(parser.allocator, .{ .meta_continue = .{ .span = statement_token.span } });
             } else if (looksLikeValueDeclaration(statement_token.text)) {
                 try appendValueDeclaration(statements, parser.allocator, statement_token);
             } else if (looksLikeAssignment(statement_token.text)) {
@@ -801,7 +833,10 @@ fn parseMetaReturn(
     rest = std.mem.trim(u8, rest["return".len..], " \t;");
     if (rest.len == 0) return error.InvalidExpression;
 
-    var parsed = expr.parseOwned(allocator, rest) catch return error.InvalidExpression;
+    var parsed = expr.parseOwned(allocator, rest) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidExpression,
+    };
     errdefer parsed.deinit(allocator);
 
     return .{
@@ -993,9 +1028,19 @@ fn looksLikeMetaElseStart(text: []const u8) bool {
     return std.mem.eql(u8, trimmed, "else {");
 }
 
+fn looksLikeMetaElseIfStart(text: []const u8) bool {
+    const trimmed = std.mem.trim(u8, text, " \t");
+    return std.mem.startsWith(u8, trimmed, "else if ") and std.mem.endsWith(u8, trimmed, "{");
+}
+
 fn looksLikeSameLineMetaElseStart(text: []const u8) bool {
     const trimmed = std.mem.trim(u8, text, " \t");
     return std.mem.eql(u8, trimmed, "} else {");
+}
+
+fn looksLikeSameLineMetaElseIfStart(text: []const u8) bool {
+    const trimmed = std.mem.trim(u8, text, " \t");
+    return std.mem.startsWith(u8, trimmed, "} else if ") and std.mem.endsWith(u8, trimmed, "{");
 }
 
 fn looksLikeMetaWhileStart(text: []const u8) bool {
@@ -1028,6 +1073,14 @@ fn looksLikeMetaReturn(text: []const u8) bool {
     if (!std.mem.startsWith(u8, trimmed, "return")) return false;
     if (trimmed.len == "return".len) return true;
     return trimmed["return".len] == ' ' or trimmed["return".len] == '\t';
+}
+
+fn looksLikeMetaBreak(text: []const u8) bool {
+    return std.mem.eql(u8, std.mem.trim(u8, text, " \t;"), "break");
+}
+
+fn looksLikeMetaContinue(text: []const u8) bool {
+    return std.mem.eql(u8, std.mem.trim(u8, text, " \t;"), "continue");
 }
 
 fn looksLikeValueDeclaration(text: []const u8) bool {
@@ -1807,6 +1860,79 @@ test "parser builds structured Meta functions and scoped blocks" {
                 else => return error.UnexpectedStatement,
             }
         },
+        else => return error.UnexpectedStatement,
+    }
+}
+
+test "parser preserves nested Meta if inside else body" {
+    var statements = try parseSource(std.testing.allocator,
+        \\fn dispatch(kind: string) {
+        \\    if kind == "read" {
+        \\        emit_read();
+        \\    } else {
+        \\        if kind == "write" {
+        \\            emit_write();
+        \\        } else {
+        \\            emit_poison();
+        \\        }
+        \\    }
+        \\}
+        \\
+    );
+    defer statements.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), statements.items.items.len);
+    const function = switch (statements.items.items[0]) {
+        .meta_fn => |function| function,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqual(@as(usize, 1), function.body.len);
+    const outer_if = switch (function.body[0]) {
+        .meta_if => |meta_if| meta_if,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqual(@as(usize, 1), outer_if.body.len);
+    try std.testing.expectEqual(@as(usize, 1), outer_if.else_body.len);
+    const nested_if = switch (outer_if.else_body[0]) {
+        .meta_if => |meta_if| meta_if,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqual(@as(usize, 1), nested_if.body.len);
+    try std.testing.expectEqual(@as(usize, 1), nested_if.else_body.len);
+}
+
+test "parser expands else if and recognizes loop control statements" {
+    var statements = try parseSource(std.testing.allocator,
+        \\if false {
+        \\    emit.u8(0);
+        \\} else if true {
+        \\    continue;
+        \\} else {
+        \\    break;
+        \\}
+        \\
+    );
+    defer statements.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), statements.items.items.len);
+    const outer_if = switch (statements.items.items[0]) {
+        .meta_if => |meta_if| meta_if,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqual(@as(usize, 1), outer_if.else_body.len);
+    const nested_if = switch (outer_if.else_body[0]) {
+        .meta_if => |meta_if| meta_if,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqualStrings("true", nested_if.condition);
+    try std.testing.expectEqual(@as(usize, 1), nested_if.body.len);
+    try std.testing.expectEqual(@as(usize, 1), nested_if.else_body.len);
+    switch (nested_if.body[0]) {
+        .meta_continue => {},
+        else => return error.UnexpectedStatement,
+    }
+    switch (nested_if.else_body[0]) {
+        .meta_break => {},
         else => return error.UnexpectedStatement,
     }
 }

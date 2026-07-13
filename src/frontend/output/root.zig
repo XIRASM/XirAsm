@@ -27,6 +27,8 @@ pub const DeferredStatement = union(enum) {
     assignment: Assignment,
     // api-matrix-output: DeferredStatement.meta_while
     meta_while: MetaWhile,
+    meta_break: source.SourceSpan,
+    meta_continue: source.SourceSpan,
 
     pub fn deinit(self: *DeferredStatement, allocator: Allocator) void {
         switch (self.*) {
@@ -35,6 +37,7 @@ pub const DeferredStatement = union(enum) {
             .value_decl => |*declaration| declaration.deinit(allocator),
             .assignment => |*assignment| assignment.deinit(allocator),
             .meta_while => |*meta_while| meta_while.deinit(allocator),
+            .meta_break, .meta_continue => {},
         }
         self.* = undefined;
     }
@@ -46,6 +49,7 @@ pub const DeferredStatement = union(enum) {
             .value_decl => |declaration| declaration.span,
             .assignment => |assignment| assignment.span,
             .meta_while => |meta_while| meta_while.span,
+            .meta_break, .meta_continue => |statement_span| statement_span,
         };
     }
 };

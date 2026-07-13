@@ -144,7 +144,7 @@ xirasm build
 
 ## Status
 
-Current version: **0.2.1**
+Current version: **0.2.3**
 
 XIRASM is pre-1.0 software. Public APIs may still be refined before the stable
 release.

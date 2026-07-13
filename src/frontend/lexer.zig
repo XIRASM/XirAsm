@@ -181,6 +181,8 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
         std.mem.eql(u8, first_word, "if") or
         std.mem.eql(u8, first_word, "else") or
         std.mem.eql(u8, first_word, "return") or
+        std.mem.eql(u8, first_word, "break") or
+        std.mem.eql(u8, first_word, "continue") or
         std.mem.eql(u8, first_word, "struct") or
         std.mem.eql(u8, first_word, "enum") or
         std.mem.eql(u8, first_word, "union") or

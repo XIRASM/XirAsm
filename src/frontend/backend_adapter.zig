@@ -12,14 +12,22 @@ const Allocator = std.mem.Allocator;
 pub const AdapterError = Allocator.Error || error{
     AmbiguousMemorySize,
     BackendUnsupported,
+    BackendFixupCountMismatch,
+    BackendFixupOffsetOverflow,
+    BackendOutputMaterializationFailed,
     CmpR64ImmediateOutOfRange,
     HighRegisterNotAllowed,
     ImpossibleAddressSize,
+    InvalidBackendFixupWidth,
     InvalidMemoryScale,
     InstructionTooLarge,
     InvalidInstructionText,
     InvalidRspIndexRegister,
     InvalidModeBits,
+    UnsupportedBackendFixupKind,
+    UnsupportedInstructionTarget,
+    UnsupportedRiscvInstruction,
+    UnsupportedX86Instruction,
     UnsupportedOperandSyntax,
     UnsupportedPrefixes,
 };
@@ -76,7 +84,7 @@ pub fn encodeInstruction(
     return switch (instruction.target.isa()) {
         .x86_64 => encodeX86Instruction(allocator, instruction, options),
         .riscv64 => encodeRiscvInstruction(allocator, instruction, options),
-        .spirv => error.BackendUnsupported,
+        .spirv => error.UnsupportedInstructionTarget,
     };
 }
 
@@ -136,7 +144,7 @@ fn encodeX86Instruction(
     }
     defer encoded.deinit(allocator);
 
-    const bytes = backend.x86.materializeOutput(allocator, encoded.units()) catch return error.BackendUnsupported;
+    const bytes = backend.x86.materializeOutput(allocator, encoded.units()) catch |err| return mapX86MaterializeError(err);
     errdefer allocator.free(bytes);
     try applyX86BackendFixups(allocator, fixups.items, encoded.units());
     applyX86BranchFallbackFixup(fixups.items, parsed.mnemonic, bytes.len);
@@ -254,7 +262,7 @@ fn encodeRiscvInstruction(
         .resolveFn = unknownRiscvExpressionResolver,
     } else null;
 
-    const encoded = backend.riscv.encodeInstructionText(instruction.text, xlen, resolver) catch return error.BackendUnsupported;
+    const encoded = backend.riscv.encodeInstructionText(instruction.text, xlen, resolver) catch |err| return mapRiscvSourceError(err);
     const encoded_bytes = encoded.asSlice();
     const bytes = try allocator.dupe(u8, encoded_bytes);
     errdefer allocator.free(bytes);
@@ -309,11 +317,11 @@ fn applyX86BackendFixups(allocator: Allocator, facts: []FixupFact, units: []cons
     for (units) |unit| {
         const unit_size = if (unit.fixup) |backend_fixup| backend_fixup.size else unit.bytes.len;
         if (unit.fixup) |backend_fixup| {
-            if (fixup_index >= facts.len) return error.BackendUnsupported;
+            if (fixup_index >= facts.len) return error.BackendFixupCountMismatch;
             facts[fixup_index].kind = switch (backend_fixup.kind) {
                 .absolute => .absolute,
                 .relative => .pc_relative,
-                .segment => return error.BackendUnsupported,
+                .segment => return error.UnsupportedBackendFixupKind,
             };
             const effective_addend = try x86BackendFixupAddend(byte_offset, backend_fixup);
             try applyX86BackendFixupAddend(allocator, &facts[fixup_index], effective_addend);
@@ -333,9 +341,9 @@ fn applyX86BackendFixups(allocator: Allocator, facts: []FixupFact, units: []cons
 fn x86BackendFixupAddend(byte_offset: u32, backend_fixup: backend.x86.Fixup) AdapterError!i64 {
     if (backend_fixup.kind != .relative) return backend_fixup.toffset;
 
-    const fixup_end = std.math.add(i64, @intCast(byte_offset), @as(i64, @intCast(backend_fixup.size))) catch return error.BackendUnsupported;
-    const relbase_delta = std.math.sub(i64, fixup_end, backend_fixup.relbase) catch return error.BackendUnsupported;
-    return std.math.add(i64, backend_fixup.toffset, relbase_delta) catch return error.BackendUnsupported;
+    const fixup_end = std.math.add(i64, @intCast(byte_offset), @as(i64, @intCast(backend_fixup.size))) catch return error.BackendFixupOffsetOverflow;
+    const relbase_delta = std.math.sub(i64, fixup_end, backend_fixup.relbase) catch return error.BackendFixupOffsetOverflow;
+    return std.math.add(i64, backend_fixup.toffset, relbase_delta) catch return error.BackendFixupOffsetOverflow;
 }
 
 fn applyX86BackendFixupAddend(allocator: Allocator, fact: *FixupFact, addend: i64) AdapterError!void {
@@ -382,8 +390,8 @@ fn isX86BranchMnemonic(mnemonic: []const u8) bool {
 }
 
 fn fixupWidthBits(byte_size: u8) AdapterError!u16 {
-    if (byte_size == 0 or byte_size > 8) return error.BackendUnsupported;
-    return std.math.mul(u16, byte_size, 8) catch return error.BackendUnsupported;
+    if (byte_size == 0 or byte_size > 8) return error.InvalidBackendFixupWidth;
+    return std.math.mul(u16, byte_size, 8) catch return error.InvalidBackendFixupWidth;
 }
 
 fn deinitFixupFacts(facts: []FixupFact, allocator: Allocator) void {
@@ -459,7 +467,26 @@ fn mapX86EncodeError(err: backend.x86.EncodeError) AdapterError {
         error.InvalidRspIndexRegister => error.InvalidRspIndexRegister,
         error.UnsupportedOperandSyntax => error.UnsupportedOperandSyntax,
         error.UnsupportedPrefixes => error.UnsupportedPrefixes,
-        else => error.BackendUnsupported,
+        else => error.UnsupportedX86Instruction,
+    };
+}
+
+fn mapX86MaterializeError(err: backend.x86.MaterializeError) AdapterError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.InvalidFixupSize => error.InvalidBackendFixupWidth,
+        error.RelativeFixupOverflow => error.BackendFixupOffsetOverflow,
+        error.UnresolvedFixup,
+        error.UnsupportedSegmentFixup,
+        error.UnsupportedReserve,
+        => error.BackendOutputMaterializationFailed,
+    };
+}
+
+fn mapRiscvSourceError(err: backend.riscv.source.SourceError) AdapterError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => error.UnsupportedRiscvInstruction,
     };
 }
 

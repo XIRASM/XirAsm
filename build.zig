@@ -312,6 +312,11 @@ pub fn build(b: *std.Build) void {
     const run_api_matrix = b.addRunArtifact(api_matrix_checker);
     run_api_matrix.addFileArg(b.path("tests/api/user-api-matrix.tsv"));
     run_api_matrix.addFileArg(b.path("src/frontend/lower.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/root.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/api.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/deferred.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/late_layout.zig"));
+    run_api_matrix.addFileArg(b.path("src/frontend/lower/meta_condition.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/expr.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/parser.zig"));
     run_api_matrix.addFileArg(b.path("src/frontend/ast.zig"));
@@ -426,6 +431,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/assignment.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/functions_scopes.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/same_line_else.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/control_flow.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/multiline_function_args.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/return_functions.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/return_functions_finalizer.asm"));
@@ -768,7 +774,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/06-isa-line-semicolon.asm",
         "x64",
         &.{},
-        "BackendUnsupported",
+        "unsupported x86 instruction form",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -777,7 +783,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/06-isa-call-semicolon.asm",
         "x64",
         &.{},
-        "BackendUnsupported",
+        "unsupported x86 instruction form",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -3307,6 +3313,16 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
+        "tests/isa/x86/frontend_const_fixup_matrix.asm",
+        "isa-x86-frontend-const-fixup-matrix.bin",
+        "x64",
+        "00000000000000000000000000000000000000000000000000000000000000004883fa078b05deffffff8b0dd8ffffff488d1dd1ffffff48833dc9ffffffff833dc2ffffff00ff15ccffffffff25beffffffc3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
         "tests/isa/x86/addressing64_matrix.asm",
         "isa-x86-addressing64-matrix.bin",
         "x64",
@@ -3564,6 +3580,16 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
+        "tests/meta/if_procedure_dispatch.asm",
+        "meta-if-procedure-dispatch.bin",
+        "x64",
+        "b811000000b822000000c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
         "tests/meta/assignment.asm",
         "meta-assignment.bin",
         "x64",
@@ -3628,6 +3654,16 @@ pub fn build(b: *std.Build) void {
         "meta-loops.bin",
         "x64",
         "00010203aa",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/control_flow.asm",
+        "meta-control-flow.bin",
+        "x64",
+        "1122000203050701030410111201000304",
     );
     addAsmFixture(
         b,
@@ -4145,6 +4181,42 @@ pub fn build(b: *std.Build) void {
         exe,
         "tests/meta/return_in_procedure.asm",
         "x64",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/break_outside_loop.asm",
+        "x64",
+        &.{},
+        "break used outside of a Meta loop",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/continue_outside_loop.asm",
+        "x64",
+        &.{},
+        "continue used outside of a Meta loop",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/break_cross_function.asm",
+        "x64",
+        &.{},
+        "break used outside of a Meta loop",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/break_outside_deferred_loop.asm",
+        "x64",
+        &.{},
+        "break used outside of a Meta loop",
     );
     const perf_step = b.step("test-isa-perf", "Assemble 100K ISA source performance fixture");
     addAsmSizeFixture(

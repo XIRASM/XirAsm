@@ -12,6 +12,9 @@ syntax.return	syntax	return	MetaReturnStatement	return value	Returns from a retu
 syntax.user_fn_value_call	syntax	user function value call	call_user_function	align_up(3, 0x200)	User return-value Meta function expression call.
 syntax.if	syntax	if	parseMetaIfStart	if target.bits	Compile-time conditional expansion.
 syntax.if_else	syntax	} else {	looksLikeSameLineMetaElseStart	} else {	Same-line Meta else block after an if body.
+syntax.if_else_if	syntax	} else if {	looksLikeSameLineMetaElseIfStart	} else if true {	Chained compile-time conditional branch.
+syntax.break	syntax	break	MetaBreakStatement	break	Ends the innermost active Meta loop.
+syntax.continue	syntax	continue	MetaContinueStatement	continue	Skips the remainder of the current Meta loop iteration.
 syntax.while	syntax	while	parseMetaWhileStart	while false	Compile-time conditional repetition.
 syntax.defer_let	syntax	defer let	DeferredStatement.value_decl	let cursor = payload	Finalization block local value declaration evaluated after output bytes are sealed.
 syntax.defer_assignment	syntax	defer assignment	DeferredStatement.assignment	cursor = cursor + 1	Finalization block local assignment for bounded sealed-image computation.

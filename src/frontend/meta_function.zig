@@ -133,6 +133,8 @@ pub fn cloneStatement(
         .meta_if => |meta_if| .{ .meta_if = try cloneMetaIf(allocator, meta_if) },
         .meta_while => |meta_while| .{ .meta_while = try cloneMetaWhile(allocator, meta_while) },
         .meta_for_range => |meta_for| .{ .meta_for_range = try cloneMetaForRange(allocator, meta_for) },
+        .meta_break => |meta_break| .{ .meta_break = meta_break },
+        .meta_continue => |meta_continue| .{ .meta_continue = meta_continue },
         .meta_fn => |meta_fn| .{ .meta_fn = try clone(allocator, meta_fn) },
         .meta_return => |meta_return| .{ .meta_return = .{
             .value = try cloneExpression(allocator, meta_return.value),
@@ -177,6 +179,13 @@ pub fn cloneStatementSlice(
         cloned_len += 1;
     }
     return cloned;
+}
+
+fn deinitClonedStatementSlice(allocator: Allocator, statements: []ast.Statement) void {
+    for (statements) |*statement| {
+        statement.deinit(allocator);
+    }
+    allocator.free(statements);
 }
 
 fn cloneValueDeclaration(
@@ -373,9 +382,16 @@ fn cloneMetaIf(allocator: Allocator, meta_if: ast.MetaIfStatement) Allocator.Err
     const owned_condition = try allocator.dupe(u8, meta_if.condition);
     errdefer allocator.free(owned_condition);
 
+    const body = try cloneStatementSlice(allocator, meta_if.body);
+    errdefer deinitClonedStatementSlice(allocator, body);
+
+    const else_body = try cloneStatementSlice(allocator, meta_if.else_body);
+    errdefer deinitClonedStatementSlice(allocator, else_body);
+
     return .{
         .condition = owned_condition,
-        .body = try cloneStatementSlice(allocator, meta_if.body),
+        .body = body,
+        .else_body = else_body,
         .span = meta_if.span,
     };
 }

@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const module_mod = @import("module.zig");
+const type_name_mod = @import("type_name.zig");
 const types = @import("types.zig");
 const value_mod = @import("value.zig");
 
@@ -76,16 +77,8 @@ pub fn coerceValueToAnnotation(module: *module_mod.Module, value: *value_mod.Val
 }
 
 fn lowerLayoutTypeName(module: *module_mod.Module, name: []const u8) TypeCheckError!types.TypeId {
-    if (module.lookupTypeName(name)) |id| return id;
+    if (try type_name_mod.resolveNamedOrFixedInteger(module, name)) |id| return id;
     if (std.mem.eql(u8, name, "usize")) return module.getOrAddIntType("usize", @bitSizeOf(usize), .unsigned);
-    if (std.mem.eql(u8, name, "u8")) return module.getOrAddIntType("u8", 8, .unsigned);
-    if (std.mem.eql(u8, name, "u16")) return module.getOrAddIntType("u16", 16, .unsigned);
-    if (std.mem.eql(u8, name, "u32")) return module.getOrAddIntType("u32", 32, .unsigned);
-    if (std.mem.eql(u8, name, "u64")) return module.getOrAddIntType("u64", 64, .unsigned);
-    if (std.mem.eql(u8, name, "i8")) return module.getOrAddIntType("i8", 8, .signed);
-    if (std.mem.eql(u8, name, "i16")) return module.getOrAddIntType("i16", 16, .signed);
-    if (std.mem.eql(u8, name, "i32")) return module.getOrAddIntType("i32", 32, .signed);
-    if (std.mem.eql(u8, name, "i64")) return module.getOrAddIntType("i64", 64, .signed);
     return error.UnknownTypeName;
 }
 
@@ -133,6 +126,20 @@ test "typecheck keeps layout integer annotations out of ValueType" {
     }
 
     try std.testing.expect(value_mod.valueTypeFromName("u8") == null);
+}
+
+test "typecheck prefers registered layout types over builtin usize" {
+    var module = try module_mod.Module.init(std.testing.allocator, @import("target.zig").Target.default);
+    defer module.deinit();
+
+    const custom = try module.addStructType("usize", &.{}, .@"packed");
+    try module.registerTypeName("usize", custom);
+
+    const annotation = (try annotationFromName(&module, "usize")) orelse return error.MissingAnnotation;
+    switch (annotation) {
+        .layout_aggregate => |id| try std.testing.expectEqual(custom.index, id.index),
+        .value, .layout_integer => return error.UnexpectedAnnotation,
+    }
 }
 
 test "typecheck validates unsigned layout integer ranges" {

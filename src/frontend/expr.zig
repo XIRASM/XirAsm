@@ -319,11 +319,14 @@ const ExpressionParser = struct {
             errdefer right.deinit(self.allocator);
 
             const left_node = try self.allocNode(left);
+            // Ownership moves into the heap node before the next fallible allocation.
+            left = .{ .boolean = false };
             errdefer {
                 left_node.deinit(self.allocator);
                 self.allocator.destroy(left_node);
             }
             const right_node = try self.allocNode(right);
+            right = .{ .boolean = false };
             errdefer {
                 right_node.deinit(self.allocator);
                 self.allocator.destroy(right_node);

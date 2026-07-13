@@ -748,20 +748,17 @@ if include_marker {
 }
 ```
 
-XIRASM does not have a separate `else if` form. Put another `if` inside the
-`else` block when a calculation needs more than two branches:
+Use `else if` when a calculation needs more than two branches:
 
 ```asm
 const payload_size = 32
 
 if payload_size < 16 {
     db(1);
+} else if payload_size < 64 {
+    db(2);
 } else {
-    if payload_size < 64 {
-        db(2);
-    } else {
-        db(3);
-    }
+    db(3);
 }
 ```
 
@@ -896,40 +893,42 @@ Keep the termination rule visible near the loop. A compile-time loop that
 cannot terminate would otherwise prevent assembly from completing, so XIRASM
 rejects control flow that exceeds 1,000,000 iterations.
 
-### Loops Without `break` or `continue`
+### `break` and `continue`
 
-The compile-time language does not provide `break` or `continue` statements.
-Choose the loop form that expresses the complete iteration set:
-
-- use `range` for a fixed numeric interval;
-- iterate a list when the values are already known;
-- use the `while` condition to express termination;
-- use `if` inside a loop when only some iterations should emit output.
+`break` ends the innermost active Meta loop. `continue` skips the rest of the
+current iteration and starts the next one. Both are valid in `for`, `while`,
+and deferred `while` bodies, including inside nested `if` statements.
 
 For example:
 
 ```asm
 for value in range(0, 8) {
-    if (value & 1) == 0 {
-        db(value);
+    if (value == 6) {
+        break;
     }
+    if (value & 1) != 0 {
+        continue;
+    }
+    db(value);
 }
 ```
 
-This emits the even values `00 02 04 06`. Every iteration still runs, but only
-the selected iterations contribute bytes.
+This emits `00 02 04`. A loop-control statement does not cross a function call
+boundary, and using one outside a loop is an error.
 
 ### Choosing a Control-Flow Form
 
 | Need | Use |
 | --- | --- |
 | Include one of two source blocks | `if` / `else` |
+| Include one of several source blocks | `if` / `else if` / `else` |
 | Select source for an ISA or bit width | Target condition |
 | Repeat a known number of times | `for` with `range` |
 | Visit compile-time collection values | `for` with a list |
 | Repeat until mutable state reaches a condition | `while` |
 | Select generated instructions | `if` containing ISA text |
-| Skip output for selected iterations | `if` inside the loop |
+| End the innermost loop early | `break` |
+| Skip the rest of one iteration | `continue` |
 
 Prefer `for` over `while` when the iteration set is already known. It makes the
 generated output easier to reason about and removes the need for a manually

@@ -212,7 +212,7 @@ fn collectImplementedApis(
     expr_apis: *std.ArrayList([]const u8),
 ) !void {
     for (impl_files) |file| {
-        if (std.mem.endsWith(u8, file.path, "lower.zig")) {
+        if (isLowerImplementationPath(file.path)) {
             try collectQuotedAfter(allocator, file.bytes, "call.callee, \"", lower_apis);
             try collectQuotedAfter(allocator, file.bytes, "api-matrix-lower: \"", lower_apis);
         } else if (std.mem.endsWith(u8, file.path, "expr.zig")) {
@@ -223,6 +223,12 @@ fn collectImplementedApis(
             try collectQuotedAfter(allocator, file.bytes, "api-matrix-meta-data: \"", expr_apis);
         }
     }
+}
+
+fn isLowerImplementationPath(path: []const u8) bool {
+    return std.mem.endsWith(u8, path, "lower.zig") or
+        std.mem.indexOf(u8, path, "/lower/") != null or
+        std.mem.indexOf(u8, path, "\\lower\\") != null;
 }
 
 fn collectQuotedAfter(

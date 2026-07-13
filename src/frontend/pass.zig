@@ -128,8 +128,88 @@ pub fn encodeInstructionFragments(
                         );
                         return error.FrontendDiagnostics;
                     },
+                    error.UnsupportedInstructionTarget => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "instruction text emission is not supported for this target ISA",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.UnsupportedX86Instruction => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "unsupported x86 instruction form",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.UnsupportedRiscvInstruction => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "unsupported RISC-V instruction form",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.BackendFixupCountMismatch => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend fixup count did not match frontend symbolic operands",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.UnsupportedBackendFixupKind => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend produced a fixup kind this frontend cannot resolve",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.BackendFixupOffsetOverflow => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend fixup offset or addend overflowed the frontend range",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.InvalidBackendFixupWidth => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend produced an invalid fixup width",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.BackendOutputMaterializationFailed => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend could not materialize instruction output",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
+                    error.BackendUnsupported => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "backend instruction form is not supported by the frontend adapter",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
                     error.OutOfMemory => return error.OutOfMemory,
-                    error.BackendUnsupported => return error.BackendUnsupported,
                     error.InstructionTooLarge => return error.InstructionTooLarge,
                     error.InvalidInstructionText => return error.InvalidInstructionText,
                     error.InvalidModeBits => return error.InvalidModeBits,

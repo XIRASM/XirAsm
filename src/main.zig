@@ -1293,6 +1293,7 @@ const FinalizerState = struct {
     module: *xirasm.Module,
     image: xirasm.OutputImage,
     lower_context: *xirasm.frontend.lower.LowerContext,
+    in_meta_loop: bool = false,
 };
 
 fn runDeferredStatements(state: *FinalizerState, statements: []const xirasm.DeferredStatement) anyerror!void {
@@ -1314,6 +1315,16 @@ fn runDeferredStatement(state: *FinalizerState, statement: xirasm.DeferredStatem
             }
         },
         .meta_while => |meta_while| try runDeferredWhile(state, meta_while),
+        .meta_break => |span| {
+            if (state.in_meta_loop) return error.MetaLoopBreak;
+            try addDeferredLoopControlDiagnostic(state, span, "break");
+            return error.FrontendDiagnostics;
+        },
+        .meta_continue => |span| {
+            if (state.in_meta_loop) return error.MetaLoopContinue;
+            try addDeferredLoopControlDiagnostic(state, span, "continue");
+            return error.FrontendDiagnostics;
+        },
     }
 }
 
@@ -1357,12 +1368,30 @@ fn runDeferredAssignment(state: *FinalizerState, assignment: xirasm.frontend.out
 }
 
 fn runDeferredWhile(state: *FinalizerState, meta_while: xirasm.frontend.output.MetaWhile) anyerror!void {
+    const previous_in_meta_loop = state.in_meta_loop;
+    state.in_meta_loop = true;
+    defer state.in_meta_loop = previous_in_meta_loop;
+
     var iterations: usize = 0;
     while (try evalDeferredCondition(state, meta_while.condition)) {
         if (iterations >= xirasm.frontend.lower.max_finalizer_loop_iterations) return error.MetaLoopLimitExceeded;
-        try runDeferredScopedStatements(state, meta_while.body);
+        runDeferredScopedStatements(state, meta_while.body) catch |err| switch (err) {
+            error.MetaLoopBreak => return,
+            error.MetaLoopContinue => {},
+            else => return err,
+        };
         iterations += 1;
     }
+}
+
+fn addDeferredLoopControlDiagnostic(
+    state: *FinalizerState,
+    span: xirasm.SourceSpan,
+    keyword: []const u8,
+) !void {
+    const message = try std.fmt.allocPrint(state.allocator, "{s} used outside of a Meta loop", .{keyword});
+    defer state.allocator.free(message);
+    try state.module.diagnostics.add(state.allocator, .err, span, message);
 }
 
 fn runDeferredApiCall(state: *FinalizerState, call: xirasm.frontend.output.ApiCall) !void {

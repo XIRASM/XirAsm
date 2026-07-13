@@ -60,6 +60,14 @@ pub const MetaWhileStatement = struct {
     }
 };
 
+pub const MetaBreakStatement = struct {
+    span: source.SourceSpan,
+};
+
+pub const MetaContinueStatement = struct {
+    span: source.SourceSpan,
+};
+
 pub const MetaForSource = union(enum) {
     range: struct {
         start: expr.Node,
@@ -354,6 +362,8 @@ pub const Statement = union(enum) {
     meta_if: MetaIfStatement,
     meta_while: MetaWhileStatement,
     meta_for_range: MetaForRangeStatement,
+    meta_break: MetaBreakStatement,
+    meta_continue: MetaContinueStatement,
     meta_fn: MetaFunctionStatement,
     meta_return: MetaReturnStatement,
     meta_block: MetaBlockStatement,
@@ -375,6 +385,7 @@ pub const Statement = union(enum) {
             .meta_if => |*statement| statement.deinit(allocator),
             .meta_while => |*statement| statement.deinit(allocator),
             .meta_for_range => |*statement| statement.deinit(allocator),
+            .meta_break, .meta_continue => {},
             .meta_fn => |*statement| statement.deinit(allocator),
             .meta_return => |*statement| statement.deinit(allocator),
             .meta_block => |*statement| statement.deinit(allocator),
@@ -398,6 +409,8 @@ pub const Statement = union(enum) {
             .meta_if => |statement| statement.span,
             .meta_while => |statement| statement.span,
             .meta_for_range => |statement| statement.span,
+            .meta_break => |statement| statement.span,
+            .meta_continue => |statement| statement.span,
             .meta_fn => |statement| statement.span,
             .meta_return => |statement| statement.span,
             .meta_block => |statement| statement.span,

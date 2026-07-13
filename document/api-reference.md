@@ -316,8 +316,8 @@ if enabled {
 The condition must evaluate to `bool`. Only the selected branch executes. Each
 branch has its own lexical scope.
 
-Write the alternative in the canonical `} else {` form. `else` is optional.
-For more than two branches, place another `if` inside the `else` block.
+Write alternatives in the canonical `} else if condition {` and `} else {`
+forms. Both `else if` and the final `else` are optional.
 
 An `if` statement selects source operations during assembly. Runtime
 conditional behavior still requires an ISA branch instruction.
@@ -336,9 +336,11 @@ while value <= 3 {
 `while` evaluates its boolean condition before every iteration. If the
 condition is initially false, the body does not execute.
 
-The language does not provide `break` or `continue`. Express termination in the
-condition and update the controlling state in the body. A compile-time loop is
-limited to 1,000,000 iterations.
+`break` ends the innermost active Meta loop. `continue` starts its next
+iteration without executing the remaining statements in the body. They also
+work in `for` loops and deferred `while` blocks. A compile-time loop is limited
+to 1,000,000 iterations. A loop-control statement outside a loop, or across a
+function call boundary, is invalid.
 
 #### Range Iteration
 
@@ -474,9 +476,12 @@ The source emits:
 | Calculate a reusable expression value | Value-returning function |
 | Select one source block | `if` |
 | Select one of two source blocks | `if` / `else` |
+| Select one of several source blocks | `if` / `else if` / `else` |
 | Repeat until mutable state reaches a condition | `while` |
 | Iterate a fixed integer interval | `for` with `range` |
 | Iterate known collection values | `for` with a list |
+| End the innermost loop early | `break` |
+| Skip the rest of one iteration | `continue` |
 
 ### Chapter 3: Structs, Unions, and Aggregate Values
 
