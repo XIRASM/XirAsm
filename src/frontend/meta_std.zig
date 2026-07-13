@@ -572,7 +572,9 @@ fn evalListSlice(allocator: Allocator, args: []const value_mod.Value) Error!valu
 
 fn evalListEq(args: []const value_mod.Value) Error!value_mod.Value {
     if (args.len != 2) return error.InvalidArgument;
-    return .{ .boolean = listValuesEqual(try expectList(args[0]), try expectList(args[1])) };
+    const left = try expectList(args[0]);
+    const right = try expectList(args[1]);
+    return .{ .boolean = value_mod.valuesEqual(.{ .list = left }, .{ .list = right }) };
 }
 
 fn evalMapNew(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
@@ -585,7 +587,7 @@ fn evalMapSet(allocator: Allocator, args: []const value_mod.Value) Error!value_m
     const input = try expectMap(args[0]);
     const key = try expectString(args[1]);
     const existing_index = mapEntryIndex(input, key);
-    const output_len = if (existing_index == null) input.entries.len + 1 else input.entries.len;
+    const output_len = try mapSetOutputLength(input.entries.len, existing_index != null);
     const output = try allocator.alloc(value_mod.MapEntry, output_len);
     var initialized: usize = 0;
     errdefer {
@@ -596,7 +598,8 @@ fn evalMapSet(allocator: Allocator, args: []const value_mod.Value) Error!value_m
     }
 
     for (input.entries, 0..) |entry, index| {
-        if (existing_index != null and existing_index.? == index) {
+        const replaces_entry = if (existing_index) |existing| existing == index else false;
+        if (replaces_entry) {
             output[index] = try cloneMapEntryWithValue(allocator, entry.key, args[2]);
         } else {
             output[index] = try entry.clone(allocator);
@@ -610,6 +613,11 @@ fn evalMapSet(allocator: Allocator, args: []const value_mod.Value) Error!value_m
     }
 
     return .{ .map = .{ .entries = output } };
+}
+
+fn mapSetOutputLength(entry_count: usize, replaces_entry: bool) Error!usize {
+    if (replaces_entry) return entry_count;
+    return std.math.add(usize, entry_count, 1) catch error.OutputTooLarge;
 }
 
 fn cloneMapEntryWithValue(
@@ -691,7 +699,9 @@ fn evalMapValues(allocator: Allocator, args: []const value_mod.Value) Error!valu
 
 fn evalMapEq(args: []const value_mod.Value) Error!value_mod.Value {
     if (args.len != 2) return error.InvalidArgument;
-    return .{ .boolean = mapValuesEqual(try expectMap(args[0]), try expectMap(args[1])) };
+    const left = try expectMap(args[0]);
+    const right = try expectMap(args[1]);
+    return .{ .boolean = value_mod.valuesEqual(.{ .map = left }, .{ .map = right }) };
 }
 
 fn evalTokensOf(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
@@ -798,79 +808,6 @@ fn hexNibble(byte: u8) Error!u8 {
         'A'...'F' => byte - 'A' + 10,
         else => error.InvalidArgument,
     };
-}
-
-fn valuesEqual(left: value_mod.Value, right: value_mod.Value) bool {
-    return switch (left) {
-        .void => right == .void,
-        .integer => |left_integer| switch (right) {
-            .integer => |right_integer| left_integer.value == right_integer.value,
-            else => false,
-        },
-        .float32 => |left_float| switch (right) {
-            .float32 => |right_float| left_float == right_float,
-            else => false,
-        },
-        .float64 => |left_float| switch (right) {
-            .float64 => |right_float| left_float == right_float,
-            else => false,
-        },
-        .boolean => |left_bool| switch (right) {
-            .boolean => |right_bool| left_bool == right_bool,
-            else => false,
-        },
-        .string => |left_text| switch (right) {
-            .string => |right_text| std.mem.eql(u8, left_text, right_text),
-            else => false,
-        },
-        .bytes => |left_bytes| switch (right) {
-            .bytes => |right_bytes| std.mem.eql(u8, left_bytes, right_bytes),
-            else => false,
-        },
-        .type => |left_type| switch (right) {
-            .type => |right_type| left_type.index == right_type.index,
-            else => false,
-        },
-        .@"struct" => |left_struct| switch (right) {
-            .@"struct" => |right_struct| structValuesEqual(left_struct, right_struct),
-            else => false,
-        },
-        .list => |left_list| switch (right) {
-            .list => |right_list| listValuesEqual(left_list, right_list),
-            else => false,
-        },
-        .map => |left_map| switch (right) {
-            .map => |right_map| mapValuesEqual(left_map, right_map),
-            else => false,
-        },
-    };
-}
-
-fn structValuesEqual(left: value_mod.StructValue, right: value_mod.StructValue) bool {
-    if (left.type_id.index != right.type_id.index) return false;
-    if (left.fields.len != right.fields.len) return false;
-    for (left.fields, right.fields) |left_field, right_field| {
-        if (!std.mem.eql(u8, left_field.name, right_field.name)) return false;
-        if (!valuesEqual(left_field.value, right_field.value)) return false;
-    }
-    return true;
-}
-
-fn listValuesEqual(left: value_mod.ListValue, right: value_mod.ListValue) bool {
-    if (left.items.len != right.items.len) return false;
-    for (left.items, right.items) |left_item, right_item| {
-        if (!valuesEqual(left_item, right_item)) return false;
-    }
-    return true;
-}
-
-fn mapValuesEqual(left: value_mod.MapValue, right: value_mod.MapValue) bool {
-    if (left.entries.len != right.entries.len) return false;
-    for (left.entries) |left_entry| {
-        const right_entry = right.entryByKey(left_entry.key) orelse return false;
-        if (!valuesEqual(left_entry.value, right_entry.value)) return false;
-    }
-    return true;
 }
 
 test "meta std string helpers cover ascii DSL operations" {
@@ -1135,6 +1072,11 @@ test "meta std rejects invalid map helper arguments" {
         empty,
         value_mod.Value.int(1),
     }));
+}
+
+test "meta std map insertion rejects length overflow" {
+    try std.testing.expectEqual(@as(usize, std.math.maxInt(usize)), try mapSetOutputLength(std.math.maxInt(usize), true));
+    try std.testing.expectError(error.OutputTooLarge, mapSetOutputLength(std.math.maxInt(usize), false));
 }
 
 test "meta std rejects invalid list helper arguments" {

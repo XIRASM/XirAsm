@@ -2,8 +2,8 @@
 
 [简体中文](README.zh-CN.md)
 
-**A modern assembler for x86, x86-64, RV32, and RV64, with a real
-compile-time programming language.**
+**Assembly syntax for instructions. A real compile-time language for everything
+around them.**
 
 XIRASM is built for assembly programmers who want direct control without being
 trapped in an old directive dialect or fragile text-macro tricks.
@@ -12,25 +12,26 @@ Write instructions normally. When the source needs calculation, generation,
 reuse, or transformation, use typed values, functions, control flow,
 collections, modules, file data, and token matching.
 
-One assembler. One language. Multiple instruction sets and native output
-formats.
+The result is one assembler language for handwritten instructions, generated
+code, binary layouts, and native output formats across x86 and RISC-V.
 
-## Why XIRASM
+## The Difference
 
-- **x86 and RISC-V in one assembler.** Use the same language and project model
-  for x86, x86-64, RV32, and RV64.
-- **Compile-time programming instead of macro puzzles.** Use functions,
-  expressions, `if`, `while`, and `for` to express intent directly.
-- **Code and data generation are ordinary language features.** Generate
-  instruction families, tables, declarations, constants, and binary data
-  without building a second source generator.
-- **Reusable libraries and small DSLs.** Modules, lists, maps, strings, bytes,
-  JSON, TOML, file APIs, and token matching are available during assembly.
-- **Useful output from the same tool.** Build flat binaries, Windows
-  executables and DLLs, COFF objects, Linux executables and PIEs, ELF objects,
-  and ELF shared libraries.
+- **Normal ISA text stays normal.** Write labels and processor instructions
+  directly; no function-call wrapper is required around assembly.
+- **Compile-time programming replaces text-macro puzzles.** Typed values,
+  functions, lexical scope, `if`/`else if`, `while`, `for`, `break`, and
+  `continue` express generation logic directly.
+- **Data and formats use the same language.** Structs, unions, float and integer
+  emission, reserve operations, modules, files, JSON, TOML, lists, maps, and
+  token matching compose without a second directive dialect.
+- **The frontend owns assembly semantics.** Source spans, symbols, fragments,
+  fixups, layout, relaxation, diagnostics, and output remain explicit; ISA
+  encoders are narrow leaf backends.
+- **One project model covers x86 and RISC-V.** The same compile-time language
+  drives x86, x86-64, RV32, and RV64 sources.
 
-## Assembly with a Real Language
+## See It
 
 Instructions remain assembly. Repetitive work becomes normal compile-time
 code:
@@ -44,7 +45,7 @@ fn emit_square_table(count: u8) {
     }
 }
 
-const answer: u32 = 40 + 2
+const answer: u32 = 40 + 2;
 
 entry:
     mov eax, answer
@@ -54,10 +55,10 @@ table:
 emit_square_table(4);
 ```
 
-The function and loop run while assembling. The output contains only the
-machine code and generated table.
+The function and loop execute only while assembling. The output contains the
+machine code and generated table, not a runtime interpreter.
 
-The same language also provides:
+The language also provides:
 
 - typed constants and variables;
 - reusable functions and lexical scope;
@@ -66,7 +67,44 @@ The same language also provides:
 - modules and imports;
 - JSON, TOML, and file-driven generation;
 - token matching for compact source DSLs;
-- assertions and diagnostics.
+- assertions with source-positioned diagnostics.
+
+## Quick Start
+
+Build with Zig 0.17:
+
+```text
+zig build -Doptimize=ReleaseSafe
+```
+
+Create `hello.asm`:
+
+```asm
+x86.use64();
+
+entry:
+    mov eax, 42
+    ret
+```
+
+Assemble a flat binary from the repository build:
+
+```text
+./zig-out/bin/xirasm hello.asm --target x86-64 -o hello.bin
+```
+
+On Windows, run `zig-out\bin\xirasm.exe`. An installed `xirasm` can be used
+directly from `PATH`.
+
+Create a ready-to-build native project:
+
+```text
+xirasm init hello-win --isa x86-64 --os windows --abi msvc
+xirasm init hello-linux --isa x86-64 --os linux --abi sysv
+```
+
+Each generated project contains `xirasm.toml`; run `xirasm build` inside that
+project to assemble its configured source and output.
 
 ## Supported Targets
 
@@ -101,36 +139,6 @@ The CLI can also create ready-to-build Windows and Linux starter projects.
 Detailed PE, COFF, and ELF examples belong in the
 [Executable Formats Guide](document/formats.md).
 
-## Quick Start
-
-Build XIRASM with Zig 0.17:
-
-```powershell
-zig build -Doptimize=ReleaseFast
-```
-
-Assemble a flat binary:
-
-```powershell
-xirasm hello.asm --target x86-64 -o hello.bin
-```
-
-Create and build a Windows executable project:
-
-```powershell
-xirasm init hello-win --isa x86-64 --os windows --abi msvc
-cd hello-win
-xirasm build
-```
-
-Create and build a Linux executable project:
-
-```powershell
-xirasm init hello-linux --isa x86-64 --os linux --abi sysv
-cd hello-linux
-xirasm build
-```
-
 ## Editor Support
 
 The standalone [XIRASM VS Code extension](https://codeberg.org/kukuyun/xirasm-vscode)
@@ -149,10 +157,13 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.6**
+Current version: **0.2.7**
 
-XIRASM is pre-1.0 software. Public APIs may still be refined before the stable
-release.
+XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
+and editor integration are usable now, while public contracts may still be
+refined before 1.0. Repository gates exercise the documented API surface,
+positive and negative source fixtures, allocation-failure paths, release-safe
+builds, and the clean public-package boundary.
 
 ## License
 

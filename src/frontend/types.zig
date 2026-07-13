@@ -181,6 +181,7 @@ pub const TypeStore = struct {
 
         var owned_fields: std.ArrayList(StructField) = .empty;
         errdefer deinitFields(&owned_fields, allocator);
+        try owned_fields.ensureTotalCapacity(allocator, fields.len);
 
         var offset: u64 = 0;
         var struct_alignment: u64 = 1;
@@ -193,18 +194,19 @@ pub const TypeStore = struct {
             if (policy == .natural) {
                 offset = try alignForward(offset, field_layout.alignment);
             }
+            const next_offset = try checkedAdd(offset, field_layout.size);
 
             const owned_field_name = try allocator.dupe(u8, field.name);
             errdefer allocator.free(owned_field_name);
 
-            try owned_fields.append(allocator, .{
+            owned_fields.appendAssumeCapacity(.{
                 .name = owned_field_name,
                 .ty = field.ty,
                 .offset = offset,
                 .default_value = field.default_value,
             });
 
-            offset = try checkedAdd(offset, field_layout.size);
+            offset = next_offset;
             struct_alignment = @max(struct_alignment, field_layout.alignment);
         }
 
@@ -240,6 +242,7 @@ pub const TypeStore = struct {
 
         var owned_fields: std.ArrayList(StructField) = .empty;
         errdefer deinitFields(&owned_fields, allocator);
+        try owned_fields.ensureTotalCapacity(allocator, fields.len);
 
         var union_size: u64 = 0;
         var union_alignment: u64 = 1;
@@ -253,7 +256,7 @@ pub const TypeStore = struct {
             const owned_field_name = try allocator.dupe(u8, field.name);
             errdefer allocator.free(owned_field_name);
 
-            try owned_fields.append(allocator, .{
+            owned_fields.appendAssumeCapacity(.{
                 .name = owned_field_name,
                 .ty = field.ty,
                 .offset = 0,
@@ -314,14 +317,6 @@ pub const TypeStore = struct {
         return switch (ty.*) {
             .@"struct" => |*struct_type| struct_type,
             .void, .int, .array, .pointer, .@"union" => error.ExpectedStruct,
-        };
-    }
-
-    pub fn getUnion(self: *const TypeStore, id: TypeId) !*const UnionType {
-        const ty = try self.get(id);
-        return switch (ty.*) {
-            .@"union" => |*union_type| union_type,
-            .void, .int, .array, .pointer, .@"struct" => error.ExpectedStruct,
         };
     }
 
@@ -520,6 +515,18 @@ test "packed struct layout supports exact binary headers" {
     try std.testing.expectEqual(@as(u64, 5), layout.size);
     try std.testing.expectEqual(@as(u64, 4), layout.alignment);
 
+    const wrapper_ty = try store.addStruct(
+        std.testing.allocator,
+        "NaturalWrapper",
+        &.{
+            .{ .name = "prefix", .ty = u8_ty },
+            .{ .name = "header", .ty = header_ty },
+        },
+        .natural,
+    );
+    try std.testing.expectEqual(@as(u64, 4), try store.structFieldOffset(wrapper_ty, "header"));
+    try std.testing.expectEqual(@as(u64, 12), (try store.layoutOf(wrapper_ty)).size);
+
     const header = try store.get(header_ty);
     switch (header.*) {
         .@"struct" => |struct_type| {
@@ -558,4 +565,53 @@ test "union layout uses max field size and clear packed boundary" {
     try std.testing.expectEqual(@as(u64, 3), packed_layout.size);
     try std.testing.expectEqual(@as(u64, 2), packed_layout.alignment);
     try std.testing.expectEqual(@as(u64, 0), try store.aggregateFieldOffset(packed_union, "three"));
+}
+
+test "struct layout overflow leaves the type store valid" {
+    var store: TypeStore = .{};
+    defer store.deinit(std.testing.allocator);
+
+    const byte_ty = try store.addInt(std.testing.allocator, 8, .unsigned);
+    const maximum_array_ty = try store.addArray(std.testing.allocator, byte_ty, std.math.maxInt(u64));
+
+    try std.testing.expectError(
+        error.IntegerOverflow,
+        store.addStruct(
+            std.testing.allocator,
+            "Overflowing",
+            &.{
+                .{ .name = "payload", .ty = maximum_array_ty },
+                .{ .name = "tail", .ty = byte_ty },
+            },
+            .@"packed",
+        ),
+    );
+    try std.testing.expectEqual(@as(usize, 2), store.items.items.len);
+}
+
+fn checkAggregateTypeConstructionAllocationFailures(allocator: Allocator) !void {
+    var store: TypeStore = .{};
+    defer store.deinit(allocator);
+
+    const byte_ty = try store.addInt(allocator, 8, .unsigned);
+    const dword_ty = try store.addInt(allocator, 32, .unsigned);
+    const struct_ty = try store.addStruct(allocator, "Header", &.{
+        .{ .name = "tag", .ty = byte_ty },
+        .{ .name = "size", .ty = dword_ty },
+    }, .natural);
+    const union_ty = try store.addUnion(allocator, "Value", &.{
+        .{ .name = "byte", .ty = byte_ty },
+        .{ .name = "dword", .ty = dword_ty },
+    }, .@"packed");
+
+    try std.testing.expectEqual(@as(u64, 8), (try store.layoutOf(struct_ty)).size);
+    try std.testing.expectEqual(@as(u64, 4), (try store.layoutOf(union_ty)).size);
+}
+
+test "aggregate type construction handles every allocation failure" {
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        checkAggregateTypeConstructionAllocationFailures,
+        .{},
+    );
 }

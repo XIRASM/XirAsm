@@ -435,6 +435,79 @@ pub fn cloneValueSlice(allocator: std.mem.Allocator, values: []const Value) std.
     return cloned;
 }
 
+pub fn valuesEqual(left: Value, right: Value) bool {
+    return switch (left) {
+        .void => right == .void,
+        .integer => |left_integer| switch (right) {
+            .integer => |right_integer| left_integer.value == right_integer.value,
+            else => false,
+        },
+        .float32 => |left_float| switch (right) {
+            .float32 => |right_float| left_float == right_float,
+            else => false,
+        },
+        .float64 => |left_float| switch (right) {
+            .float64 => |right_float| left_float == right_float,
+            else => false,
+        },
+        .boolean => |left_bool| switch (right) {
+            .boolean => |right_bool| left_bool == right_bool,
+            else => false,
+        },
+        .string => |left_text| switch (right) {
+            .string => |right_text| std.mem.eql(u8, left_text, right_text),
+            else => false,
+        },
+        .bytes => |left_bytes| switch (right) {
+            .bytes => |right_bytes| std.mem.eql(u8, left_bytes, right_bytes),
+            else => false,
+        },
+        .type => |left_type| switch (right) {
+            .type => |right_type| left_type.index == right_type.index,
+            else => false,
+        },
+        .@"struct" => |left_struct| switch (right) {
+            .@"struct" => |right_struct| structValuesEqual(left_struct, right_struct),
+            else => false,
+        },
+        .list => |left_list| switch (right) {
+            .list => |right_list| listValuesEqual(left_list, right_list),
+            else => false,
+        },
+        .map => |left_map| switch (right) {
+            .map => |right_map| mapValuesEqual(left_map, right_map),
+            else => false,
+        },
+    };
+}
+
+fn structValuesEqual(left: StructValue, right: StructValue) bool {
+    if (left.type_id.index != right.type_id.index) return false;
+    if (left.fields.len != right.fields.len) return false;
+    for (left.fields, right.fields) |left_field, right_field| {
+        if (!std.mem.eql(u8, left_field.name, right_field.name)) return false;
+        if (!valuesEqual(left_field.value, right_field.value)) return false;
+    }
+    return true;
+}
+
+fn listValuesEqual(left: ListValue, right: ListValue) bool {
+    if (left.items.len != right.items.len) return false;
+    for (left.items, right.items) |left_item, right_item| {
+        if (!valuesEqual(left_item, right_item)) return false;
+    }
+    return true;
+}
+
+fn mapValuesEqual(left: MapValue, right: MapValue) bool {
+    if (left.entries.len != right.entries.len) return false;
+    for (left.entries) |left_entry| {
+        const right_entry = right.entryByKey(left_entry.key) orelse return false;
+        if (!valuesEqual(left_entry.value, right_entry.value)) return false;
+    }
+    return true;
+}
+
 pub const PackError = std.mem.Allocator.Error || error{
     ExpectedStruct,
     IntegerOverflow,
@@ -708,6 +781,22 @@ test "value owns and clones nested map bindings" {
     try std.testing.expect(original_nested.entries.ptr != cloned_nested.entries.ptr);
     const nested_list = try cloned_nested.entries[0].value.expectList();
     try std.testing.expectEqual(@as(u64, 2), try nested_list.items[0].expectInteger());
+}
+
+test "value equality is deep and ignores map insertion order" {
+    var left: Value = .{ .map = .{ .entries = try std.testing.allocator.alloc(MapEntry, 0) } };
+    defer left.deinit(std.testing.allocator);
+    try left.map.setCloned(std.testing.allocator, "first", Value.int(1));
+    try left.map.setCloned(std.testing.allocator, "second", .{ .float64 = 2.5 });
+
+    var right: Value = .{ .map = .{ .entries = try std.testing.allocator.alloc(MapEntry, 0) } };
+    defer right.deinit(std.testing.allocator);
+    try right.map.setCloned(std.testing.allocator, "second", .{ .float64 = 2.5 });
+    try right.map.setCloned(std.testing.allocator, "first", Value.int(1));
+
+    try std.testing.expect(valuesEqual(left, right));
+    try right.map.setCloned(std.testing.allocator, "first", Value.int(3));
+    try std.testing.expect(!valuesEqual(left, right));
 }
 
 test "list mutation clones appended and replacement values" {

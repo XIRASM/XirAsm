@@ -529,6 +529,10 @@ A packed struct places each field immediately after the previous field and
 does not add trailing padding. Use packed layout for exact file and protocol
 records. Use natural layout for records that require field alignment.
 
+Packing removes padding but does not erase the aggregate's alignment property.
+A packed aggregate retains the largest field alignment, so a naturally aligned
+outer aggregate aligns a nested packed field to that boundary.
+
 Field names within one declaration must be unique.
 
 #### Field Defaults and Struct Literals
@@ -550,8 +554,9 @@ emit.struct(header)
 A struct literal assigns fields by name. Source order inside the literal does
 not have to match declaration order.
 
-An omitted integer field uses its declared default. Every other omitted field
-is an error. Unknown and duplicate literal fields are also errors.
+An omitted integer struct field uses its declared default. Every other omitted
+field is an error. Unknown and duplicate literal fields are also errors. Union
+fields cannot declare defaults.
 
 Aggregate literals can be passed directly to built-in expressions:
 
@@ -609,6 +614,8 @@ emit.struct(value)
 ```
 
 Initializing no union fields or more than one field is invalid.
+Union field declarations cannot provide defaults; the active field must always
+be selected explicitly by the literal.
 
 #### Nested Aggregate Literals
 

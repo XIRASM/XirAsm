@@ -25,6 +25,7 @@ pub const LowerError = Allocator.Error || error{
     InvalidAlignment,
     InvalidStructDeclaration,
     InvalidStructField,
+    UnionFieldDefaultNotAllowed,
     DuplicateMetaFunction,
     InvalidMetaBlock,
     InvalidMetaDefer,

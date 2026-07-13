@@ -2573,13 +2573,17 @@ packed struct FileHeader {
 `FileHeader` occupies five bytes. Its `size` field begins immediately at offset
 1, and there is no trailing padding.
 
+Packing removes internal and trailing padding, but the type retains the largest
+field alignment. When a packed aggregate is nested inside a naturally aligned
+aggregate, the outer aggregate aligns that field to the retained alignment.
+
 Packed layout is usually the correct choice for file headers, protocol
 records, instruction metadata, and other externally specified byte layouts.
 Natural layout is usually the correct choice for native in-memory records.
 
 ### Field Defaults and Struct Literals
 
-Fields may provide compile-time defaults:
+Integer fields in structs may provide compile-time defaults:
 
 ```asm
 packed struct Header {
@@ -2601,6 +2605,9 @@ Literal fields are matched by name rather than by source order.
 
 Every omitted field must have a default. Unknown fields, duplicate fields, and
 values of the wrong type are source errors.
+
+Union fields cannot declare defaults. A union value must always select exactly
+one active field explicitly.
 
 Fields can be read with normal field access, as shown by the two emission calls
 in the example.
@@ -2717,7 +2724,9 @@ size rounded to the largest field alignment. A packed union uses the exact
 largest field size.
 
 The `coordinates` literal selects exactly one active field. A union literal
-cannot omit every field or initialize several fields at once.
+cannot omit every field or initialize several fields at once. Union field
+declarations cannot provide defaults because a default would not identify an
+explicitly selected active field.
 
 Unions may be nested inside structs:
 
@@ -4676,9 +4685,9 @@ Numeric instruction operands that are part of an algorithm may remain local.
 Offsets, flags, structure sizes, format values, and alignment policies usually
 deserve names.
 
-Use enums when a value represents one choice from a closed set. Use structs
-when several fields form one record. Use maps or lists when the source is
-building a dynamic plan.
+Use named constants when a value represents one choice from a closed set. Use
+structs when several fields form one record. Use maps or lists when the source
+is building a dynamic plan.
 
 ### Name Coordinates Explicitly
 

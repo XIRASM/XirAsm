@@ -18,6 +18,7 @@ pub const ParseError = Allocator.Error || error{
     InvalidValueDeclaration,
     InvalidStructDeclaration,
     InvalidStructField,
+    UnionFieldDefaultNotAllowed,
     InvalidMetaBlock,
     InvalidMetaDefer,
     InvalidLateLayout,
@@ -321,6 +322,11 @@ fn appendStructDeclaration(
             },
             .isa_line, .meta_line => {
                 var field = try parseStructField(parser.allocator, token.text, token.span);
+                if (declaration.kind == .@"union" and field.default_value != null) {
+                    parser.last_error_span = field.span;
+                    field.deinit(parser.allocator);
+                    return error.UnionFieldDefaultNotAllowed;
+                }
                 fields.append(parser.allocator, field) catch |err| {
                     field.deinit(parser.allocator);
                     return err;
@@ -1671,6 +1677,19 @@ test "parser accepts struct literals as value initializers" {
         },
         else => return error.UnexpectedStatement,
     }
+}
+
+test "parser rejects union field defaults" {
+    var parser = Parser.init(std.testing.allocator,
+        \\union Value {
+        \\    raw: u32 = 1
+        \\}
+        \\const value: Value = Value { raw: 2 }
+        \\
+    );
+
+    try std.testing.expectError(error.UnionFieldDefaultNotAllowed, parser.parse());
+    try std.testing.expect(parser.errorSpan() != null);
 }
 
 test "parser accepts sizeof type query as API argument" {

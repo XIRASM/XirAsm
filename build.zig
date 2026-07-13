@@ -637,6 +637,15 @@ pub fn build(b: *std.Build) void {
         &.{},
         "InvalidValueDeclaration",
     );
+    addFailingAsmFixtureWithInputs(
+        b,
+        api_reference_step,
+        exe,
+        "tests/api/reference/negative/03-union-field-default.asm",
+        "x64",
+        &.{},
+        "union fields cannot declare defaults",
+    );
     addAsmFixture(
         b,
         api_reference_step,

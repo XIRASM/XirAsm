@@ -343,6 +343,15 @@ fn addLowerErrorDiagnostic(
         );
         return;
     }
+    if (err == error.UnionFieldDefaultNotAllowed) {
+        try module.diagnostics.add(
+            allocator,
+            .err,
+            span,
+            "union fields cannot declare defaults; a union literal must select exactly one active field",
+        );
+        return;
+    }
     const message = try std.fmt.allocPrint(allocator, "lowering failed: {s}", .{@errorName(err)});
     defer allocator.free(message);
     try module.diagnostics.add(allocator, .err, span, message);
