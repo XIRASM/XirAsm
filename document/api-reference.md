@@ -1450,10 +1450,12 @@ labels placed after ISA instructions.
 | Form | Syntax | Result |
 | --- | --- | --- |
 | Fixed-width integer | `emit.u8(value)` through `emit.u64(value)` | Emits one little-endian integer. |
-| Data sequence | `db(values...)`, `dw(values...)`, `dd(values...)`, `dq(values...)` | Emits one or more values at a fixed element width. |
+| Fixed-width float | `emit.f32(value)`, `emit.f64(value)` | Emits one little-endian IEEE-754 value. |
+| Data sequence | `db`/`dw`/`dd`/`dp`/`dq`/`dt`/`ddq`/`dqq`/`ddqq` | Emits integer elements of width 1 through 64 bytes. |
 | Byte sequence | `emit.bytes(value)` | Emits a string or `bytes` value unchanged. |
+| File bytes | `emit.file(path, offset?, count?)` | Emits a complete source-relative file or exact range. |
 | Byte reserve | `reserve(count)` | Reserves `count` logical bytes. |
-| Element reserve | `rb(count)`, `rw(count)`, `rd(count)`, `rq(count)` | Reserves elements of width 1, 2, 4, or 8. |
+| Element reserve | `rb`/`rw`/`rd`/`rp`/`rq`/`rt`/`rdq`/`rqq`/`rdqq` | Reserves elements of width 1 through 64 bytes. |
 | Fixed padding | `pad(count, fill?)` | Emits exactly `count` fill bytes. |
 | Absolute padding | `pad_to(position, fill?)` | Emits until the active region reaches `position`. |
 | Alignment | `align(boundary, fill?)` | Advances to the next aligned position. |
@@ -1494,7 +1496,12 @@ The data aliases accept one or more arguments:
 | `db(values...)` | 1 byte | Integers, strings, and `bytes` values |
 | `dw(values...)` | 2 bytes | Integers |
 | `dd(values...)` | 4 bytes | Integers |
+| `dp(values...)` | 6 bytes | Integers |
 | `dq(values...)` | 8 bytes | Integers |
+| `dt(values...)` | 10 bytes | Integers, zero-extended from `u64` |
+| `ddq(values...)` | 16 bytes | Integers, zero-extended from `u64` |
+| `dqq(values...)` | 32 bytes | Integers, zero-extended from `u64` |
+| `ddqq(values...)` | 64 bytes | Integers, zero-extended from `u64` |
 
 ```asm
 db(0x10, "AZ", b"BC")
@@ -1506,6 +1513,26 @@ dq(0x0102030405060708)
 Strings and byte sequences passed to `db` are copied byte for byte. Wider
 aliases require integers and encode every element in little-endian order.
 Calling a data alias without arguments is invalid.
+
+Values narrower than eight bytes are range-checked and never truncated. `dt`
+is raw 10-byte data, not an `f80` or x87 value. Use `emit.bytes` for exact wide
+bit patterns.
+
+#### Floating-Point Emission
+
+Decimal fractional and exponent literals are `f64`. `f32(value)` explicitly
+narrows a finite `f64`; `f64(value)` widens `f32` or preserves `f64`.
+
+```asm
+const compact: f32 = f32(1.5)
+emit.f32(compact)
+emit.f64(-0.0)
+```
+
+`emit.f32` and `emit.f64` require exact matching types and write IEEE-754 bits
+in little-endian order. There is no implicit integer conversion or `f80`
+surface. NaN, Infinity, and overflow are rejected; finite underflow and signed
+zero are preserved.
 
 #### Byte Sequences
 
@@ -1530,7 +1557,12 @@ express the count in fixed-width elements:
 | `rb(count)` | `count` |
 | `rw(count)` | `count * 2` |
 | `rd(count)` | `count * 4` |
+| `rp(count)` | `count * 6` |
 | `rq(count)` | `count * 8` |
+| `rt(count)` | `count * 10` |
+| `rdq(count)` | `count * 16` |
+| `rqq(count)` | `count * 32` |
+| `rdqq(count)` | `count * 64` |
 
 ```asm
 db(0xaa)
@@ -2340,6 +2372,8 @@ Use `map.has` or `map.get_or` when absence is expected.
 | `fs.read_text(path)` | `string` | Reads an entire file as text. |
 | `fs.read_bytes(path)` | `bytes` | Reads an entire file as bytes. |
 | `fs.read_bytes(path, offset, count)` | `bytes` | Reads an exact byte range. |
+| `emit.file(path)` | statement | Emits an entire source-relative file. |
+| `emit.file(path, offset, count)` | statement | Emits an exact file byte range. |
 | `json.parse(value)` | value | Parses JSON held in a string or byte sequence. |
 | `json.file(path)` | value | Reads and parses a JSON file. |
 | `toml.parse(value)` | `map` | Parses a TOML document held in a string or byte sequence. |
@@ -2354,7 +2388,7 @@ relative data paths.
 
 | Operation | Ordinary source | `late_layout` | `defer` |
 | --- | --- | --- | --- |
-| `fs.exists`, `fs.read_text`, `fs.read_bytes` | Available | Unavailable | Unavailable |
+| `fs.exists`, `fs.read_text`, `fs.read_bytes`, `emit.file` | Available | Unavailable | Unavailable |
 | `json.file`, `toml.file` | Available | Unavailable | Unavailable |
 | `json.parse`, `toml.parse` | Available | Available in value expressions | Available in value expressions |
 
@@ -2396,6 +2430,9 @@ a line feed, the example emits:
 The range overload uses a zero-based offset and a byte count. The complete
 range must fit inside the file. A zero-length range at the end of a file is
 valid.
+
+`emit.file` uses the same resolver and range rules as `fs.read_bytes`, but
+emits directly instead of returning a `bytes` value.
 
 #### JSON Values
 

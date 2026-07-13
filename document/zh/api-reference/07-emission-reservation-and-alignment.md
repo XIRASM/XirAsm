@@ -5,10 +5,12 @@
 | 形式 | 语法 | 结果 |
 | --- | --- | --- |
 | 固定宽度整数 | `emit.u8(value)` 至 `emit.u64(value)` | 按小端顺序写出一个整数。 |
-| 数据序列 | `db(values...)`、`dw(values...)`、`dd(values...)`、`dq(values...)` | 按固定元素宽度写出一个或多个值。 |
+| 固定宽度浮点 | `emit.f32(value)`、`emit.f64(value)` | 按小端顺序写出一个 IEEE-754 值。 |
+| 数据序列 | `db`/`dw`/`dd`/`dp`/`dq`/`dt`/`ddq`/`dqq`/`ddqq` | 写出 1 至 64 字节宽度的整数元素。 |
 | 字节序列 | `emit.bytes(value)` | 原样写出字符串或 `bytes` 值。 |
+| 文件字节 | `emit.file(path, offset?, count?)` | 写出完整的源文件相对文件或精确范围。 |
 | 按字节预留 | `reserve(count)` | 预留 `count` 个逻辑字节。 |
-| 按元素预留 | `rb(count)`、`rw(count)`、`rd(count)`、`rq(count)` | 预留宽度为 1、2、4 或 8 字节的元素。 |
+| 按元素预留 | `rb`/`rw`/`rd`/`rp`/`rq`/`rt`/`rdq`/`rqq`/`rdqq` | 预留 1 至 64 字节宽度的元素。 |
 | 固定填充 | `pad(count, fill?)` | 恰好写出 `count` 个填充字节。 |
 | 绝对位置填充 | `pad_to(position, fill?)` | 持续写出字节，直到活动输出区域到达 `position`。 |
 | 对齐 | `align(boundary, fill?)` | 前进到下一个对齐位置。 |
@@ -49,7 +51,12 @@ emit.u64(0x8899aabbccddeeff)
 | `db(values...)` | 1 字节 | 整数、字符串和 `bytes` 值 |
 | `dw(values...)` | 2 字节 | 整数 |
 | `dd(values...)` | 4 字节 | 整数 |
+| `dp(values...)` | 6 字节 | 整数 |
 | `dq(values...)` | 8 字节 | 整数 |
+| `dt(values...)` | 10 字节 | 从 `u64` 零扩展的整数 |
+| `ddq(values...)` | 16 字节 | 从 `u64` 零扩展的整数 |
+| `dqq(values...)` | 32 字节 | 从 `u64` 零扩展的整数 |
+| `ddqq(values...)` | 64 字节 | 从 `u64` 零扩展的整数 |
 
 ```asm
 // db 原样组合整数字节、字符串和字节序列；其余调用按固定宽度写出整数。
@@ -60,6 +67,20 @@ dq(0x0102030405060708)
 ```
 
 传给 `db` 的字符串和字节序列会逐字节复制。宽度更大的简写只接受整数，并按小端顺序编码每个元素。调用数据写出简写时不提供实参是无效的。
+
+小于八字节的宽度会检查范围且绝不截断。`dt` 是 10 字节原始数据，不是 `f80` 或 x87 值。精确的宽位模式应使用 `emit.bytes`。
+
+## 浮点写出
+
+带小数部分或指数的十进制字面量属于 `f64`。`f32(value)` 显式窄化有限的 `f64`；`f64(value)` 扩宽 `f32` 或保留 `f64`。
+
+```asm
+const compact: f32 = f32(1.5)
+emit.f32(compact)
+emit.f64(-0.0)
+```
+
+`emit.f32` 和 `emit.f64` 要求实参类型完全匹配，并以小端顺序写出 IEEE-754 位模式。语言不提供隐式整数转换或 `f80` 表面。NaN、Infinity 和溢出会被拒绝；有限下溢与有符号零会被保留。
 
 ## 字节序列
 
@@ -83,7 +104,12 @@ emit.bytes("ASM")
 | `rb(count)` | `count` |
 | `rw(count)` | `count * 2` |
 | `rd(count)` | `count * 4` |
+| `rp(count)` | `count * 6` |
 | `rq(count)` | `count * 8` |
+| `rt(count)` | `count * 10` |
+| `rdq(count)` | `count * 16` |
+| `rqq(count)` | `count * 32` |
+| `rdqq(count)` | `count * 64` |
 
 ```asm
 // 在两个已初始化字节之间预留三个逻辑字节。

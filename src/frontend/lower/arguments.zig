@@ -89,7 +89,7 @@ pub fn sourcePathAtContext(
             defer value.deinit(allocator);
             const text = switch (value) {
                 .string => |stored| stored,
-                .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+                .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
             };
             return allocator.dupe(u8, text);
         },

@@ -31,7 +31,9 @@ pub const Callbacks = struct {
     lower_assert: *const fn (Allocator, *module_mod.Module, *LowerContext, ActiveOutput, ast.ApiCallStatement) LowerError!void,
     lower_isa: *const fn (*module_mod.Module, *LowerContext, *ActiveOutput, ast.ApiCallStatement) LowerError!void,
     lower_data_emit: *const fn (*module_mod.Module, *LowerContext, *ActiveOutput, ast.ApiCallStatement, u8) LowerError!void,
+    lower_float_emit: *const fn (*module_mod.Module, *LowerContext, *ActiveOutput, ast.ApiCallStatement, u8) LowerError!void,
     lower_data_reserve: *const fn (*module_mod.Module, *LowerContext, *ActiveOutput, ast.ApiCallStatement, u64) LowerError!void,
+    lower_file_emit: *const fn (*module_mod.Module, *LowerContext, *ActiveOutput, ast.ApiCallStatement) LowerError!void,
     value_arg_at_context: *const fn (Allocator, *module_mod.Module, *LowerContext, ActiveOutput, ast.ApiCallStatement, usize) LowerError!value_mod.Value,
     integer_arg_at_context: *const fn (*module_mod.Module, *LowerContext, ActiveOutput, ast.ApiCallStatement, usize) LowerError!u64,
     source_path_arg_at_context: *const fn (Allocator, *module_mod.Module, *LowerContext, ActiveOutput, ast.ApiCallStatement, usize) LowerError![]u8,
@@ -90,6 +92,7 @@ fn integerArgAs(
 // api-matrix-lower: "emit.u32"
 // api-matrix-lower: "emit.u64"
 // api-matrix-lower: "emit.bytes"
+// api-matrix-lower: "emit.file"
 // api-matrix-lower: "emit.struct"
 // api-matrix-lower: "reserve"
 // api-matrix-lower: "pad"
@@ -152,7 +155,7 @@ pub fn lowerApiCall(
         defer value.deinit(module.allocator);
         const name = switch (value) {
             .string => |text| text,
-            .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         if (!identifier.isName(name)) return error.InvalidApiArgument;
         const fragment_position = try callbacks.active_fragment_position(module, active.section_id);
@@ -282,15 +285,13 @@ pub fn lowerApiCall(
         return;
     }
 
-    if (dataEmitByteCount(call.callee)) |byte_count| {
+    if (dataOperation(call.callee)) |operation| {
         try callbacks.require_open_output_region(active.*);
-        try callbacks.lower_data_emit(module, context, active, call, byte_count);
-        return;
-    }
-
-    if (dataReserveScale(call.callee)) |scale| {
-        try callbacks.require_open_output_region(active.*);
-        try callbacks.lower_data_reserve(module, context, active, call, scale);
+        switch (operation) {
+            .emit => |byte_count| try callbacks.lower_data_emit(module, context, active, call, byte_count),
+            .emit_float => |byte_count| try callbacks.lower_float_emit(module, context, active, call, byte_count),
+            .reserve => |scale| try callbacks.lower_data_reserve(module, context, active, call, scale),
+        }
         return;
     }
 
@@ -341,10 +342,16 @@ pub fn lowerApiCall(
         const bytes = switch (value) {
             .bytes => |data| data,
             .string => |text| text,
-            .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         const fragment_id = try module.emitBytes(active.section_id, bytes, call.span);
         try callbacks.advance_active_output(active, module.fragments.items.items[fragment_id.index]);
+        return;
+    }
+
+    if (std.mem.eql(u8, call.callee, "emit.file")) {
+        try callbacks.require_open_output_region(active.*);
+        try callbacks.lower_file_emit(module, context, active, call);
         return;
     }
 
@@ -355,7 +362,7 @@ pub fn lowerApiCall(
         defer value.deinit(module.allocator);
         const struct_value = switch (value) {
             .@"struct" => |stored| stored,
-            .void, .integer, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
+            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
         };
         const bytes = try callbacks.emit_struct_value(module, struct_value);
         defer module.allocator.free(bytes);
@@ -387,7 +394,7 @@ pub fn lowerApiCall(
         const bytes = switch (value) {
             .bytes => |data| data,
             .string => |text| text,
-            .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         try module.storeBytesAt(store_target.section, store_target.address, bytes);
         return;
@@ -447,11 +454,11 @@ pub fn apiCallHasOutputSideEffect(callee: []const u8) bool {
         std.mem.eql(u8, callee, "emit.u16") or
         std.mem.eql(u8, callee, "emit.u32") or
         std.mem.eql(u8, callee, "emit.u64") or
-        dataEmitByteCount(callee) != null or
-        dataReserveScale(callee) != null or
+        dataOperation(callee) != null or
         std.mem.eql(u8, callee, "region.begin") or
         std.mem.eql(u8, callee, "region.file_align") or
         std.mem.eql(u8, callee, "emit.bytes") or
+        std.mem.eql(u8, callee, "emit.file") or
         std.mem.eql(u8, callee, "emit.struct") or
         std.mem.eql(u8, callee, "pad") or
         std.mem.eql(u8, callee, "pad_to") or
@@ -471,27 +478,64 @@ pub fn storeByteCount(name: []const u8) ?u8 {
     return null;
 }
 
-pub fn dataEmitByteCount(name: []const u8) ?u8 {
-    // api-matrix-lower: "db"
-    // api-matrix-lower: "dw"
-    // api-matrix-lower: "dd"
-    // api-matrix-lower: "dq"
-    if (std.mem.eql(u8, name, "db")) return 1;
-    if (std.mem.eql(u8, name, "dw")) return 2;
-    if (std.mem.eql(u8, name, "dd")) return 4;
-    if (std.mem.eql(u8, name, "dq")) return 8;
-    return null;
-}
+pub const DataOperation = union(enum) {
+    emit: u8,
+    emit_float: u8,
+    reserve: u64,
+};
 
-pub fn dataReserveScale(name: []const u8) ?u64 {
+const DataOperationDescriptor = struct {
+    name: []const u8,
+    operation: DataOperation,
+};
+
+const data_operations = [_]DataOperationDescriptor{
+    // api-matrix-lower: "emit.f32"
+    .{ .name = "emit.f32", .operation = .{ .emit_float = 4 } },
+    // api-matrix-lower: "emit.f64"
+    .{ .name = "emit.f64", .operation = .{ .emit_float = 8 } },
+    // api-matrix-lower: "db"
+    .{ .name = "db", .operation = .{ .emit = 1 } },
+    // api-matrix-lower: "dw"
+    .{ .name = "dw", .operation = .{ .emit = 2 } },
+    // api-matrix-lower: "dd"
+    .{ .name = "dd", .operation = .{ .emit = 4 } },
+    // api-matrix-lower: "dp"
+    .{ .name = "dp", .operation = .{ .emit = 6 } },
+    // api-matrix-lower: "dq"
+    .{ .name = "dq", .operation = .{ .emit = 8 } },
+    // api-matrix-lower: "dt"
+    .{ .name = "dt", .operation = .{ .emit = 10 } },
+    // api-matrix-lower: "ddq"
+    .{ .name = "ddq", .operation = .{ .emit = 16 } },
+    // api-matrix-lower: "dqq"
+    .{ .name = "dqq", .operation = .{ .emit = 32 } },
+    // api-matrix-lower: "ddqq"
+    .{ .name = "ddqq", .operation = .{ .emit = 64 } },
     // api-matrix-lower: "rb"
+    .{ .name = "rb", .operation = .{ .reserve = 1 } },
     // api-matrix-lower: "rw"
+    .{ .name = "rw", .operation = .{ .reserve = 2 } },
     // api-matrix-lower: "rd"
+    .{ .name = "rd", .operation = .{ .reserve = 4 } },
+    // api-matrix-lower: "rp"
+    .{ .name = "rp", .operation = .{ .reserve = 6 } },
     // api-matrix-lower: "rq"
-    if (std.mem.eql(u8, name, "rb")) return 1;
-    if (std.mem.eql(u8, name, "rw")) return 2;
-    if (std.mem.eql(u8, name, "rd")) return 4;
-    if (std.mem.eql(u8, name, "rq")) return 8;
+    .{ .name = "rq", .operation = .{ .reserve = 8 } },
+    // api-matrix-lower: "rt"
+    .{ .name = "rt", .operation = .{ .reserve = 10 } },
+    // api-matrix-lower: "rdq"
+    .{ .name = "rdq", .operation = .{ .reserve = 16 } },
+    // api-matrix-lower: "rqq"
+    .{ .name = "rqq", .operation = .{ .reserve = 32 } },
+    // api-matrix-lower: "rdqq"
+    .{ .name = "rdqq", .operation = .{ .reserve = 64 } },
+};
+
+pub fn dataOperation(name: []const u8) ?DataOperation {
+    for (data_operations) |descriptor| {
+        if (std.mem.eql(u8, name, descriptor.name)) return descriptor.operation;
+    }
     return null;
 }
 
@@ -518,7 +562,6 @@ pub fn isAllowedLateLayoutApi(callee: []const u8) bool {
         std.mem.eql(u8, callee, "pad") or
         std.mem.eql(u8, callee, "pad_to") or
         std.mem.eql(u8, callee, "align") or
-        dataEmitByteCount(callee) != null or
-        dataReserveScale(callee) != null or
+        dataOperation(callee) != null or
         storeByteCount(callee) != null;
 }

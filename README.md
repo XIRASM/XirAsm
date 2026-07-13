@@ -149,7 +149,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.5**
+Current version: **0.2.6**
 
 XIRASM is pre-1.0 software. Public APIs may still be refined before the stable
 release.

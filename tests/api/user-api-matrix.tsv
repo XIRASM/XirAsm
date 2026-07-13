@@ -62,17 +62,30 @@ api.emit_u8	api	emit.u8	call.callee, "emit.u8"	emit.u8(	Emit one byte.
 api.emit_u16	api	emit.u16	call.callee, "emit.u16"	emit.u16(	Emit little-endian u16.
 api.emit_u32	api	emit.u32	call.callee, "emit.u32"	emit.u32(	Emit little-endian u32.
 api.emit_u64	api	emit.u64	call.callee, "emit.u64"	emit.u64(	Emit little-endian u64.
-api.db	api	db	dataEmitByteCount	db(	Emit byte values; string and bytes arguments are appended as raw bytes.
-api.dw	api	dw	dataEmitByteCount	dw(	Emit little-endian u16 values.
-api.dd	api	dd	dataEmitByteCount	dd(	Emit little-endian u32 values.
-api.dq	api	dq	dataEmitByteCount	dq(	Emit little-endian u64 values.
+api.emit_f32	api	emit.f32	dataOperation	emit.f32(	Emit one little-endian IEEE-754 binary32 value.
+api.emit_f64	api	emit.f64	dataOperation	emit.f64(	Emit one little-endian IEEE-754 binary64 value.
+api.db	api	db	dataOperation	db(	Emit byte values; string and bytes arguments are appended as raw bytes.
+api.dw	api	dw	dataOperation	dw(	Emit little-endian 2-byte integer values.
+api.dd	api	dd	dataOperation	dd(	Emit little-endian 4-byte integer values.
+api.dp	api	dp	dataOperation	dp(	Emit little-endian 6-byte integer values.
+api.dq	api	dq	dataOperation	dq(	Emit little-endian 8-byte integer values.
+api.dt	api	dt	dataOperation	dt(	Emit zero-extended little-endian 10-byte integer values.
+api.ddq	api	ddq	dataOperation	ddq(	Emit zero-extended little-endian 16-byte integer values.
+api.dqq	api	dqq	dataOperation	dqq(	Emit zero-extended little-endian 32-byte integer values.
+api.ddqq	api	ddqq	dataOperation	ddqq(	Emit zero-extended little-endian 64-byte integer values.
 api.emit_bytes	api	emit.bytes	call.callee, "emit.bytes"	emit.bytes(	Emit string or bytes value.
+api.emit_file	api	emit.file	call.callee, "emit.file"	emit.file(	Emit an entire source-relative file or an exact byte range.
 api.emit_struct	api	emit.struct	call.callee, "emit.struct"	emit.struct(	Pack and emit binary struct value.
 api.reserve	api	reserve	call.callee, "reserve"	reserve(	Reserve logical hole.
-api.rb	api	rb	dataReserveScale	rb(	Reserve byte-sized logical storage.
-api.rw	api	rw	dataReserveScale	rw(	Reserve word-sized logical storage.
-api.rd	api	rd	dataReserveScale	rd(	Reserve dword-sized logical storage.
-api.rq	api	rq	dataReserveScale	rq(	Reserve qword-sized logical storage.
+api.rb	api	rb	dataOperation	rb(	Reserve 1-byte logical elements.
+api.rw	api	rw	dataOperation	rw(	Reserve 2-byte logical elements.
+api.rd	api	rd	dataOperation	rd(	Reserve 4-byte logical elements.
+api.rp	api	rp	dataOperation	rp(	Reserve 6-byte logical elements.
+api.rq	api	rq	dataOperation	rq(	Reserve 8-byte logical elements.
+api.rt	api	rt	dataOperation	rt(	Reserve 10-byte logical elements.
+api.rdq	api	rdq	dataOperation	rdq(	Reserve 16-byte logical elements.
+api.rqq	api	rqq	dataOperation	rqq(	Reserve 32-byte logical elements.
+api.rdqq	api	rdqq	dataOperation	rdqq(	Reserve 64-byte logical elements.
 api.pad	api	pad	call.callee, "pad"	pad(	Emit explicit fill bytes.
 api.pad_to	api	pad_to	call.callee, "pad_to"	pad_to(	Emit fill bytes up to file offset.
 api.align	api	align	call.callee, "align"	align(	Emit fill bytes up to alignment.
@@ -430,6 +443,8 @@ format.coff_string_table_foa	format	coff_string_table_foa	fn coff_string_table_f
 format.coff_finalize_section	format	coff_finalize_section	fn coff_finalize_section	coff_finalize_section(	Register deferred COFF section row backfill without relocations.
 format.coff_finalize_section_reloc	format	coff_finalize_section_reloc	fn coff_finalize_section_reloc	coff_finalize_section_reloc(	Register deferred COFF section row backfill with relocation table fields.
 format.coff64_finish_section_reloc	format	coff64_finish_section_reloc	fn coff64_finish_section_reloc	coff64_finish_section_reloc(	User-facing AMD64 COFF section-row finalizer with relocation table fields.
+expr.f32	expr	f32	name, "f32"	f32(	Explicitly narrow a finite f64 value to f32.
+expr.f64	expr	f64	name, "f64"	f64(	Widen f32 to f64 or preserve f64.
 expr.sizeof	expr	sizeof	call.name, "sizeof"	sizeof(	Binary layout size query.
 expr.offset_of	expr	offset_of	call.name, "offset_of"	offset_of(	Binary layout field offset query.
 expr.lengthof	expr	lengthof	call.name, "lengthof"	lengthof(	Length query for bytes/string/integer text.

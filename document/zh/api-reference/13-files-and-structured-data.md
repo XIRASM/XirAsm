@@ -8,6 +8,8 @@
 | `fs.read_text(path)` | `string` | 把整个文件读取为字符串。 |
 | `fs.read_bytes(path)` | `bytes` | 把整个文件读取为字节序列。 |
 | `fs.read_bytes(path, offset, count)` | `bytes` | 读取一段长度明确的字节范围。 |
+| `emit.file(path)` | 语句 | 写出完整的源文件相对文件。 |
+| `emit.file(path, offset, count)` | 语句 | 写出精确的文件字节范围。 |
 | `json.parse(value)` | 值 | 解析字符串或字节序列中的 JSON。 |
 | `json.file(path)` | 值 | 读取并解析 JSON 文件。 |
 | `toml.parse(value)` | `map` | 解析字符串或字节序列中的 TOML 文档。 |
@@ -19,7 +21,7 @@
 
 | 操作 | 常规求值阶段 | `late_layout` | `defer` |
 | --- | --- | --- | --- |
-| `fs.exists`、`fs.read_text`、`fs.read_bytes` | 可用 | 不可用 | 不可用 |
+| `fs.exists`、`fs.read_text`、`fs.read_bytes`、`emit.file` | 可用 | 不可用 | 不可用 |
 | `json.file`、`toml.file` | 可用 | 不可用 | 不可用 |
 | `json.parse`、`toml.parse` | 可用 | 可在值表达式中使用 | 可在值表达式中使用 |
 
@@ -55,6 +57,8 @@ emit.bytes(banner)
 ```
 
 范围读取形式使用从零开始的偏移和字节数量。整个范围必须位于文件以内。在文件末尾读取长度为零的范围是有效操作。
+
+`emit.file` 使用与 `fs.read_bytes` 完全相同的解析器和范围规则，但会直接写入输出，而不是返回 `bytes` 值。
 
 ## JSON 值
 

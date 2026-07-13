@@ -13,6 +13,13 @@ pub const Error = Allocator.Error || meta_io.Error || toml.ParseError || error{
     TypeMismatch,
 };
 
+pub const ReadError = Allocator.Error || meta_io.Error || error{InvalidApiInteger};
+
+pub const ByteRange = struct {
+    offset: usize,
+    count: usize,
+};
+
 const EvalContext = struct {
     file_resolver: ?meta_io.FileResolver,
     parent_path: ?[]const u8,
@@ -111,24 +118,48 @@ fn evalFsRead(
         },
         .bytes => {
             if (args.len != 1 and args.len != 3) return error.InvalidArgument;
-            if (args.len == 1) {
-                const result = try readFile(allocator, args[0], ctx, kind);
-                allocator.free(result.path);
-                return .{ .bytes = result.bytes };
-            }
-
-            var result = try readFile(allocator, args[0], ctx, kind);
-            defer result.deinit(allocator);
-
-            const offset = try expectUsize(args[1]);
-            const count = try expectUsize(args[2]);
-            if (offset > result.bytes.len) return error.InvalidApiInteger;
-            const available = result.bytes.len - offset;
-            if (count > available) return error.InvalidApiInteger;
-
-            return .{ .bytes = try allocator.dupe(u8, result.bytes[offset..][0..count]) };
+            const resolver = ctx.file_resolver orelse return error.FileNotAvailable;
+            const path = try expectString(args[0]);
+            const range: ?ByteRange = if (args.len == 3) .{
+                .offset = try expectUsize(args[1]),
+                .count = try expectUsize(args[2]),
+            } else null;
+            return .{ .bytes = try readBytes(
+                allocator,
+                resolver,
+                path,
+                ctx.parent_path,
+                source_mod.unknown_span,
+                range,
+            ) };
         },
     }
+}
+
+pub fn readBytes(
+    allocator: Allocator,
+    resolver: meta_io.FileResolver,
+    path: []const u8,
+    parent_path: ?[]const u8,
+    span: source_mod.SourceSpan,
+    range: ?ByteRange,
+) ReadError![]u8 {
+    var result = try resolver.read(resolver.context, allocator, .{
+        .path = path,
+        .parent_path = parent_path,
+        .span = span,
+        .kind = .bytes,
+    });
+    const selected = range orelse {
+        allocator.free(result.path);
+        return result.bytes;
+    };
+    defer result.deinit(allocator);
+
+    if (selected.offset > result.bytes.len) return error.InvalidApiInteger;
+    const available = result.bytes.len - selected.offset;
+    if (selected.count > available) return error.InvalidApiInteger;
+    return allocator.dupe(u8, result.bytes[selected.offset..][0..selected.count]);
 }
 
 fn evalTomlParse(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
@@ -136,7 +167,7 @@ fn evalTomlParse(allocator: Allocator, args: []const value_mod.Value) Error!valu
     const source = switch (args[0]) {
         .string => |text| text,
         .bytes => |bytes| bytes,
-        .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     return parseTomlValue(allocator, source);
 }
@@ -153,7 +184,7 @@ fn evalJsonParse(allocator: Allocator, args: []const value_mod.Value) Error!valu
     const source = switch (args[0]) {
         .string => |text| text,
         .bytes => |bytes| bytes,
-        .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     return parseJsonValue(allocator, source);
 }
@@ -326,14 +357,14 @@ fn jsonObjectToMap(allocator: Allocator, object: std.json.ObjectMap) Error![]val
 fn expectString(value: value_mod.Value) Error![]const u8 {
     return switch (value) {
         .string => |text| text,
-        .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.TypeMismatch,
     };
 }
 
 fn expectUsize(value: value_mod.Value) Error!usize {
     const integer = switch (value) {
         .integer => |stored| stored.value,
-        .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     if (integer > std.math.maxInt(usize)) return error.InvalidApiInteger;
     return @intCast(integer);

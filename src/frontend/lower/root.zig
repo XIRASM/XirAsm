@@ -261,14 +261,6 @@ fn lowerStatement(
             if (context.value_function_depth != 0 and api_mod.apiCallHasOutputSideEffect(call.callee)) return error.SideEffectInValueFunction;
             try api_mod.lowerApiCall(allocator, module, active, output_stack, call, context, apiCallbacks());
         },
-        .legacy_directive => |directive| {
-            try module.diagnostics.add(
-                allocator,
-                .err,
-                directive.span,
-                "legacy assembler directive is not supported; use modern XIRASM API syntax",
-            );
-        },
         .meta_if => |meta_if| {
             if (try evalMetaCondition(module, context, active.*, meta_if.condition)) {
                 try lowerScopedStatementSlice(allocator, module, active, output_stack, meta_if.body, context);
@@ -342,6 +334,15 @@ fn addLowerErrorDiagnostic(
     span: source.SourceSpan,
     err: anyerror,
 ) Allocator.Error!void {
+    if (err == error.LegacyDirectiveSyntax) {
+        try module.diagnostics.add(
+            allocator,
+            .err,
+            span,
+            "legacy assembler directive is not supported; use modern XIRASM API syntax",
+        );
+        return;
+    }
     const message = try std.fmt.allocPrint(allocator, "lowering failed: {s}", .{@errorName(err)});
     defer allocator.free(message);
     try module.diagnostics.add(allocator, .err, span, message);
@@ -366,6 +367,16 @@ fn lowerDataEmitCall(
     return data_emission.lowerEmitCall(module, context, active, call, byte_count, dataEmissionCallbacks());
 }
 
+fn lowerFloatEmitCall(
+    module: *module_mod.Module,
+    context: *LowerContext,
+    active: *ActiveOutput,
+    call: ast.ApiCallStatement,
+    byte_count: u8,
+) LowerError!void {
+    return data_emission.lowerFloatCall(module, context, active, call, byte_count, dataEmissionCallbacks());
+}
+
 fn lowerDataReserveCall(
     module: *module_mod.Module,
     context: *LowerContext,
@@ -374,6 +385,15 @@ fn lowerDataReserveCall(
     scale: u64,
 ) LowerError!void {
     return data_emission.lowerReserveCall(module, context, active, call, scale, dataEmissionCallbacks());
+}
+
+fn lowerFileEmitCall(
+    module: *module_mod.Module,
+    context: *LowerContext,
+    active: *ActiveOutput,
+    call: ast.ApiCallStatement,
+) LowerError!void {
+    return data_emission.lowerFileCall(module, context, active, call, dataEmissionCallbacks());
 }
 
 fn lowerDiagnosticCall(
@@ -672,6 +692,7 @@ fn dataEmissionCallbacks() data_emission.Callbacks {
     return .{
         .value_arg_at_context = valueArgAtContext,
         .integer_arg_at_context = integerArgAtContext,
+        .file_resolver = expression_bridge.fileResolver,
         .advance_active_output = advanceActiveOutput,
     };
 }
@@ -747,7 +768,9 @@ fn apiCallbacks() api_mod.Callbacks {
         .lower_assert = lowerAssertCall,
         .lower_isa = lowerIsaCall,
         .lower_data_emit = lowerDataEmitCall,
+        .lower_float_emit = lowerFloatEmitCall,
         .lower_data_reserve = lowerDataReserveCall,
+        .lower_file_emit = lowerFileEmitCall,
         .value_arg_at_context = valueArgAtContext,
         .integer_arg_at_context = integerArgAtContext,
         .source_path_arg_at_context = sourcePathArgAtContext,

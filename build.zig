@@ -467,6 +467,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/config.json"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/json.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/project.toml"));
+    run_api_matrix.addFileArg(b.path("tests/meta/floats.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/target_conditions.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/x86_modes.asm"));
     run_api_matrix.addFileArg(b.path("tests/struct/natural_emit_struct.asm"));
@@ -3564,7 +3565,17 @@ pub fn build(b: *std.Build) void {
         "tests/flat/data_aliases.asm",
         "flat-data-aliases.bin",
         "x64",
-        "4142434422116655443308070605040302010000ff0000ee00000000dd0000000000000000cc",
+        "41424344221166554433080706050403020106050403020107080000000000000000090a00000000000000000000000000000b0c0000000000000000000000000000000000000000000000000000000000000d0e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff0000ee00000000dd0000000000000000cc000000000000f100000000000000000000f200000000000000000000000000000000f30000000000000000000000000000000000000000000000000000000000000000f400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f5",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/floats.asm",
+        "meta-floats.bin",
+        "x64",
+        "0000c03f0000000000000080000000000000144000000040010000000000000001000000",
     );
     addAsmFixture(
         b,
@@ -3884,7 +3895,7 @@ pub fn build(b: *std.Build) void {
         "tests/meta/data_file/main.asm",
         "meta-data-file.bin",
         "x64",
-        "4f4b42494e0a40636667",
+        "4f4b42494e0a42494e0a494e40636667",
     );
     addAsmFixture(
         b,

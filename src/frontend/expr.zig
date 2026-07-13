@@ -113,6 +113,7 @@ pub const UnaryOp = enum {
 
 pub const Node = union(enum) {
     integer: u64,
+    float64: f64,
     boolean: bool,
     string_literal: []u8,
     bytes_literal: []u8,
@@ -130,7 +131,7 @@ pub const Node = union(enum) {
             .builtin_call => |*payload| payload.deinit(allocator),
             .unary => |*payload| payload.deinit(allocator),
             .binary => |*payload| payload.deinit(allocator),
-            .integer, .boolean => {},
+            .integer, .float64, .boolean => {},
         }
         self.* = undefined;
     }
@@ -238,6 +239,7 @@ pub fn evaluateBoolean(node: *const Node, ctx: *EvalContext) ExpressionError!boo
 pub fn evaluateValue(allocator: Allocator, node: *const Node, ctx: *EvalContext) ExpressionError!value_mod.Value {
     return switch (node.*) {
         .integer => |value| value_mod.Value.int(value),
+        .float64 => |value| .{ .float64 = value },
         .boolean => |value| .{ .boolean = value },
         .string_literal => |text| .{ .string = try allocator.dupe(u8, text) },
         .bytes_literal => |bytes| .{ .bytes = try allocator.dupe(u8, bytes) },
@@ -454,18 +456,26 @@ const ExpressionParser = struct {
     }
 
     fn parseNumber(self: *ExpressionParser) ExpressionError!Node {
-        var token: std.ArrayList(u8) = .empty;
-        defer token.deinit(self.allocator);
-
+        const start = self.pos;
         while (self.peekByte()) |byte| {
-            if (std.ascii.isAlphanumeric(byte) or byte == '_') {
-                try token.append(self.allocator, try self.requireByte());
+            if (std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '\'') {
+                self.pos += 1;
+            } else if (byte == '.' and self.pos + 1 < self.input.len and std.ascii.isDigit(self.input[self.pos + 1])) {
+                self.pos += 1;
+            } else if ((byte == '+' or byte == '-') and self.pos != start and
+                (self.input[self.pos - 1] == 'e' or self.input[self.pos - 1] == 'E'))
+            {
+                self.pos += 1;
             } else {
                 break;
             }
         }
 
-        return .{ .integer = try parseIntegerLiteral(self.allocator, token.items) };
+        const token = self.input[start..self.pos];
+        if (isDecimalFloatLiteral(token)) {
+            return .{ .float64 = try parseFloatLiteral(self.allocator, token) };
+        }
+        return .{ .integer = try parseIntegerLiteral(self.allocator, token) };
     }
 
     fn parseStringLiteral(self: *ExpressionParser) ExpressionError!Node {
@@ -773,8 +783,16 @@ fn skipQuotedText(text: []const u8, quote_index: usize) ?usize {
 
 fn evalUnary(op: UnaryOp, operand: *const Node, ctx: *EvalContext) ExpressionError!value_mod.Value {
     return switch (op) {
-        .plus => value_mod.Value.int(try evaluateInteger(operand, ctx)),
-        .neg => value_mod.Value.int(0 -% try evaluateInteger(operand, ctx)),
+        .plus, .neg => blk: {
+            var value = try evaluateValue(ctx.module.allocator, operand, ctx);
+            defer value.deinit(ctx.module.allocator);
+            break :blk switch (value) {
+                .integer => |stored| value_mod.Value.int(if (op == .neg) 0 -% stored.value else stored.value),
+                .float32 => |stored| .{ .float32 = if (op == .neg) -stored else stored },
+                .float64 => |stored| .{ .float64 = if (op == .neg) -stored else stored },
+                else => error.TypeMismatch,
+            };
+        },
         .bit_not => value_mod.Value.int(~try evaluateInteger(operand, ctx)),
         .logical_not => .{ .boolean = !try evaluateBoolean(operand, ctx) },
         .lengthof => switch (operand.*) {
@@ -802,27 +820,8 @@ fn evalBinary(
         },
         .equal => .{ .boolean = try valuesEqual(left, right, ctx) },
         .not_equal => .{ .boolean = !try valuesEqual(left, right, ctx) },
-        .less_than => .{ .boolean = try evaluateInteger(left, ctx) < try evaluateInteger(right, ctx) },
-        .less_equal => .{ .boolean = try evaluateInteger(left, ctx) <= try evaluateInteger(right, ctx) },
-        .greater_than => .{ .boolean = try evaluateInteger(left, ctx) > try evaluateInteger(right, ctx) },
-        .greater_equal => .{ .boolean = try evaluateInteger(left, ctx) >= try evaluateInteger(right, ctx) },
-        .add => blk: {
-            const value = std.math.add(u64, try evaluateInteger(left, ctx), try evaluateInteger(right, ctx)) catch return error.InvalidNumber;
-            break :blk value_mod.Value.int(value);
-        },
-        .sub => blk: {
-            const value = std.math.sub(u64, try evaluateInteger(left, ctx), try evaluateInteger(right, ctx)) catch return error.InvalidNumber;
-            break :blk value_mod.Value.int(value);
-        },
-        .mul => blk: {
-            const value = std.math.mul(u64, try evaluateInteger(left, ctx), try evaluateInteger(right, ctx)) catch return error.InvalidNumber;
-            break :blk value_mod.Value.int(value);
-        },
-        .div => blk: {
-            const divisor = try evaluateInteger(right, ctx);
-            if (divisor == 0) return error.DivisionByZero;
-            break :blk value_mod.Value.int(@divTrunc(try evaluateInteger(left, ctx), divisor));
-        },
+        .less_than, .less_equal, .greater_than, .greater_equal => .{ .boolean = try evalNumericComparison(op, left, right, ctx) },
+        .add, .sub, .mul, .div => evalNumericArithmetic(op, left, right, ctx),
         .mod => blk: {
             const divisor = try evaluateInteger(right, ctx);
             if (divisor == 0) return error.DivisionByZero;
@@ -846,6 +845,95 @@ fn evalBinary(
     };
 }
 
+fn evalNumericComparison(
+    op: BinaryOp,
+    left: *const Node,
+    right: *const Node,
+    ctx: *EvalContext,
+) ExpressionError!bool {
+    var left_value = try evaluateValue(ctx.module.allocator, left, ctx);
+    defer left_value.deinit(ctx.module.allocator);
+    var right_value = try evaluateValue(ctx.module.allocator, right, ctx);
+    defer right_value.deinit(ctx.module.allocator);
+
+    return switch (left_value) {
+        .integer => |lhs| switch (right_value) {
+            .integer => |rhs| try compareNumbers(u64, op, lhs.value, rhs.value),
+            else => error.TypeMismatch,
+        },
+        .float32 => |lhs| switch (right_value) {
+            .float32 => |rhs| try compareNumbers(f32, op, lhs, rhs),
+            else => error.TypeMismatch,
+        },
+        .float64 => |lhs| switch (right_value) {
+            .float64 => |rhs| try compareNumbers(f64, op, lhs, rhs),
+            else => error.TypeMismatch,
+        },
+        else => error.TypeMismatch,
+    };
+}
+
+fn compareNumbers(comptime T: type, op: BinaryOp, left: T, right: T) ExpressionError!bool {
+    return switch (op) {
+        .less_than => left < right,
+        .less_equal => left <= right,
+        .greater_than => left > right,
+        .greater_equal => left >= right,
+        else => error.TypeMismatch,
+    };
+}
+
+fn evalNumericArithmetic(
+    op: BinaryOp,
+    left: *const Node,
+    right: *const Node,
+    ctx: *EvalContext,
+) ExpressionError!value_mod.Value {
+    var left_value = try evaluateValue(ctx.module.allocator, left, ctx);
+    defer left_value.deinit(ctx.module.allocator);
+    var right_value = try evaluateValue(ctx.module.allocator, right, ctx);
+    defer right_value.deinit(ctx.module.allocator);
+
+    return switch (left_value) {
+        .integer => |lhs| switch (right_value) {
+            .integer => |rhs| evalIntegerArithmetic(op, lhs.value, rhs.value),
+            else => error.TypeMismatch,
+        },
+        .float32 => |lhs| switch (right_value) {
+            .float32 => |rhs| .{ .float32 = try evalFloatArithmetic(f32, op, lhs, rhs) },
+            else => error.TypeMismatch,
+        },
+        .float64 => |lhs| switch (right_value) {
+            .float64 => |rhs| .{ .float64 = try evalFloatArithmetic(f64, op, lhs, rhs) },
+            else => error.TypeMismatch,
+        },
+        else => error.TypeMismatch,
+    };
+}
+
+fn evalIntegerArithmetic(op: BinaryOp, left: u64, right: u64) ExpressionError!value_mod.Value {
+    return switch (op) {
+        .add => value_mod.Value.int(std.math.add(u64, left, right) catch return error.InvalidNumber),
+        .sub => value_mod.Value.int(std.math.sub(u64, left, right) catch return error.InvalidNumber),
+        .mul => value_mod.Value.int(std.math.mul(u64, left, right) catch return error.InvalidNumber),
+        .div => if (right == 0) error.DivisionByZero else value_mod.Value.int(@divTrunc(left, right)),
+        else => error.TypeMismatch,
+    };
+}
+
+fn evalFloatArithmetic(comptime T: type, op: BinaryOp, left: T, right: T) ExpressionError!T {
+    if (op == .div and right == 0) return error.DivisionByZero;
+    const result = switch (op) {
+        .add => left + right,
+        .sub => left - right,
+        .mul => left * right,
+        .div => left / right,
+        else => return error.TypeMismatch,
+    };
+    if (!std.math.isFinite(result)) return error.InvalidNumber;
+    return result;
+}
+
 fn evalBuiltinCall(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) ExpressionError!value_mod.Value {
     if (meta_std.isBuiltinName(call.name)) {
         return evalMetaStdBuiltin(allocator, call, ctx);
@@ -857,6 +945,27 @@ fn evalBuiltinCall(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) E
         const local_context = ctx.local_context orelse return error.InvalidOperand;
         const callback = ctx.call_user_function orelse return error.InvalidOperand;
         return callback(local_context, allocator, call.name, call.args, ctx);
+    }
+    if (std.mem.eql(u8, call.name, "f32") or std.mem.eql(u8, call.name, "f64")) {
+        if (call.args.len != 1) return error.InvalidArgument;
+        var value = try evaluateBuiltinValueArg(allocator, call.args[0], ctx);
+        defer value.deinit(allocator);
+        if (std.mem.eql(u8, call.name, "f32")) {
+            return switch (value) {
+                .float32 => |stored| .{ .float32 = stored },
+                .float64 => |stored| blk: {
+                    const narrowed: f32 = @floatCast(stored);
+                    if (!std.math.isFinite(narrowed)) return error.InvalidNumber;
+                    break :blk .{ .float32 = narrowed };
+                },
+                else => error.TypeMismatch,
+            };
+        }
+        return switch (value) {
+            .float32 => |stored| .{ .float64 = stored },
+            .float64 => |stored| .{ .float64 = stored },
+            else => error.TypeMismatch,
+        };
     }
     if (std.mem.eql(u8, call.name, "sym.unique")) {
         if (call.args.len != 1) return error.InvalidArgument;
@@ -1120,7 +1229,7 @@ fn evalFieldAccess(allocator: Allocator, access: FieldAccess, ctx: *EvalContext)
 
     const struct_value = switch (object) {
         .@"struct" => |stored| stored,
-        .void, .integer, .boolean, .string, .bytes, .type, .list, .map => return error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.TypeMismatch,
     };
 
     return (try struct_value.fieldValueByName(allocator, access.field_name)) orelse error.UnknownField;
@@ -1153,7 +1262,7 @@ fn builtinLabelNameArg(allocator: Allocator, call: BuiltinCall, index: usize, ct
             defer resolved.deinit(allocator);
             break :blk switch (resolved) {
                 .string => |text| try allocator.dupe(u8, text),
-                .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => try allocator.dupe(u8, name),
+                .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => try allocator.dupe(u8, name),
             };
         },
         .expression => builtinStringArg(allocator, call, index, ctx),
@@ -1289,7 +1398,7 @@ fn outputLoadLabelSection(
             break :blk right;
         },
         .field_access => |access| outputLoadLabelSection(allocator, ctx, access.object),
-        .builtin_call, .integer, .boolean, .string_literal, .bytes_literal => null,
+        .builtin_call, .integer, .float64, .boolean, .string_literal, .bytes_literal => null,
     };
 }
 
@@ -1329,7 +1438,7 @@ pub fn usesOutputLoad(node: *const Node) bool {
         .field_access => |access| usesOutputLoad(access.object),
         .unary => |unary| usesOutputLoad(unary.operand),
         .binary => |binary| usesOutputLoad(binary.left) or usesOutputLoad(binary.right),
-        .integer, .boolean, .string_literal, .bytes_literal, .symbol => false,
+        .integer, .float64, .boolean, .string_literal, .bytes_literal, .symbol => false,
     };
 }
 
@@ -1428,6 +1537,14 @@ fn valuesEqual(left: *const Node, right: *const Node, ctx: *EvalContext) Express
             .integer => |right_integer| left_integer.value == right_integer.value,
             else => false,
         },
+        .float32 => |left_float| switch (right_value) {
+            .float32 => |right_float| left_float == right_float,
+            else => false,
+        },
+        .float64 => |left_float| switch (right_value) {
+            .float64 => |right_float| left_float == right_float,
+            else => false,
+        },
         .boolean => |left_bool| switch (right_value) {
             .boolean => |right_bool| left_bool == right_bool,
             else => false,
@@ -1491,6 +1608,14 @@ fn valueValuesEqual(left: value_mod.Value, right: value_mod.Value) bool {
         .void => right == .void,
         .integer => |left_integer| switch (right) {
             .integer => |right_integer| left_integer.value == right_integer.value,
+            else => false,
+        },
+        .float32 => |left_float| switch (right) {
+            .float32 => |right_float| left_float == right_float,
+            else => false,
+        },
+        .float64 => |left_float| switch (right) {
+            .float64 => |right_float| left_float == right_float,
             else => false,
         },
         .boolean => |left_bool| switch (right) {
@@ -1573,6 +1698,64 @@ fn parseIntegerLiteral(allocator: Allocator, token: []const u8) ExpressionError!
     return std.fmt.parseInt(u64, normalized, 10) catch error.InvalidNumber;
 }
 
+fn isDecimalFloatLiteral(token: []const u8) bool {
+    if (token.len == 0) return false;
+    var index: usize = 0;
+    var integer_digits: usize = 0;
+    while (index < token.len) : (index += 1) {
+        if (std.ascii.isDigit(token[index])) {
+            integer_digits += 1;
+            continue;
+        }
+        if (token[index] == '_' or token[index] == '\'') continue;
+        break;
+    }
+    if (integer_digits == 0) return false;
+
+    var has_fraction = false;
+    if (index < token.len and token[index] == '.') {
+        has_fraction = true;
+        index += 1;
+        var fraction_digits: usize = 0;
+        while (index < token.len) : (index += 1) {
+            if (std.ascii.isDigit(token[index])) {
+                fraction_digits += 1;
+                continue;
+            }
+            if (token[index] == '_' or token[index] == '\'') continue;
+            break;
+        }
+        if (fraction_digits == 0) return false;
+    }
+
+    var has_exponent = false;
+    if (index < token.len and (token[index] == 'e' or token[index] == 'E')) {
+        has_exponent = true;
+        index += 1;
+        if (index < token.len and (token[index] == '+' or token[index] == '-')) index += 1;
+        var exponent_digits: usize = 0;
+        while (index < token.len) : (index += 1) {
+            if (std.ascii.isDigit(token[index])) {
+                exponent_digits += 1;
+                continue;
+            }
+            if (token[index] == '_' or token[index] == '\'') continue;
+            break;
+        }
+        if (exponent_digits == 0) return false;
+    }
+
+    return index == token.len and (has_fraction or has_exponent);
+}
+
+fn parseFloatLiteral(allocator: Allocator, token: []const u8) ExpressionError!f64 {
+    const normalized = try normalizeNumberToken(allocator, token);
+    defer allocator.free(normalized);
+    const value = std.fmt.parseFloat(f64, normalized) catch return error.InvalidNumber;
+    if (!std.math.isFinite(value)) return error.InvalidNumber;
+    return value;
+}
+
 fn normalizeNumberToken(allocator: Allocator, token: []const u8) Allocator.Error![]u8 {
     var normalized: std.ArrayList(u8) = .empty;
     errdefer normalized.deinit(allocator);
@@ -1595,7 +1778,9 @@ fn countDecimalDigits(value: u64) u64 {
 }
 
 fn isBuiltinName(name: []const u8) bool {
-    return std.mem.eql(u8, name, "sizeof") or
+    return std.mem.eql(u8, name, "f32") or
+        std.mem.eql(u8, name, "f64") or
+        std.mem.eql(u8, name, "sizeof") or
         std.mem.eql(u8, name, "lengthof") or
         std.mem.eql(u8, name, "pack") or
         std.mem.eql(u8, name, "offset_of") or
@@ -1625,6 +1810,54 @@ test "expression evaluates arithmetic precedence and bitwise operators" {
     defer expression.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(u64, 19), try evaluateInteger(&expression, &ctx));
+}
+
+test "expression evaluates finite f32 and f64 values" {
+    var module = try module_mod.Module.init(std.testing.allocator, @import("target.zig").Target.default);
+    defer module.deinit();
+    var ctx: EvalContext = .{ .module = &module };
+
+    var expression = try parseOwned(std.testing.allocator, "1.5e1 / 3.0");
+    defer expression.deinit(std.testing.allocator);
+    var result = try evaluateValue(std.testing.allocator, &expression, &ctx);
+    defer result.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u64, @bitCast(@as(f64, 5.0))), @as(u64, @bitCast(try result.expectFloat64())));
+
+    var narrow_expression = try parseOwned(std.testing.allocator, "f32(1.5)");
+    defer narrow_expression.deinit(std.testing.allocator);
+    var narrow = try evaluateValue(std.testing.allocator, &narrow_expression, &ctx);
+    defer narrow.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u32, 0x3fc00000), @as(u32, @bitCast(try narrow.expectFloat32())));
+
+    var negative_zero_expression = try parseOwned(std.testing.allocator, "-0.0");
+    defer negative_zero_expression.deinit(std.testing.allocator);
+    var negative_zero = try evaluateValue(std.testing.allocator, &negative_zero_expression, &ctx);
+    defer negative_zero.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u64, 0x8000000000000000), @as(u64, @bitCast(try negative_zero.expectFloat64())));
+}
+
+test "expression rejects non-finite and mixed float arithmetic" {
+    try std.testing.expectError(error.InvalidNumber, parseOwned(std.testing.allocator, "1e400"));
+
+    var module = try module_mod.Module.init(std.testing.allocator, @import("target.zig").Target.default);
+    defer module.deinit();
+    var ctx: EvalContext = .{ .module = &module };
+
+    var narrow_overflow_expression = try parseOwned(std.testing.allocator, "f32(3.4028236e38)");
+    defer narrow_overflow_expression.deinit(std.testing.allocator);
+    try std.testing.expectError(error.InvalidNumber, evaluateValue(std.testing.allocator, &narrow_overflow_expression, &ctx));
+
+    var mixed_expression = try parseOwned(std.testing.allocator, "1.0 + f32(1.0)");
+    defer mixed_expression.deinit(std.testing.allocator);
+    try std.testing.expectError(error.TypeMismatch, evaluateValue(std.testing.allocator, &mixed_expression, &ctx));
+
+    var arithmetic_overflow_expression = try parseOwned(std.testing.allocator, "1e308 * 2.0");
+    defer arithmetic_overflow_expression.deinit(std.testing.allocator);
+    try std.testing.expectError(error.InvalidNumber, evaluateValue(std.testing.allocator, &arithmetic_overflow_expression, &ctx));
+
+    var division_by_zero_expression = try parseOwned(std.testing.allocator, "1.0 / 0.0");
+    defer division_by_zero_expression.deinit(std.testing.allocator);
+    try std.testing.expectError(error.DivisionByZero, evaluateValue(std.testing.allocator, &division_by_zero_expression, &ctx));
 }
 
 test "expression evaluates sizeof and lengthof builtins" {

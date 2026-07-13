@@ -126,7 +126,7 @@ fn inputView(allocator: Allocator, input: value_mod.Value) Error!TokenView {
     return switch (input) {
         .string => |text| .{ .items = try lexInputTokens(allocator, text) },
         .list => listStringView(allocator, input),
-        .void, .integer, .boolean, .bytes, .type, .@"struct", .map => error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .map => error.TypeMismatch,
     };
 }
 
@@ -134,7 +134,7 @@ fn patternView(allocator: Allocator, input: value_mod.Value) Error!TokenView {
     return switch (input) {
         .string => |text| .{ .items = try splitPatternText(allocator, text) },
         .list => listStringView(allocator, input),
-        .void, .integer, .boolean, .bytes, .type, .@"struct", .map => error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .map => error.TypeMismatch,
     };
 }
 

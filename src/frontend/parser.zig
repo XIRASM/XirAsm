@@ -35,6 +35,7 @@ pub const ParseError = Allocator.Error || error{
     UnexpectedEndOfMetaWhile,
     TooManyStatements,
     UnexpectedEndOfStatement,
+    LegacyDirectiveSyntax,
 };
 
 const statement_ws = " \t\r\n";
@@ -42,6 +43,7 @@ const statement_ws = " \t\r\n";
 pub const Parser = struct {
     allocator: Allocator,
     lexer: lexer.Lexer,
+    last_error_span: ?source.SourceSpan = null,
 
     pub fn init(allocator: Allocator, input: []const u8) Parser {
         return .{
@@ -78,7 +80,7 @@ pub const Parser = struct {
                 .label => try appendLabel(&statements, self.allocator, token),
                 .isa_line => try appendOwnedText(&statements, self.allocator, .isa_line, token),
                 .api_call => try appendApiCall(&statements, self.allocator, token),
-                .legacy_directive => try appendOwnedText(&statements, self.allocator, .legacy_directive, token),
+                .invalid_directive => return self.rejectBareDirective(token),
                 .meta_line => {
                     if (looksLikeStructStart(token.text)) {
                         try appendStructDeclaration(self, &statements, token);
@@ -118,6 +120,15 @@ pub const Parser = struct {
         }
 
         return statements;
+    }
+
+    pub fn errorSpan(self: *const Parser) ?source.SourceSpan {
+        return self.last_error_span;
+    }
+
+    fn rejectBareDirective(self: *Parser, token: lexer.Token) ParseError {
+        self.last_error_span = token.span;
+        return error.LegacyDirectiveSyntax;
     }
 
     fn collectContinuedStatement(self: *Parser, token: lexer.Token) ParseError!?[]u8 {
@@ -250,14 +261,6 @@ fn appendOwnedText(
                 },
             });
         },
-        .legacy_directive => {
-            try statements.append(allocator, .{
-                .legacy_directive = .{
-                    .text = owned_text,
-                    .span = token.span,
-                },
-            });
-        },
         .meta_line => {
             try statements.append(allocator, .{
                 .meta_line = .{
@@ -323,7 +326,8 @@ fn appendStructDeclaration(
                     return err;
                 };
             },
-            .label, .api_call, .legacy_directive, .meta_block_start => return error.InvalidStructField,
+            .invalid_directive => return parser.rejectBareDirective(token),
+            .label, .api_call, .meta_block_start => return error.InvalidStructField,
         }
     }
 
@@ -635,7 +639,7 @@ fn appendExecutableStatement(
         .label => try appendLabel(statements, parser.allocator, statement_token),
         .isa_line => try appendOwnedText(statements, parser.allocator, .isa_line, statement_token),
         .api_call => try appendApiCall(statements, parser.allocator, statement_token),
-        .legacy_directive => try appendOwnedText(statements, parser.allocator, .legacy_directive, statement_token),
+        .invalid_directive => return parser.rejectBareDirective(statement_token),
         .meta_line => {
             if (looksLikeStructStart(statement_token.text)) {
                 try appendStructDeclaration(parser, statements, statement_token);
@@ -1513,7 +1517,6 @@ test "parser keeps labels ISA statements and Meta statements separate" {
         \\    mov rax, 0
         \\origin(0x7c00);
         \\emit.u16(0xaa55);
-        \\org 0x7c00
         \\packed struct DosHeader {
         \\    magic: u16 = 0x5a4d,
         \\    lfanew: u32,
@@ -1527,7 +1530,7 @@ test "parser keeps labels ISA statements and Meta statements separate" {
     );
     defer statements.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 9), statements.items.items.len);
+    try std.testing.expectEqual(@as(usize, 8), statements.items.items.len);
 
     switch (statements.items.items[0]) {
         .label => |statement| try std.testing.expectEqualStrings("loop", statement.name),
@@ -1572,11 +1575,6 @@ test "parser keeps labels ISA statements and Meta statements separate" {
     }
 
     switch (statements.items.items[4]) {
-        .legacy_directive => |statement| try std.testing.expectEqualStrings("org 0x7c00", statement.text),
-        else => return error.UnexpectedStatement,
-    }
-
-    switch (statements.items.items[5]) {
         .struct_decl => |statement| {
             try std.testing.expectEqualStrings("DosHeader", statement.name);
             try std.testing.expectEqual(ast.StructSyntaxPolicy.@"packed", statement.policy);
@@ -1591,7 +1589,7 @@ test "parser keeps labels ISA statements and Meta statements separate" {
         else => return error.UnexpectedStatement,
     }
 
-    switch (statements.items.items[6]) {
+    switch (statements.items.items[5]) {
         .value_decl => |statement| {
             try std.testing.expectEqualStrings("count", statement.name);
             try std.testing.expectEqual(value_mod.Mutability.let, statement.mutability);
@@ -1606,7 +1604,7 @@ test "parser keeps labels ISA statements and Meta statements separate" {
         else => return error.UnexpectedStatement,
     }
 
-    switch (statements.items.items[7]) {
+    switch (statements.items.items[6]) {
         .assignment => |statement| {
             try std.testing.expectEqualStrings("count", statement.name);
             switch (statement.value) {
@@ -1620,7 +1618,7 @@ test "parser keeps labels ISA statements and Meta statements separate" {
         else => return error.UnexpectedStatement,
     }
 
-    switch (statements.items.items[8]) {
+    switch (statements.items.items[7]) {
         .meta_for_range => |statement| {
             try std.testing.expectEqualStrings("i", statement.name);
             try std.testing.expectEqual(@as(usize, 1), statement.body.len);
@@ -1631,6 +1629,24 @@ test "parser keeps labels ISA statements and Meta statements separate" {
         },
         else => return error.UnexpectedStatement,
     }
+}
+
+test "parser rejects bare directives with their source span" {
+    const input =
+        \\emit.u8(1);
+        \\  db 0xff
+        \\
+    ;
+    const source_id: source.SourceId = .{ .index = 7 };
+    var parser = Parser.initWithSource(std.testing.allocator, source_id, input);
+
+    try std.testing.expectError(error.LegacyDirectiveSyntax, parser.parse());
+    const error_span = parser.errorSpan() orelse return error.MissingErrorSpan;
+    const start = std.mem.indexOf(u8, input, "db 0xff") orelse return error.MissingDirective;
+    const span_source = error_span.source orelse return error.MissingSource;
+    try std.testing.expectEqual(source_id.index, span_source.index);
+    try std.testing.expectEqual(@as(u32, @intCast(start)), error_span.start);
+    try std.testing.expectEqual(@as(u32, @intCast(start + "db 0xff".len)), error_span.end);
 }
 
 test "parser accepts struct literals as value initializers" {

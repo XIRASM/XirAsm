@@ -45,6 +45,7 @@ pub const LowerError = Allocator.Error || error{
     UnexpectedEndOfMetaIf,
     UnexpectedEndOfMetaWhile,
     UnexpectedEndOfStatement,
+    LegacyDirectiveSyntax,
     InvalidFieldName,
     InvalidIntegerBits,
     InvalidType,

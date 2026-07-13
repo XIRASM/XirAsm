@@ -1439,7 +1439,7 @@ fn runDeferredStoreBytes(state: *FinalizerState, call: xirasm.frontend.ast.ApiCa
     const bytes = switch (value) {
         .bytes => |data| data,
         .string => |text| text,
-        .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
     };
     if (target.explicit_section)
         try state.image.storeBytesInSection(target.section, target.address, bytes)
@@ -1605,6 +1605,8 @@ fn formatDeferredValue(allocator: Allocator, value: xirasm.Value) ![]u8 {
         .void => allocator.dupe(u8, "void"),
         .boolean => |boolean| allocator.dupe(u8, if (boolean) "true" else "false"),
         .integer => |integer| std.fmt.allocPrint(allocator, "{d}", .{integer.value}),
+        .float32 => |stored| xirasm.formatFloat32Literal(allocator, stored),
+        .float64 => |stored| xirasm.formatFloatLiteral(allocator, stored),
         .string => |text| allocator.dupe(u8, text),
         .bytes => |bytes| formatBytesValue(allocator, bytes),
         .type => |id| std.fmt.allocPrint(allocator, "type({d})", .{id.index}),

@@ -192,7 +192,7 @@ fn resolveSymbolTarget(module: *module_mod.Module, name: []const u8) ResolveErro
         .absolute => |absolute| if (absolute < 0) error.InvalidOperand else @intCast(absolute),
         .value => |binding| switch (binding.value) {
             .integer => |integer| integer.value,
-            .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.InvalidOperand,
+            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.InvalidOperand,
         },
         .unknown => error.UndefinedSymbol,
     };

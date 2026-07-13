@@ -14,6 +14,8 @@ pub const ValueType = enum {
     void,
     boolean,
     integer,
+    f32,
+    f64,
     string,
     bytes,
     type,
@@ -33,6 +35,8 @@ pub fn valueTypeFromName(name: []const u8) ?ValueType {
     if (std.mem.eql(u8, name, "bool")) return .boolean;
     if (std.mem.eql(u8, name, "boolean")) return .boolean;
     if (std.mem.eql(u8, name, "integer")) return .integer;
+    if (std.mem.eql(u8, name, "f32")) return .f32;
+    if (std.mem.eql(u8, name, "f64")) return .f64;
     if (std.mem.eql(u8, name, "string")) return .string;
     if (std.mem.eql(u8, name, "bytes")) return .bytes;
     if (std.mem.eql(u8, name, "type")) return .type;
@@ -40,6 +44,19 @@ pub fn valueTypeFromName(name: []const u8) ?ValueType {
     if (std.mem.eql(u8, name, "list")) return .list;
     if (std.mem.eql(u8, name, "map")) return .map;
     return null;
+}
+
+pub fn formatFloatLiteral(allocator: std.mem.Allocator, value: anytype) std.mem.Allocator.Error![]u8 {
+    const text = try std.fmt.allocPrint(allocator, "{d}", .{value});
+    if (std.mem.indexOfAny(u8, text, ".eE") != null) return text;
+    defer allocator.free(text);
+    return std.fmt.allocPrint(allocator, "{s}.0", .{text});
+}
+
+pub fn formatFloat32Literal(allocator: std.mem.Allocator, value: f32) std.mem.Allocator.Error![]u8 {
+    const literal = try formatFloatLiteral(allocator, value);
+    defer allocator.free(literal);
+    return std.fmt.allocPrint(allocator, "f32({s})", .{literal});
 }
 
 /// Minimal integer value facts for Meta runtime integers. `type_id == null`
@@ -262,6 +279,8 @@ pub const MapValue = struct {
 pub const Value = union(enum) {
     void,
     integer: IntegerValue,
+    float32: f32,
+    float64: f64,
     boolean: bool,
     string: []u8,
     bytes: []u8,
@@ -280,7 +299,7 @@ pub const Value = union(enum) {
 
     pub fn deinit(self: *Value, allocator: std.mem.Allocator) void {
         switch (self.*) {
-            .void, .integer, .boolean, .type => {},
+            .void, .integer, .float32, .float64, .boolean, .type => {},
             .string, .bytes => |text| allocator.free(text),
             .@"struct" => |*struct_value| struct_value.deinit(allocator),
             .list => |*list| list.deinit(allocator),
@@ -293,6 +312,8 @@ pub const Value = union(enum) {
         return switch (self) {
             .void => .void,
             .integer => |value| .{ .integer = value },
+            .float32 => |value| .{ .float32 = value },
+            .float64 => |value| .{ .float64 = value },
             .boolean => |value| .{ .boolean = value },
             .string => |text| .{ .string = try allocator.dupe(u8, text) },
             .bytes => |data| .{ .bytes = try allocator.dupe(u8, data) },
@@ -307,6 +328,8 @@ pub const Value = union(enum) {
         return switch (self) {
             .void => .void,
             .integer => .integer,
+            .float32 => .f32,
+            .float64 => .f64,
             .boolean => .boolean,
             .string => .string,
             .bytes => .bytes,
@@ -320,63 +343,77 @@ pub const Value = union(enum) {
     pub fn expectInteger(self: Value) !u64 {
         return switch (self) {
             .integer => |integer| integer.value,
-            .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
+            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
         };
     }
 
     pub fn expectIntegerValue(self: Value) !IntegerValue {
         return switch (self) {
             .integer => |integer| integer,
-            .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
+            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
+        };
+    }
+
+    pub fn expectFloat32(self: Value) !f32 {
+        return switch (self) {
+            .float32 => |value| value,
+            .void, .integer, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat32,
+        };
+    }
+
+    pub fn expectFloat64(self: Value) !f64 {
+        return switch (self) {
+            .float64 => |value| value,
+            .void, .integer, .float32, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat64,
         };
     }
 
     pub fn expectBoolean(self: Value) !bool {
         return switch (self) {
             .boolean => |value| value,
-            .void, .integer, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedBoolean,
+            .void, .integer, .float32, .float64, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedBoolean,
         };
     }
 
     pub fn expectString(self: Value) ![]const u8 {
         return switch (self) {
             .string => |text| text,
-            .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => error.ExpectedString,
+            .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.ExpectedString,
         };
     }
 
     pub fn expectBytes(self: Value) ![]const u8 {
         return switch (self) {
             .bytes => |data| data,
-            .void, .integer, .boolean, .string, .type, .@"struct", .list, .map => error.ExpectedBytes,
+            .void, .integer, .float32, .float64, .boolean, .string, .type, .@"struct", .list, .map => error.ExpectedBytes,
         };
     }
 
     pub fn expectType(self: Value) !types.TypeId {
         return switch (self) {
             .type => |id| id,
-            .void, .integer, .boolean, .string, .bytes, .@"struct", .list, .map => error.ExpectedType,
+            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .@"struct", .list, .map => error.ExpectedType,
         };
     }
 
     pub fn expectStruct(self: Value) !StructValue {
         return switch (self) {
             .@"struct" => |struct_value| struct_value,
-            .void, .integer, .boolean, .string, .bytes, .type, .list, .map => error.ExpectedStruct,
+            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => error.ExpectedStruct,
         };
     }
 
     pub fn expectList(self: Value) !ListValue {
         return switch (self) {
             .list => |list| list,
-            .void, .integer, .boolean, .string, .bytes, .type, .@"struct", .map => error.ExpectedList,
+            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .map => error.ExpectedList,
         };
     }
 
     pub fn expectMap(self: Value) !MapValue {
         return switch (self) {
             .map => |map| map,
-            .void, .integer, .boolean, .string, .bytes, .type, .@"struct", .list => error.ExpectedMap,
+            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list => error.ExpectedMap,
         };
     }
 };
@@ -462,14 +499,14 @@ fn writeFieldValue(
         .int => |int_type| {
             const integer = switch (value) {
                 .integer => |stored| stored.value,
-                .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+                .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
             };
             try writeIntegerField(bytes, base_offset, field, integer, int_type);
         },
         .@"struct", .@"union" => {
             const nested = switch (value) {
                 .@"struct" => |stored| stored,
-                .void, .integer, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
+                .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
             };
             if (nested.type_id.index != field.ty.index) return error.InvalidType;
             const nested_offset = std.math.add(u64, base_offset, field.offset) catch return error.IntegerOverflow;
@@ -554,6 +591,16 @@ test "value stores boolean bindings" {
 test "value type names are Meta-only names" {
     try std.testing.expectEqual(ValueType.integer, valueTypeFromName("integer").?);
     try std.testing.expect(valueTypeFromName("u64") == null);
+}
+
+test "float formatting remains parseable as a float" {
+    const whole = try formatFloatLiteral(std.testing.allocator, @as(f64, 1.0));
+    defer std.testing.allocator.free(whole);
+    try std.testing.expectEqualStrings("1.0", whole);
+
+    const typed = try formatFloat32Literal(std.testing.allocator, @as(f32, -0.0));
+    defer std.testing.allocator.free(typed);
+    try std.testing.expectEqualStrings("f32(-0.0)", typed);
 }
 
 test "value owns string bindings" {

@@ -108,7 +108,6 @@ fn cloneStatement(
         .label,
         .isa_instruction,
         .struct_decl,
-        .legacy_directive,
         .meta_for_range,
         .meta_fn,
         .meta_return,
@@ -163,7 +162,6 @@ fn freezeStatementAppend(
         .label,
         .isa_instruction,
         .struct_decl,
-        .legacy_directive,
         .meta_for_range,
         .meta_fn,
         .meta_return,
@@ -427,6 +425,8 @@ fn renderInitializer(
 fn renderFrozenValue(allocator: Allocator, value: value_mod.Value) LowerError![]u8 {
     return switch (value) {
         .integer => |integer| try std.fmt.allocPrint(allocator, "{}", .{integer.value}),
+        .float32 => |stored| try value_mod.formatFloat32Literal(allocator, stored),
+        .float64 => |stored| try value_mod.formatFloatLiteral(allocator, stored),
         .boolean => |boolean| try allocator.dupe(u8, if (boolean) "true" else "false"),
         .string => |text| try formatStringLiteral(allocator, text),
         .bytes => |bytes| try formatBytesValue(allocator, bytes),
@@ -453,6 +453,7 @@ fn renderFrozenExpression(
 fn renderExpressionSource(allocator: Allocator, maybe_context: ?*LowerContext, node: *const expr.Node) LowerError![]u8 {
     return switch (node.*) {
         .integer => |value| std.fmt.allocPrint(allocator, "{}", .{value}),
+        .float64 => |value| value_mod.formatFloatLiteral(allocator, value),
         .boolean => |value| allocator.dupe(u8, if (value) "true" else "false"),
         .string_literal => |text| formatStringLiteral(allocator, text),
         .bytes_literal => |bytes| formatBytesValue(allocator, bytes),

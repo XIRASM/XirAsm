@@ -56,7 +56,7 @@ pub fn coerceValueToAnnotation(module: *module_mod.Module, value: *value_mod.Val
         .layout_integer => |type_id| {
             var integer_value = switch (value.*) {
                 .integer => |stored| stored,
-                .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidValueDeclaration,
+                .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidValueDeclaration,
             };
             const layout_type = module.types.get(type_id) catch return error.InvalidValueDeclaration;
             switch (layout_type.*) {
@@ -69,7 +69,7 @@ pub fn coerceValueToAnnotation(module: *module_mod.Module, value: *value_mod.Val
         .layout_aggregate => |type_id| {
             const struct_value = switch (value.*) {
                 .@"struct" => |stored| stored,
-                .void, .integer, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidValueDeclaration,
+                .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidValueDeclaration,
             };
             if (struct_value.type_id.index != type_id.index) return error.InvalidValueDeclaration;
         },

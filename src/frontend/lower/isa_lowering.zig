@@ -36,7 +36,7 @@ pub fn lowerCall(
     defer value.deinit(module.allocator);
     const text = switch (value) {
         .string => |stored| stored,
-        .void, .integer, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
     };
     if (text.len == 0 or std.mem.indexOfAny(u8, text, "\r\n") != null) return error.InvalidApiArgument;
 
@@ -93,7 +93,7 @@ fn integerSymbolValue(
     if (context_mod.lookupLocalValue(context, name)) |local| {
         return switch (local.*) {
             .integer => |integer| integer.value,
-            .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => null,
+            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => null,
         };
     }
 
@@ -102,7 +102,7 @@ fn integerSymbolValue(
     return switch (stored.binding) {
         .value => |binding| switch (binding.value) {
             .integer => |integer| integer.value,
-            .void, .boolean, .string, .bytes, .type, .@"struct", .list, .map => null,
+            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => null,
         },
         .absolute => |absolute| if (absolute < 0) null else @intCast(absolute),
         .label, .unknown => null,

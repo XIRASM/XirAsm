@@ -346,11 +346,6 @@ pub const ApiCallStatement = struct {
     }
 };
 
-pub const LegacyDirectiveStatement = struct {
-    text: []u8,
-    span: source.SourceSpan,
-};
-
 pub const Statement = union(enum) {
     label: LabelStatement,
     isa_instruction: IsaInstructionStatement,
@@ -358,7 +353,6 @@ pub const Statement = union(enum) {
     assignment: AssignmentStatement,
     struct_decl: StructDeclarationStatement,
     api_call: ApiCallStatement,
-    legacy_directive: LegacyDirectiveStatement,
     meta_if: MetaIfStatement,
     meta_while: MetaWhileStatement,
     meta_for_range: MetaForRangeStatement,
@@ -381,7 +375,6 @@ pub const Statement = union(enum) {
             .assignment => |*statement| statement.deinit(allocator),
             .struct_decl => |*statement| statement.deinit(allocator),
             .api_call => |*statement| statement.deinit(allocator),
-            .legacy_directive => |statement| allocator.free(statement.text),
             .meta_if => |*statement| statement.deinit(allocator),
             .meta_while => |*statement| statement.deinit(allocator),
             .meta_for_range => |*statement| statement.deinit(allocator),
@@ -405,7 +398,6 @@ pub const Statement = union(enum) {
             .assignment => |statement| statement.span,
             .struct_decl => |statement| statement.span,
             .api_call => |statement| statement.span,
-            .legacy_directive => |statement| statement.span,
             .meta_if => |statement| statement.span,
             .meta_while => |statement| statement.span,
             .meta_for_range => |statement| statement.span,

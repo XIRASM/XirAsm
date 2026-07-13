@@ -15,5 +15,7 @@ assert(fs.exists("blob.bin"));
 assert(contains(raw, "[target]"));
 
 emit.bytes(fs.read_bytes("blob.bin"));
+emit.file("blob.bin");
+emit.file("blob.bin", 1, 2);
 emit.u8(map.get(target, "bits"));
 emit.bytes(map.get(parsed_again, "name"));

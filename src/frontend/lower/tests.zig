@@ -22,7 +22,6 @@ test "lowering records labels and ISA fragments in the frontend container" {
         \\entry:
         \\    mov rax, 1
         \\origin(0x7c00);
-        \\org 0x7c00
         \\packed struct Header {
         \\    magic: u16 = 0xaa55,
         \\    size: u32,
@@ -39,14 +38,9 @@ test "lowering records labels and ISA fragments in the frontend container" {
     try std.testing.expectEqual(@as(usize, 1), module.sections.items.items.len);
     try std.testing.expectEqual(@as(usize, 2), module.fragments.items.items.len);
     try std.testing.expectEqual(@as(usize, 2), module.symbols.items.items.len);
-    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    try std.testing.expectEqual(@as(usize, 0), module.diagnostics.items.items.len);
     try std.testing.expectEqual(@as(usize, 3), module.types.items.items.len);
     try std.testing.expect((module.lookupTypeName("Header") orelse return error.MissingType).index == 2);
-    try std.testing.expectEqualStrings(
-        "legacy assembler directive is not supported; use modern XIRASM API syntax",
-        module.diagnostics.items.items[0].message,
-    );
-
     const entry_id = module.symbols.lookup("entry") orelse return error.MissingSymbol;
     const entry = try module.symbols.get(entry_id);
     switch (entry.binding) {
@@ -69,6 +63,27 @@ test "lowering records labels and ISA fragments in the frontend container" {
 
     const text = try module.sections.get(module.default_section);
     try std.testing.expectEqual(@as(usize, 2), text.fragments.items.len);
+}
+
+test "lowering reports bare directive syntax at the parser span" {
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+
+    const result = lowerSourceIntoModuleWithPathOptions(
+        std.testing.allocator,
+        &module,
+        "src/main.xir",
+        "  db 0xff\n",
+        .{},
+    );
+    try std.testing.expectError(error.LegacyDirectiveSyntax, result);
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    const diagnostic = module.diagnostics.items.items[0];
+    try std.testing.expectEqual(@as(u32, 2), diagnostic.span.start);
+    try std.testing.expectEqualStrings(
+        "legacy assembler directive is not supported; use modern XIRASM API syntax",
+        diagnostic.message,
+    );
 }
 
 test "lowering updates let value bindings" {
@@ -552,7 +567,6 @@ test "lowering evaluates modern defined meta conditionals" {
         \\emit.u8(0xaa);
         \\}
         \\if defined("missing") {
-        \\org 0x7c00
         \\emit.u8(0xbb);
         \\}
         \\

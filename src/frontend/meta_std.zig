@@ -211,7 +211,7 @@ fn evalLen(args: []const value_mod.Value) Error!value_mod.Value {
         .bytes => |data| data.len,
         .list => |list| list.items.len,
         .map => |map| map.entries.len,
-        .void, .integer, .boolean, .type, .@"struct" => return error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .type, .@"struct" => return error.TypeMismatch,
     });
 }
 
@@ -225,6 +225,8 @@ fn valueToString(allocator: Allocator, value: value_mod.Value) Error![]u8 {
     return switch (value) {
         .void => try allocator.dupe(u8, "void"),
         .integer => |integer| try std.fmt.allocPrint(allocator, "{}", .{integer.value}),
+        .float32 => |stored| try value_mod.formatFloatLiteral(allocator, stored),
+        .float64 => |stored| try value_mod.formatFloatLiteral(allocator, stored),
         .boolean => |stored| try allocator.dupe(u8, if (stored) "true" else "false"),
         .string => |text| try allocator.dupe(u8, text),
         .bytes => |data| try bytesToHex(allocator, data),
@@ -269,7 +271,7 @@ fn evalContains(args: []const value_mod.Value) Error!value_mod.Value {
     return .{ .boolean = switch (args[0]) {
         .string => |haystack| std.mem.indexOf(u8, haystack, try expectString(args[1])) != null,
         .bytes => |haystack| std.mem.indexOf(u8, haystack, try expectBytes(args[1])) != null,
-        .void, .integer, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     } };
 }
 
@@ -803,6 +805,14 @@ fn valuesEqual(left: value_mod.Value, right: value_mod.Value) bool {
         .void => right == .void,
         .integer => |left_integer| switch (right) {
             .integer => |right_integer| left_integer.value == right_integer.value,
+            else => false,
+        },
+        .float32 => |left_float| switch (right) {
+            .float32 => |right_float| left_float == right_float,
+            else => false,
+        },
+        .float64 => |left_float| switch (right) {
+            .float64 => |right_float| left_float == right_float,
             else => false,
         },
         .boolean => |left_bool| switch (right) {

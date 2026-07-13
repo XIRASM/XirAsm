@@ -114,7 +114,16 @@ fn lowerIntoModuleInternal(
         return;
     }
 
-    var statements = try parser.parseSource(allocator, input);
+    var source_parser = parser.Parser.init(allocator, input);
+    var statements = source_parser.parse() catch |err| {
+        try callbacks.add_lower_error_diagnostic(
+            allocator,
+            module,
+            source_parser.errorSpan() orelse source.unknown_span,
+            err,
+        );
+        return err;
+    };
     defer statements.deinit(allocator);
     try callbacks.lower_statements_into_context(allocator, module, statements.items.items, context);
 }
@@ -134,12 +143,18 @@ fn lowerIntoModuleWithPathInternal(
     defer context.source_stack.shrinkRetainingCapacity(context.source_stack.items.len - 1);
 
     const source_id = try module.addSource(path, input);
-    var statements = parser.parseSourceWithId(allocator, source_id, input) catch |err| {
-        try callbacks.add_lower_error_diagnostic(allocator, module, .{
-            .source = source_id,
-            .start = 0,
-            .end = 0,
-        }, err);
+    var source_parser = parser.Parser.initWithSource(allocator, source_id, input);
+    var statements = source_parser.parse() catch |err| {
+        try callbacks.add_lower_error_diagnostic(
+            allocator,
+            module,
+            source_parser.errorSpan() orelse .{
+                .source = source_id,
+                .start = 0,
+                .end = 0,
+            },
+            err,
+        );
         return err;
     };
     defer statements.deinit(allocator);

@@ -9,7 +9,7 @@ pub const TokenKind = enum {
     label,
     isa_line,
     api_call,
-    legacy_directive,
+    invalid_directive,
     meta_line,
     meta_block_start,
     meta_block_end,
@@ -122,7 +122,7 @@ fn classifyTrimmed(trimmed: []const u8) TokenKind {
     if (std.mem.eql(u8, trimmed, "{")) return .meta_block_start;
     if (std.mem.eql(u8, trimmed, "}")) return .meta_block_end;
     if (isStandaloneLabel(trimmed)) return .label;
-    if (looksLikeLegacyDirective(trimmed)) return .legacy_directive;
+    if (looksLikeBareDirective(trimmed)) return .invalid_directive;
     if (looksLikeMetaLine(trimmed)) return .meta_line;
     if (looksLikeApiCall(trimmed)) return .api_call;
     return .isa_line;
@@ -205,17 +205,31 @@ fn looksLikeAssignment(trimmed: []const u8) bool {
     return identifier.isName(name);
 }
 
-fn looksLikeLegacyDirective(trimmed: []const u8) bool {
+fn looksLikeBareDirective(trimmed: []const u8) bool {
     const first_word = firstWord(trimmed);
-    return isLegacyDirectiveName(first_word) and !hasCallOpenAfterCallee(trimmed);
+    return isBareDirectiveName(first_word) and !hasCallOpenAfterCallee(trimmed);
 }
 
-fn isLegacyDirectiveName(name: []const u8) bool {
+fn isBareDirectiveName(name: []const u8) bool {
     return std.ascii.eqlIgnoreCase(name, "org") or
         std.ascii.eqlIgnoreCase(name, "db") or
         std.ascii.eqlIgnoreCase(name, "dw") or
         std.ascii.eqlIgnoreCase(name, "dd") or
+        std.ascii.eqlIgnoreCase(name, "dp") or
         std.ascii.eqlIgnoreCase(name, "dq") or
+        std.ascii.eqlIgnoreCase(name, "dt") or
+        std.ascii.eqlIgnoreCase(name, "ddq") or
+        std.ascii.eqlIgnoreCase(name, "dqq") or
+        std.ascii.eqlIgnoreCase(name, "ddqq") or
+        std.ascii.eqlIgnoreCase(name, "rb") or
+        std.ascii.eqlIgnoreCase(name, "rw") or
+        std.ascii.eqlIgnoreCase(name, "rd") or
+        std.ascii.eqlIgnoreCase(name, "rp") or
+        std.ascii.eqlIgnoreCase(name, "rq") or
+        std.ascii.eqlIgnoreCase(name, "rt") or
+        std.ascii.eqlIgnoreCase(name, "rdq") or
+        std.ascii.eqlIgnoreCase(name, "rqq") or
+        std.ascii.eqlIgnoreCase(name, "rdqq") or
         std.ascii.eqlIgnoreCase(name, "resb") or
         std.ascii.eqlIgnoreCase(name, "resw") or
         std.ascii.eqlIgnoreCase(name, "resd") or
@@ -329,9 +343,9 @@ test "lexer classifies labels ISA lines and meta lines" {
     try std.testing.expectEqual(TokenKind.api_call, emit_call.kind);
     try std.testing.expectEqualStrings("emit.u16(0xaa55);", emit_call.text);
 
-    const legacy_org = try lexer.next();
-    try std.testing.expectEqual(TokenKind.legacy_directive, legacy_org.kind);
-    try std.testing.expectEqualStrings("org 0x7c00", legacy_org.text);
+    const invalid_org = try lexer.next();
+    try std.testing.expectEqual(TokenKind.invalid_directive, invalid_org.kind);
+    try std.testing.expectEqualStrings("org 0x7c00", invalid_org.text);
 
     const let_line = try lexer.next();
     try std.testing.expectEqual(TokenKind.meta_line, let_line.kind);
@@ -349,6 +363,22 @@ test "lexer classifies labels ISA lines and meta lines" {
 
     const blank = try lexer.next();
     try std.testing.expectEqual(TokenKind.blank, blank.kind);
+}
+
+test "data operations require modern parenthesized call syntax" {
+    const names = [_][]const u8{
+        "db", "dw", "dd", "dp", "dq", "dt", "ddq", "dqq", "ddqq",
+        "rb", "rw", "rd", "rp", "rq", "rt", "rdq", "rqq", "rdqq",
+    };
+    for (names) |name| {
+        var bare_buffer: [16]u8 = undefined;
+        const bare = try std.fmt.bufPrint(&bare_buffer, "{s} 1", .{name});
+        try std.testing.expectEqual(TokenKind.invalid_directive, classifyTrimmed(bare));
+
+        var call_buffer: [16]u8 = undefined;
+        const call = try std.fmt.bufPrint(&call_buffer, "{s}(1)", .{name});
+        try std.testing.expectEqual(TokenKind.api_call, classifyTrimmed(call));
+    }
 }
 
 test "lexer handles crlf line endings" {

@@ -346,6 +346,8 @@ Common value types used in ordinary source include:
 | `u16` | Unsigned 16-bit value | `0x5a4d` |
 | `u32` | Unsigned 32-bit value | `0x401000` |
 | `u64` | Unsigned 64-bit value | `0x140000000` |
+| `f32` | IEEE-754 binary32 value | `f32(1.5)` |
+| `f64` | IEEE-754 binary64 value | `1.5` |
 | `bool` | Compile-time condition | `true` |
 | `string` | Compile-time text | `"kernel"` |
 | `bytes` | Explicit byte sequence | `b"PE"` |
@@ -357,6 +359,10 @@ Width-specific integer types are useful for binary fields and function
 contracts. The general `integer` type is useful when a helper accepts an
 integer without requiring a particular encoded width. The API that eventually
 emits the value still decides how many bytes are written.
+
+Decimal literals with a fractional part or exponent have type `f64`. Use
+`f32(value)` for an explicit finite narrowing conversion and `f64(value)` to
+widen an `f32`. Integer and floating values are never mixed implicitly.
 
 ### Strings and Byte Sequences
 
@@ -2347,7 +2353,12 @@ The compact aliases are:
 | `db` | 1 byte | byte values, strings, and `bytes` values |
 | `dw` | 2 bytes | little-endian integers |
 | `dd` | 4 bytes | little-endian integers |
+| `dp` | 6 bytes | little-endian integers |
 | `dq` | 8 bytes | little-endian integers |
+| `dt` | 10 bytes | zero-extended little-endian integers |
+| `ddq` | 16 bytes | zero-extended little-endian integers |
+| `dqq` | 32 bytes | zero-extended little-endian integers |
+| `ddqq` | 64 bytes | zero-extended little-endian integers |
 
 For example:
 
@@ -2358,8 +2369,29 @@ dd(0x33445566);
 dq(0x0102030405060708);
 ```
 
-The aliases accept multiple arguments. Every `dw`, `dd`, or `dq` argument must
-be an integer. `db` additionally accepts strings and byte sequences.
+The aliases accept multiple arguments. Every alias except `db` requires
+integers; `db` additionally accepts strings and byte sequences. Values for
+1/2/4/6/8-byte elements must fit exactly. The current Meta integer is `u64`, so
+10/16/32/64-byte elements zero-extend it. Use `emit.bytes` for wider exact bit
+patterns. `dt` is raw 10-byte data and does not introduce an `f80` type.
+
+### Floating-Point Values
+
+Floating output is explicit and separate from integer data aliases:
+
+```asm
+const scale: f64 = 1.5
+const compact: f32 = f32(scale)
+
+emit.f32(compact);
+emit.f64(scale * 2.0);
+```
+
+`emit.f32` and `emit.f64` write the exact little-endian IEEE-754 binary32 and
+binary64 encodings. Their arguments must already have the matching type.
+Floating arithmetic and comparisons require matching types. Literals,
+conversions, and arithmetic results must remain finite; overflow, NaN, and
+Infinity are rejected. Finite underflow and signed zero are preserved.
 
 ### Strings and Byte Sequences
 
@@ -2416,7 +2448,12 @@ The reserve aliases multiply a count by an element width:
 | `rb(count)` | `count` |
 | `rw(count)` | `count * 2` |
 | `rd(count)` | `count * 4` |
+| `rp(count)` | `count * 6` |
 | `rq(count)` | `count * 8` |
+| `rt(count)` | `count * 10` |
+| `rdq(count)` | `count * 16` |
+| `rqq(count)` | `count * 32` |
+| `rdqq(count)` | `count * 64` |
 
 ```asm
 rb(2);
@@ -2921,6 +2958,11 @@ automatically.
 
 `fs.read_bytes(path)` reads an entire file as `bytes`. It is the natural choice
 for images, encoded tables, prebuilt records, and other binary payloads.
+
+When the bytes are needed only as output, `emit.file(path)` avoids creating an
+intermediate binding. `emit.file(path, offset, count)` emits an exact range.
+Both forms use the same source-relative resolver and bounds checks as
+`fs.read_bytes`, and are unavailable in `late_layout` and `defer`.
 
 ### Reading a Byte Range
 

@@ -92,6 +92,8 @@ pub fn formatMetaValue(allocator: Allocator, value: value_mod.Value) LowerError!
     return switch (value) {
         .void => try allocator.dupe(u8, "void"),
         .integer => |integer| try std.fmt.allocPrint(allocator, "{}", .{integer.value}),
+        .float32 => |stored| try value_mod.formatFloatLiteral(allocator, stored),
+        .float64 => |stored| try value_mod.formatFloatLiteral(allocator, stored),
         .boolean => |boolean| try allocator.dupe(u8, if (boolean) "true" else "false"),
         .string => |text| try allocator.dupe(u8, text),
         .bytes => |bytes| try formatBytesValue(allocator, bytes),

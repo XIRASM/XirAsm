@@ -126,10 +126,6 @@ pub fn cloneStatement(
         .assignment => |assignment| .{ .assignment = try cloneAssignment(allocator, assignment) },
         .struct_decl => |declaration| .{ .struct_decl = try cloneStructDeclaration(allocator, declaration) },
         .api_call => |call| .{ .api_call = try cloneApiCall(allocator, call) },
-        .legacy_directive => |directive| .{ .legacy_directive = .{
-            .text = try allocator.dupe(u8, directive.text),
-            .span = directive.span,
-        } },
         .meta_if => |meta_if| .{ .meta_if = try cloneMetaIf(allocator, meta_if) },
         .meta_while => |meta_while| .{ .meta_while = try cloneMetaWhile(allocator, meta_while) },
         .meta_for_range => |meta_for| .{ .meta_for_range = try cloneMetaForRange(allocator, meta_for) },
@@ -443,6 +439,7 @@ fn cloneMetaForSource(allocator: Allocator, source_node: ast.MetaForSource) Allo
 fn cloneExpression(allocator: Allocator, node: expr.Node) Allocator.Error!expr.Node {
     return switch (node) {
         .integer => |value| .{ .integer = value },
+        .float64 => |value| .{ .float64 = value },
         .boolean => |value| .{ .boolean = value },
         .string_literal => |text| .{ .string_literal = try allocator.dupe(u8, text) },
         .bytes_literal => |bytes| .{ .bytes_literal = try allocator.dupe(u8, bytes) },

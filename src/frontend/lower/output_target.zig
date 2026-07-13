@@ -75,7 +75,7 @@ fn labelSection(
             break :blk right;
         },
         .field_access => |access| labelSection(module, context, access.object),
-        .builtin_call, .integer, .boolean, .string_literal, .bytes_literal => null,
+        .builtin_call, .integer, .float64, .boolean, .string_literal, .bytes_literal => null,
     };
 }
 
