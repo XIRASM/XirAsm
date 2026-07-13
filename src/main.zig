@@ -135,10 +135,6 @@ const AssembledFlat = struct {
     }
 };
 
-const AssemblyError = error{
-    RelativeFixupOutOfRange,
-};
-
 const TimingStage = enum {
     read_source,
     parse_lower,
@@ -190,19 +186,7 @@ const TimingTrace = struct {
     }
 };
 
-const AssembledFlatCore = struct {
-    layout: xirasm.ModuleLayout,
-    default_section_layout_index: usize,
-    bytes: []u8,
-    encoded_count: usize,
-    pending_fixups: usize,
-
-    fn deinit(self: *AssembledFlatCore, allocator: Allocator) void {
-        allocator.free(self.bytes);
-        self.layout.deinit(allocator);
-        self.* = undefined;
-    }
-};
+const AssembledFlatCore = xirasm.assembly.FlatResult;
 
 fn finishAssembledFlat(module: *xirasm.Module, core: AssembledFlatCore, module_owned: *bool) AssembledFlat {
     module_owned.* = false;
@@ -948,9 +932,12 @@ fn assembleFlatTimed(
         .project_root = project_root,
         .install_include_root = install_include_root,
     };
+    const source_identity = try canonicalFileIdentity(allocator, io, source_path);
+    defer if (source_identity) |identity| allocator.free(identity);
     const lower_start = nowNs(io);
     xirasm.lowerSourceIntoModuleWithPathOptions(allocator, &module, source_path, source_bytes, .{
         .target = target,
+        .source_identity = source_identity,
         .include_resolver = .{
             .context = @ptrCast(&include_context),
             .resolve = resolveFileInclude,
@@ -1040,8 +1027,12 @@ fn assembleProjectFlatTimed(
         },
     };
     for (includes) |include| {
+        const source_identity = try canonicalFileIdentity(allocator, io, include.path);
+        defer if (source_identity) |identity| allocator.free(identity);
+        var source_options = lower_options;
+        source_options.source_identity = source_identity;
         const lower_start = nowNs(io);
-        xirasm.lowerSourceIntoModuleWithPathOptions(allocator, &module, include.path, include.bytes, lower_options) catch |err| {
+        xirasm.lowerSourceIntoModuleWithPathOptions(allocator, &module, include.path, include.bytes, source_options) catch |err| {
             if (!module.diagnostics.hasErrors()) return err;
             timing_trace.add(.parse_lower, elapsedSince(lower_start, nowNs(io)));
             const assembled = try assembleModuleFlatChecked(allocator, io, &module, diagnostics_writer, timing_trace);
@@ -1049,8 +1040,12 @@ fn assembleProjectFlatTimed(
         };
         timing_trace.add(.parse_lower, elapsedSince(lower_start, nowNs(io)));
     }
+    const main_source_identity = try canonicalFileIdentity(allocator, io, main_source.path);
+    defer if (main_source_identity) |identity| allocator.free(identity);
+    var main_source_options = lower_options;
+    main_source_options.source_identity = main_source_identity;
     const lower_start = nowNs(io);
-    xirasm.lowerSourceIntoModuleWithPathOptions(allocator, &module, main_source.path, main_source.bytes, lower_options) catch |err| {
+    xirasm.lowerSourceIntoModuleWithPathOptions(allocator, &module, main_source.path, main_source.bytes, main_source_options) catch |err| {
         if (!module.diagnostics.hasErrors()) return err;
     };
     timing_trace.add(.parse_lower, elapsedSince(lower_start, nowNs(io)));
@@ -1125,7 +1120,15 @@ fn readResolvedIncludePath(
     const owned_path = try allocator.dupe(u8, resolved_path);
     errdefer allocator.free(owned_path);
 
-    const bytes = readSourceFile(allocator, resolver.io, owned_path) catch |err| switch (err) {
+    const real_identity = std.Io.Dir.cwd().realPathFileAlloc(resolver.io, resolved_path, allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.IncludeNotAvailable,
+    };
+    defer allocator.free(real_identity);
+    const identity = try allocator.dupe(u8, real_identity);
+    errdefer allocator.free(identity);
+
+    const bytes = readSourceFile(allocator, resolver.io, identity) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => return error.IncludeNotAvailable,
     };
@@ -1133,8 +1136,18 @@ fn readResolvedIncludePath(
 
     return .{
         .path = owned_path,
+        .identity = identity,
         .bytes = bytes,
     };
+}
+
+fn canonicalFileIdentity(allocator: Allocator, io: Io, path: []const u8) Allocator.Error!?[]u8 {
+    const real_identity = std.Io.Dir.cwd().realPathFileAlloc(io, path, allocator) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return null,
+    };
+    defer allocator.free(real_identity);
+    return try allocator.dupe(u8, real_identity);
 }
 
 fn resolveIncludePath(
@@ -1200,53 +1213,42 @@ fn assembleModuleFlatChecked(
 }
 
 fn assembleModuleFlat(allocator: Allocator, io: Io, module: *xirasm.Module, timing_trace: *TimingTrace) !AssembledFlatCore {
-    const encode_start = nowNs(io);
-    const encode_result = try xirasm.encodeInstructionFragments(allocator, module);
-    timing_trace.add(.encode, elapsedSince(encode_start, nowNs(io)));
-
-    try xirasm.runLateLayoutPhase(allocator, module);
-
-    const fixup_start = nowNs(io);
-    var fixup_result = try xirasm.resolveFixups(allocator, module);
-    timing_trace.add(.fixup_resolve, elapsedSince(fixup_start, nowNs(io)));
-    defer fixup_result.deinit(allocator);
-
-    const layout_start = nowNs(io);
-    var module_layout = try xirasm.layoutModule(allocator, module);
-    timing_trace.add(.layout, elapsedSince(layout_start, nowNs(io)));
-    errdefer module_layout.deinit(allocator);
-
-    const default_section_layout_index = moduleLayoutIndex(&module_layout, module.default_section) orelse return error.InvalidSection;
-    const materialize_start = nowNs(io);
-    var writer_result = try xirasm.writeOutput(allocator, .flat, module, &module_layout);
-    errdefer writer_result.deinit(allocator);
-    timing_trace.add(.materialize, elapsedSince(materialize_start, nowNs(io)));
-    const patch_start = nowNs(io);
-    try patchResolvedFixups(writer_result.bytes, module, &module_layout, writer_result.regions, fixup_result);
-    timing_trace.add(.patch, elapsedSince(patch_start, nowNs(io)));
-    const finalizer_start = nowNs(io);
-    try runDeferredFinalizers(module, writer_result.regions, writer_result.bytes);
-    timing_trace.add(.defer_finalizers, elapsedSince(finalizer_start, nowNs(io)));
-
-    const output_bytes = writer_result.bytes;
-    allocator.free(writer_result.regions);
-    writer_result.bytes = &.{};
-    writer_result.regions = &.{};
-
-    return .{
-        .layout = module_layout,
-        .default_section_layout_index = default_section_layout_index,
-        .bytes = output_bytes,
-        .encoded_count = encode_result.encoded_count,
-        .pending_fixups = fixup_result.pending_count,
+    var observer_state: AssemblyTimingObserver = .{
+        .io = io,
+        .timing_trace = timing_trace,
     };
+    return xirasm.assembly.assembleFlat(allocator, module, .{
+        .context = @ptrCast(&observer_state),
+        .begin = AssemblyTimingObserver.begin,
+        .end = AssemblyTimingObserver.end,
+    });
 }
 
-fn moduleLayoutIndex(module_layout: *const xirasm.ModuleLayout, section_id: xirasm.frontend.section.SectionId) ?usize {
-    for (module_layout.sections, 0..) |section_layout, index| {
-        if (section_layout.section.index == section_id.index) return index;
+const AssemblyTimingObserver = struct {
+    io: Io,
+    timing_trace: *TimingTrace,
+    started_at: i96 = 0,
+
+    fn begin(context: *anyopaque, _: xirasm.assembly.Stage) void {
+        const self: *AssemblyTimingObserver = @ptrCast(@alignCast(context));
+        self.started_at = nowNs(self.io);
     }
-    return null;
+
+    fn end(context: *anyopaque, stage: xirasm.assembly.Stage) void {
+        const self: *AssemblyTimingObserver = @ptrCast(@alignCast(context));
+        self.timing_trace.add(timingStageForAssembly(stage), elapsedSince(self.started_at, nowNs(self.io)));
+    }
+};
+
+fn timingStageForAssembly(stage: xirasm.assembly.Stage) TimingStage {
+    return switch (stage) {
+        .encode => .encode,
+        .fixup_resolve => .fixup_resolve,
+        .layout => .layout,
+        .materialize => .materialize,
+        .patch => .patch,
+        .defer_finalizers => .defer_finalizers,
+    };
 }
 
 fn renderListing(allocator: Allocator, source_path: []const u8, assembled: *const AssembledFlat) ![]u8 {
@@ -1256,507 +1258,11 @@ fn renderListing(allocator: Allocator, source_path: []const u8, assembled: *cons
     });
 }
 
-fn runDeferredFinalizers(
-    module: *xirasm.Module,
-    image_regions: []const xirasm.frontend.output.ImageRegion,
-    bytes: []u8,
-) anyerror!void {
-    if (module.deferred.items.items.len == 0) return;
-
-    const default_region = imageRegionForSection(image_regions, module.default_section) orelse return error.InvalidSection;
-
-    const image: xirasm.OutputImage = .{
-        .section = module.default_section,
-        .origin = default_region.origin,
-        .regions = image_regions,
-        .bytes = bytes,
-    };
-    var lower_context: xirasm.frontend.lower.LowerContext = .{};
-    defer lower_context.deinit(module.allocator);
-
-    var state: FinalizerState = .{
-        .allocator = module.allocator,
-        .module = module,
-        .image = image,
-        .lower_context = &lower_context,
-    };
-
-    for (module.deferred.items.items) |block| {
-        try xirasm.frontend.lower.pushMetaScope(state.lower_context, state.allocator);
-        defer xirasm.frontend.lower.popMetaScope(state.lower_context, state.allocator);
-        try runDeferredStatements(&state, block.body);
-    }
-}
-
-const FinalizerState = struct {
-    allocator: Allocator,
-    module: *xirasm.Module,
-    image: xirasm.OutputImage,
-    lower_context: *xirasm.frontend.lower.LowerContext,
-    in_meta_loop: bool = false,
-};
-
-fn runDeferredStatements(state: *FinalizerState, statements: []const xirasm.DeferredStatement) anyerror!void {
-    for (statements) |statement| {
-        try runDeferredStatement(state, statement);
-    }
-}
-
-fn runDeferredStatement(state: *FinalizerState, statement: xirasm.DeferredStatement) anyerror!void {
-    switch (statement) {
-        .api_call => |call| try runDeferredApiCall(state, call),
-        .value_decl => |declaration| try runDeferredValueDeclaration(state, declaration),
-        .assignment => |assignment| try runDeferredAssignment(state, assignment),
-        .meta_if => |meta_if| {
-            if (try evalDeferredCondition(state, meta_if.condition)) {
-                try runDeferredScopedStatements(state, meta_if.body);
-            } else {
-                try runDeferredScopedStatements(state, meta_if.else_body);
-            }
-        },
-        .meta_while => |meta_while| try runDeferredWhile(state, meta_while),
-        .meta_break => |span| {
-            if (state.in_meta_loop) return error.MetaLoopBreak;
-            try addDeferredLoopControlDiagnostic(state, span, "break");
-            return error.FrontendDiagnostics;
-        },
-        .meta_continue => |span| {
-            if (state.in_meta_loop) return error.MetaLoopContinue;
-            try addDeferredLoopControlDiagnostic(state, span, "continue");
-            return error.FrontendDiagnostics;
-        },
-    }
-}
-
-fn runDeferredScopedStatements(state: *FinalizerState, statements: []const xirasm.DeferredStatement) anyerror!void {
-    try xirasm.frontend.lower.pushMetaScope(state.lower_context, state.allocator);
-    defer xirasm.frontend.lower.popMetaScope(state.lower_context, state.allocator);
-    try runDeferredStatements(state, statements);
-}
-
-fn runDeferredValueDeclaration(state: *FinalizerState, declaration: xirasm.frontend.output.ValueDeclaration) !void {
-    var node = try xirasm.frontend.expr.parseOwned(state.allocator, declaration.value_text);
-    defer node.deinit(state.allocator);
-
-    var value = try deferredEvalValue(state, &node);
-    errdefer value.deinit(state.allocator);
-
-    const annotation = try xirasm.frontend.typecheck.annotationFromName(state.module, declaration.type_name);
-    if (declaration.type_name != null and annotation == null) return error.InvalidValueDeclaration;
-    try xirasm.frontend.typecheck.coerceValueToAnnotation(state.module, &value, annotation);
-
-    try xirasm.frontend.lower.defineFinalLocalValue(
-        state.lower_context,
-        state.allocator,
-        declaration.name,
-        value,
-        declaration.mutability,
-    );
-}
-
-fn runDeferredAssignment(state: *FinalizerState, assignment: xirasm.frontend.output.Assignment) !void {
-    var node = try xirasm.frontend.expr.parseOwned(state.allocator, assignment.value_text);
-    defer node.deinit(state.allocator);
-
-    var value = try deferredEvalValue(state, &node);
-    errdefer value.deinit(state.allocator);
-
-    if (try xirasm.frontend.lower.setFinalLocalValue(state.lower_context, state.allocator, assignment.name, value)) {
-        return;
-    }
-    return error.InvalidValueDeclaration;
-}
-
-fn runDeferredWhile(state: *FinalizerState, meta_while: xirasm.frontend.output.MetaWhile) anyerror!void {
-    const previous_in_meta_loop = state.in_meta_loop;
-    state.in_meta_loop = true;
-    defer state.in_meta_loop = previous_in_meta_loop;
-
-    var iterations: usize = 0;
-    while (try evalDeferredCondition(state, meta_while.condition)) {
-        if (iterations >= xirasm.frontend.lower.max_finalizer_loop_iterations) return error.MetaLoopLimitExceeded;
-        runDeferredScopedStatements(state, meta_while.body) catch |err| switch (err) {
-            error.MetaLoopBreak => return,
-            error.MetaLoopContinue => {},
-            else => return err,
-        };
-        iterations += 1;
-    }
-}
-
-fn addDeferredLoopControlDiagnostic(
-    state: *FinalizerState,
-    span: xirasm.SourceSpan,
-    keyword: []const u8,
-) !void {
-    const message = try std.fmt.allocPrint(state.allocator, "{s} used outside of a Meta loop", .{keyword});
-    defer state.allocator.free(message);
-    try state.module.diagnostics.add(state.allocator, .err, span, message);
-}
-
-fn runDeferredApiCall(state: *FinalizerState, call: xirasm.frontend.output.ApiCall) !void {
-    var parsed = try xirasm.frontend.parser.parseApiCallText(state.allocator, call.text, call.span);
-    defer parsed.deinit(state.allocator);
-
-    if (std.mem.eql(u8, parsed.callee, "store.bytes")) {
-        try runDeferredStoreBytes(state, parsed);
-        return;
-    }
-
-    if (storeByteCount(parsed.callee)) |byte_count| {
-        try runDeferredStoreInteger(state, parsed, byte_count);
-        return;
-    }
-
-    if (std.mem.eql(u8, parsed.callee, "assert")) {
-        try runDeferredAssert(state, parsed);
-        return;
-    }
-
-    if (std.mem.eql(u8, parsed.callee, "print")) {
-        try addDeferredDiagnostic(state, parsed, .note);
-        return;
-    }
-
-    if (std.mem.eql(u8, parsed.callee, "warn")) {
-        try addDeferredDiagnostic(state, parsed, .warning);
-        return;
-    }
-
-    if (std.mem.eql(u8, parsed.callee, "err")) {
-        try addDeferredDiagnostic(state, parsed, .err);
-        return error.FrontendDiagnostics;
-    }
-
-    return error.FinalizerCannotChangeLayout;
-}
-
-fn runDeferredStoreBytes(state: *FinalizerState, call: xirasm.frontend.ast.ApiCallStatement) !void {
-    if (call.args.len != 2) return error.InvalidApiArity;
-    const target = try deferredOutputTarget(state, call, 0);
-    var value = try deferredValueArg(state, call, 1);
-    defer value.deinit(state.allocator);
-    const bytes = switch (value) {
-        .bytes => |data| data,
-        .string => |text| text,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
-    };
-    if (target.explicit_section)
-        try state.image.storeBytesInSection(target.section, target.address, bytes)
-    else
-        try state.image.storeBytes(target.address, bytes);
-}
-
-fn runDeferredStoreInteger(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    byte_count: u8,
-) !void {
-    if (call.args.len != 2) return error.InvalidApiArity;
-    const target = try deferredOutputTarget(state, call, 0);
-    const value = try deferredIntegerArg(state, call, 1);
-    if (target.explicit_section)
-        try state.image.storeIntegerInSection(target.section, target.address, value, byte_count)
-    else
-        try state.image.storeInteger(target.address, value, byte_count);
-}
-
-fn runDeferredAssert(state: *FinalizerState, call: xirasm.frontend.ast.ApiCallStatement) !void {
-    if (call.args.len != 1 and call.args.len != 2) return error.InvalidApiArity;
-    if (try deferredBooleanArg(state, call, 0)) return;
-
-    const message = if (call.args.len == 2)
-        try formatDeferredDiagnosticArg(state, &call.args[1])
-    else
-        try state.allocator.dupe(u8, "assertion failed");
-    defer state.allocator.free(message);
-
-    try state.module.diagnostics.add(state.allocator, .err, call.span, message);
-    return error.FrontendDiagnostics;
-}
-
-fn addDeferredDiagnostic(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    severity: xirasm.frontend.diagnostic.Severity,
-) !void {
-    if (call.args.len == 0) return error.InvalidApiArity;
-    var message: std.ArrayList(u8) = .empty;
-    errdefer message.deinit(state.allocator);
-    for (call.args, 0..) |*arg, index| {
-        if (index != 0) try message.append(state.allocator, ' ');
-        const text = try formatDeferredDiagnosticArg(state, arg);
-        defer state.allocator.free(text);
-        try message.appendSlice(state.allocator, text);
-    }
-    const owned = try message.toOwnedSlice(state.allocator);
-    defer state.allocator.free(owned);
-    try state.module.diagnostics.add(state.allocator, severity, call.span, owned);
-}
-
-fn evalDeferredCondition(state: *FinalizerState, condition: []const u8) !bool {
-    const trimmed = std.mem.trim(u8, condition, " \t\r\n");
-    if (trimmed.len == 0) return error.InvalidMetaIf;
-    if (std.mem.eql(u8, trimmed, "true")) return true;
-    if (std.mem.eql(u8, trimmed, "false")) return false;
-
-    var node = try xirasm.frontend.expr.parseOwned(state.allocator, trimmed);
-    defer node.deinit(state.allocator);
-    return deferredEvalBoolean(state, &node);
-}
-
-fn deferredIntegerArg(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    index: usize,
-) !u64 {
-    if (index >= call.args.len) return error.InvalidApiArity;
-    return switch (call.args[index]) {
-        .expression => |*node| deferredEvalInteger(state, node),
-        .string, .struct_literal => error.InvalidApiArgument,
-    };
-}
-
-fn deferredOutputTarget(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    index: usize,
-) !xirasm.frontend.expr.OutputExpressionTarget {
-    if (index >= call.args.len) return error.InvalidApiArity;
-    return switch (call.args[index]) {
-        .expression => |*node| blk: {
-            var ctx = deferredEvalContext(state);
-            break :blk try xirasm.frontend.expr.resolveOutputExpressionTarget(state.allocator, &ctx, node);
-        },
-        .string, .struct_literal => error.InvalidApiArgument,
-    };
-}
-
-fn deferredBooleanArg(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    index: usize,
-) !bool {
-    if (index >= call.args.len) return error.InvalidApiArity;
-    return switch (call.args[index]) {
-        .expression => |*node| deferredEvalBoolean(state, node),
-        .string, .struct_literal => error.InvalidApiArgument,
-    };
-}
-
-fn deferredValueArg(
-    state: *FinalizerState,
-    call: xirasm.frontend.ast.ApiCallStatement,
-    index: usize,
-) !xirasm.Value {
-    if (index >= call.args.len) return error.InvalidApiArity;
-    return switch (call.args[index]) {
-        .expression => |*node| deferredEvalValue(state, node),
-        .string => |text| .{ .string = try state.allocator.dupe(u8, text) },
-        .struct_literal => error.InvalidApiArgument,
-    };
-}
-
-fn deferredEvalInteger(state: *FinalizerState, node: *const xirasm.frontend.expr.Node) !u64 {
-    var ctx = deferredEvalContext(state);
-    return xirasm.frontend.expr.evaluateInteger(node, &ctx);
-}
-
-fn deferredEvalBoolean(state: *FinalizerState, node: *const xirasm.frontend.expr.Node) !bool {
-    var ctx = deferredEvalContext(state);
-    return xirasm.frontend.expr.evaluateBoolean(node, &ctx);
-}
-
-fn deferredEvalValue(state: *FinalizerState, node: *const xirasm.frontend.expr.Node) !xirasm.Value {
-    var ctx = deferredEvalContext(state);
-    return xirasm.frontend.expr.evaluateValue(state.allocator, node, &ctx);
-}
-
-fn deferredEvalContext(state: *FinalizerState) xirasm.frontend.expr.EvalContext {
-    return .{
-        .module = state.module,
-        .active_section = state.image.section,
-        .active_offset = 0,
-        .output_image = state.image,
-        .local_context = state.lower_context,
-        .resolve_local = xirasm.frontend.lower.resolveLocalValue,
-        .call_user_function = xirasm.frontend.lower.evalModuleValueFunction,
-        .evaluate_struct_literal = xirasm.frontend.lower.evalModuleStructLiteralValue,
-    };
-}
-
-fn formatDeferredDiagnosticArg(
-    state: *FinalizerState,
-    arg: *const xirasm.frontend.ast.ApiArgument,
-) ![]u8 {
-    return switch (arg.*) {
-        .string => |text| state.allocator.dupe(u8, text),
-        .struct_literal => error.InvalidApiArgument,
-        .expression => |*node| blk: {
-            var value = try deferredEvalValue(state, node);
-            defer value.deinit(state.allocator);
-            break :blk formatDeferredValue(state.allocator, value);
-        },
-    };
-}
-
-fn formatDeferredValue(allocator: Allocator, value: xirasm.Value) ![]u8 {
-    return switch (value) {
-        .void => allocator.dupe(u8, "void"),
-        .boolean => |boolean| allocator.dupe(u8, if (boolean) "true" else "false"),
-        .integer => |integer| std.fmt.allocPrint(allocator, "{d}", .{integer.value}),
-        .float32 => |stored| xirasm.formatFloat32Literal(allocator, stored),
-        .float64 => |stored| xirasm.formatFloatLiteral(allocator, stored),
-        .string => |text| allocator.dupe(u8, text),
-        .bytes => |bytes| formatBytesValue(allocator, bytes),
-        .type => |id| std.fmt.allocPrint(allocator, "type({d})", .{id.index}),
-        .@"struct", .list, .map => error.InvalidApiArgument,
-    };
-}
-
-fn formatBytesValue(allocator: Allocator, bytes: []const u8) ![]u8 {
-    const out = try allocator.alloc(u8, bytes.len * 2);
-    for (bytes, 0..) |byte, index| {
-        const hex = "0123456789abcdef";
-        out[index * 2] = hex[byte >> 4];
-        out[index * 2 + 1] = hex[byte & 0x0f];
-    }
-    return out;
-}
-
-fn storeByteCount(name: []const u8) ?u8 {
-    if (std.mem.eql(u8, name, "store.u8")) return 1;
-    if (std.mem.eql(u8, name, "store.u16")) return 2;
-    if (std.mem.eql(u8, name, "store.u32")) return 4;
-    if (std.mem.eql(u8, name, "store.u64")) return 8;
-    return null;
-}
-
-fn patchResolvedFixups(
-    bytes: []u8,
-    module: *const xirasm.Module,
-    module_layout: *const xirasm.ModuleLayout,
-    image_regions: []const xirasm.frontend.output.ImageRegion,
-    fixup_result: xirasm.FixupPassResult,
-) (AssemblyError || anyerror)!void {
-    for (fixup_result.items) |state| {
-        switch (state) {
-            .pending => {},
-            .resolved => |resolved| {
-                const stored_fixup = try fixupAt(module, resolved.fixup);
-                const section_id = try sectionForFragment(module, stored_fixup.fragment);
-                const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
-                const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
-                const fragment_layout = fragmentLayout(section_layout, stored_fixup.fragment) orelse return error.InvalidFragment;
-                try patchOneFixup(bytes, section_layout.*, image_region, fragment_layout, stored_fixup, resolved.value);
-            },
-        }
-    }
-}
-
-fn imageRegionForSection(
-    image_regions: []const xirasm.frontend.output.ImageRegion,
-    section_id: xirasm.frontend.section.SectionId,
-) ?xirasm.frontend.output.ImageRegion {
-    for (image_regions) |region| {
-        if (region.section.index == section_id.index) return region;
-    }
-    return null;
-}
-
-fn fixupAt(module: *const xirasm.Module, id: xirasm.FixupId) !xirasm.Fixup {
-    if (id.index >= module.fixups.items.items.len) return error.InvalidFixupTarget;
-    return module.fixups.items.items[id.index];
-}
-
-fn fragmentLayout(section_layout: *const xirasm.SectionLayout, fragment_id: xirasm.FragmentId) ?xirasm.FragmentLayout {
-    for (section_layout.fragments) |entry| {
-        if (entry.fragment.index == fragment_id.index) return entry;
-    }
-    return null;
-}
-
-fn sectionForFragment(module: *const xirasm.Module, fragment_id: xirasm.FragmentId) !xirasm.frontend.section.SectionId {
-    if (fragment_id.index >= module.fragments.items.items.len) return error.InvalidFragment;
-    return switch (module.fragments.items.items[fragment_id.index]) {
-        .bytes => |payload| payload.section,
-        .reserve => |payload| payload.section,
-        .alignment => |payload| payload.section,
-        .isa_instruction => |payload| payload.section,
-    };
-}
-
-fn patchOneFixup(
-    bytes: []u8,
-    section_layout: xirasm.SectionLayout,
-    image_region: xirasm.frontend.output.ImageRegion,
-    fragment_layout: xirasm.FragmentLayout,
-    stored_fixup: xirasm.Fixup,
-    target_value: u64,
-) (AssemblyError || anyerror)!void {
-    const width_bytes = fixupWidthBytes(stored_fixup.width_bits) catch return error.InvalidFixupTarget;
-    const section_relative_patch_offset = std.math.add(u64, fragment_layout.offset, stored_fixup.offset) catch return error.OffsetOverflow;
-    const patch_end_relative = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.OffsetOverflow;
-    if (patch_end_relative > image_region.file_size) return error.InvalidFixupTarget;
-    const patch_offset = std.math.add(u64, image_region.file_offset, section_relative_patch_offset) catch return error.OffsetOverflow;
-    const patch_start = try sizeToUsize(patch_offset);
-    const patch_end = std.math.add(usize, patch_start, width_bytes) catch return error.OffsetOverflow;
-    if (patch_end > bytes.len) return error.InvalidFixupTarget;
-
-    const value = switch (stored_fixup.kind) {
-        .absolute => try absolutePatchValue(target_value, stored_fixup.width_bits),
-        .pc_relative => value: {
-            const next_ip_offset = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.OffsetOverflow;
-            const next_ip = std.math.add(u64, section_layout.origin, next_ip_offset) catch return error.OffsetOverflow;
-            break :value try relativePatchValue(target_value, next_ip, stored_fixup.width_bits);
-        },
-    };
-    writeSignedLittleEndian(bytes[patch_start..patch_end], value);
-}
-
-fn fixupWidthBytes(width_bits: u16) !usize {
-    if (width_bits == 0 or width_bits % 8 != 0) return error.InvalidFixupTarget;
-    const width_bytes = width_bits / 8;
-    if (width_bytes != 1 and width_bytes != 2 and width_bytes != 4 and width_bytes != 8) return error.InvalidFixupTarget;
-    return @intCast(width_bytes);
-}
-
-fn absolutePatchValue(value: u64, width_bits: u16) !i64 {
-    if (width_bits < 64) {
-        const max_value = (@as(u64, 1) << @intCast(width_bits)) - 1;
-        if (value > max_value) return error.InvalidFixupTarget;
-    }
-    if (value > std.math.maxInt(i64)) return error.InvalidFixupTarget;
-    return @intCast(value);
-}
-
-fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) !i64 {
-    const target_i128: i128 = @intCast(target_value);
-    const next_ip_i128: i128 = @intCast(next_ip);
-    const value = target_i128 - next_ip_i128;
-    switch (width_bits) {
-        8 => if (value < std.math.minInt(i8) or value > std.math.maxInt(i8)) return error.RelativeFixupOutOfRange,
-        16 => if (value < std.math.minInt(i16) or value > std.math.maxInt(i16)) return error.RelativeFixupOutOfRange,
-        32 => if (value < std.math.minInt(i32) or value > std.math.maxInt(i32)) return error.RelativeFixupOutOfRange,
-        64 => if (value < std.math.minInt(i64) or value > std.math.maxInt(i64)) return error.RelativeFixupOutOfRange,
-        else => return error.InvalidFixupTarget,
-    }
-    return @intCast(value);
-}
-
 fn assemblyErrorMessage(err: anyerror) ?[]const u8 {
     return switch (err) {
         error.RelativeFixupOutOfRange => "PC-relative fixup target is out of range for the encoded displacement width",
         else => null,
     };
-}
-
-fn writeSignedLittleEndian(out: []u8, value: i64) void {
-    const raw: u64 = @bitCast(value);
-    for (out, 0..) |*byte, index| {
-        const shift: u6 = @intCast(index * 8);
-        byte.* = @intCast((raw >> shift) & 0xff);
-    }
 }
 
 fn writeDiagnostics(writer: *Io.Writer, module: *const xirasm.Module) !void {

@@ -4,6 +4,7 @@ const ast = @import("../ast.zig");
 const module_mod = @import("../module.zig");
 const parser = @import("../parser.zig");
 const source = @import("../source.zig");
+const source_path_mod = @import("../source_path.zig");
 const api_mod = @import("api.zig");
 const contracts = @import("contracts.zig");
 const context_mod = @import("context.zig");
@@ -61,7 +62,8 @@ pub fn lowerIntoModuleWithPath(
 ) LowerError!void {
     var context: LowerContext = .{ .include_resolver = if (options) |stored| stored.include_resolver else null };
     defer context.deinit(allocator);
-    try lowerIntoModuleWithPathInternal(allocator, module, path, input, &context, callbacks);
+    const identity_source = if (options) |stored| stored.source_identity else null;
+    try lowerIntoModuleWithPathInternal(allocator, module, path, identity_source, input, &context, callbacks);
 }
 
 pub fn lowerIncludeOrImportCall(
@@ -89,14 +91,18 @@ pub fn lowerIncludeOrImportCall(
     });
     defer include_source.deinit(allocator);
 
-    if (context_mod.sourceStackContains(context, include_source.path)) return error.IncludeCycle;
+    const raw_identity = include_source.identity orelse include_source.path;
+    const identity = try source_path_mod.normalizeIdentity(allocator, raw_identity);
+    defer allocator.free(identity);
+
+    if (context_mod.sourceStackContains(context, identity)) return error.IncludeCycle;
 
     if (mode == .import_once) {
-        if (context_mod.sourceImported(context, include_source.path)) return;
-        try context_mod.rememberImportedSource(allocator, context, include_source.path);
+        if (module.hasImportedSource(identity)) return;
     }
 
-    try lowerIntoModuleWithPathInternal(allocator, module, include_source.path, include_source.bytes, context, callbacks);
+    try lowerIntoModuleWithIdentityInternal(allocator, module, include_source.path, identity, include_source.bytes, context, callbacks);
+    if (mode == .import_once) try module.rememberImportedSource(identity);
     active.offset = try callbacks.section_cursor(module, active.section_id);
     active.target = module.target;
 }
@@ -110,7 +116,7 @@ fn lowerIntoModuleInternal(
     callbacks: Callbacks,
 ) LowerError!void {
     if (path) |source_path| {
-        try lowerIntoModuleWithPathInternal(allocator, module, source_path, input, context, callbacks);
+        try lowerIntoModuleWithPathInternal(allocator, module, source_path, null, input, context, callbacks);
         return;
     }
 
@@ -132,14 +138,29 @@ fn lowerIntoModuleWithPathInternal(
     allocator: Allocator,
     module: *module_mod.Module,
     path: []const u8,
+    identity_source: ?[]const u8,
+    input: []const u8,
+    context: *LowerContext,
+    callbacks: Callbacks,
+) LowerError!void {
+    const identity = try source_path_mod.normalizeIdentity(allocator, identity_source orelse path);
+    defer allocator.free(identity);
+    try lowerIntoModuleWithIdentityInternal(allocator, module, path, identity, input, context, callbacks);
+}
+
+fn lowerIntoModuleWithIdentityInternal(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    path: []const u8,
+    identity: []const u8,
     input: []const u8,
     context: *LowerContext,
     callbacks: Callbacks,
 ) LowerError!void {
     if (context.source_stack.items.len >= max_include_depth) return error.IncludeTooDeep;
-    if (context_mod.sourceStackContains(context, path)) return error.IncludeCycle;
+    if (context_mod.sourceStackContains(context, identity)) return error.IncludeCycle;
 
-    try context.source_stack.append(allocator, path);
+    try context.source_stack.append(allocator, .{ .path = path, .identity = identity });
     defer context.source_stack.shrinkRetainingCapacity(context.source_stack.items.len - 1);
 
     const source_id = try module.addSource(path, input);

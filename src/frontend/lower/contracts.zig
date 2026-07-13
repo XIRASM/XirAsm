@@ -99,10 +99,12 @@ pub const IncludeRequest = struct {
 
 pub const IncludeSource = struct {
     path: []u8,
+    identity: ?[]u8 = null,
     bytes: []u8,
 
     pub fn deinit(self: *IncludeSource, allocator: Allocator) void {
         allocator.free(self.bytes);
+        if (self.identity) |identity| allocator.free(identity);
         allocator.free(self.path);
         self.* = undefined;
     }
@@ -111,6 +113,7 @@ pub const IncludeSource = struct {
 pub const LowerOptions = struct {
     target: target.Target = target.Target.default,
     include_resolver: ?IncludeResolver = null,
+    source_identity: ?[]const u8 = null,
 };
 
 pub const LateLayoutResult = struct {

@@ -1,5 +1,6 @@
 pub const data = @import("data/root.zig");
-pub const frontend = @import("frontend/root.zig");
+pub const assembly = @import("assembly.zig");
+const frontend = @import("frontend/root.zig");
 
 const std = @import("std");
 
@@ -27,29 +28,15 @@ pub const lowerSource = frontend.lowerSource;
 pub const lowerSourceIntoModule = frontend.lowerSourceIntoModule;
 pub const lowerSourceIntoModuleWithPath = frontend.lowerSourceIntoModuleWithPath;
 pub const lowerSourceIntoModuleWithPathOptions = frontend.lowerSourceIntoModuleWithPathOptions;
-pub const FragmentId = frontend.FragmentId;
 pub const ModuleLayout = frontend.ModuleLayout;
 pub const SectionLayout = frontend.SectionLayout;
-pub const FragmentLayout = frontend.FragmentLayout;
 pub const ListingOptions = frontend.ListingOptions;
-pub const OutputImage = frontend.OutputImage;
-pub const OutputKind = frontend.OutputKind;
-pub const WriterResult = frontend.WriterResult;
-pub const DeferredStatement = frontend.DeferredStatement;
-pub const DeferredBlock = frontend.DeferredBlock;
-pub const LateLayoutStatement = frontend.LateLayoutStatement;
-pub const LateLayoutBlock = frontend.LateLayoutBlock;
-pub const layoutModule = frontend.layoutModule;
 pub const renderFlatListing = frontend.renderFlatListing;
-pub const encodeInstructionFragments = frontend.encodeInstructionFragments;
-pub const runLateLayoutPhase = frontend.runLateLayoutPhase;
-pub const FixupId = frontend.FixupId;
-pub const Fixup = frontend.Fixup;
-pub const FixupPassResult = frontend.FixupPassResult;
-pub const resolveFixups = frontend.resolveFixups;
-pub const writeOutput = frontend.writeOutput;
+pub const FlatAssemblyResult = assembly.FlatResult;
+pub const assembleFlat = assembly.assembleFlat;
 
 test "frontend declarations are test-reachable" {
+    std.testing.refAllDecls(assembly);
     std.testing.refAllDecls(data);
     std.testing.refAllDecls(data.config);
     std.testing.refAllDecls(frontend);

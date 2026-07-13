@@ -445,18 +445,7 @@ fn evalUserValueFunction(
     args: []const expr.BuiltinArgument,
     eval_ctx: *expr.EvalContext,
 ) expr.ExpressionError!value_mod.Value {
-    const lower_context: *LowerContext = @ptrCast(@alignCast(context));
-    const function_index = eval_ctx.module.value_functions.lookupIndex(name) orelse return error.InvalidOperand;
-    const active_section = eval_ctx.active_section orelse return error.MissingEvaluationContext;
-    const active: ActiveOutput = .{
-        .section_id = active_section,
-        .offset = eval_ctx.active_offset,
-        .file_offset = eval_ctx.active_file_offset orelse eval_ctx.active_offset,
-        .target = eval_ctx.module.target,
-    };
-    var output_stack: std.ArrayList(ActiveOutput) = .empty;
-    defer output_stack.deinit(allocator);
-    return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, &output_stack, function_index, args, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
+    return evalModuleValueFunction(context, allocator, name, args, eval_ctx);
 }
 
 fn evalStructLiteralValue(

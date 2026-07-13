@@ -4,7 +4,7 @@ const diagnostic = @import("diagnostic.zig");
 const fixup = @import("fixup.zig");
 const fragment = @import("fragment.zig");
 const meta_function = @import("meta_function.zig");
-const output = @import("output/root.zig");
+const output_contracts = @import("output/contracts.zig");
 const section = @import("section.zig");
 const source = @import("source.zig");
 const symbol = @import("symbol.zig");
@@ -35,9 +35,10 @@ pub const Module = struct {
     type_names: std.ArrayList(TypeNameBinding) = .empty,
     value_functions: meta_function.Store = .{},
     virtual_sections: std.ArrayList(section.SectionId) = .empty,
-    late_layout: output.LateLayoutStore = .{},
-    deferred: output.DeferredStore = .{},
+    late_layout: output_contracts.LateLayoutStore = .{},
+    deferred: output_contracts.DeferredStore = .{},
     sources: source.SourceMap = .{},
+    imported_sources: std.ArrayList([]u8) = .empty,
     diagnostics: diagnostic.DiagnosticStore = .{},
     default_section: section.SectionId,
 
@@ -55,6 +56,8 @@ pub const Module = struct {
 
     pub fn deinit(self: *Module) void {
         self.diagnostics.deinit(self.allocator);
+        for (self.imported_sources.items) |path| self.allocator.free(path);
+        self.imported_sources.deinit(self.allocator);
         self.sources.deinit(self.allocator);
         self.deferred.deinit(self.allocator);
         self.late_layout.deinit(self.allocator);
@@ -74,6 +77,20 @@ pub const Module = struct {
 
     pub fn addSource(self: *Module, path: []const u8, bytes: []const u8) !source.SourceId {
         return self.sources.add(self.allocator, path, bytes);
+    }
+
+    pub fn hasImportedSource(self: *const Module, identity: []const u8) bool {
+        for (self.imported_sources.items) |stored| {
+            if (std.mem.eql(u8, stored, identity)) return true;
+        }
+        return false;
+    }
+
+    pub fn rememberImportedSource(self: *Module, identity: []const u8) Allocator.Error!void {
+        if (self.hasImportedSource(identity)) return;
+        const owned_identity = try self.allocator.dupe(u8, identity);
+        errdefer self.allocator.free(owned_identity);
+        try self.imported_sources.append(self.allocator, owned_identity);
     }
 
     pub fn emitBytes(
@@ -151,11 +168,11 @@ pub const Module = struct {
         }
     }
 
-    pub fn appendDeferredBlock(self: *Module, block: output.DeferredBlock) !void {
+    pub fn appendDeferredBlock(self: *Module, block: output_contracts.DeferredBlock) !void {
         try self.deferred.append(self.allocator, block);
     }
 
-    pub fn appendLateLayoutBlock(self: *Module, block: output.LateLayoutBlock) !void {
+    pub fn appendLateLayoutBlock(self: *Module, block: output_contracts.LateLayoutBlock) !void {
         try self.late_layout.append(self.allocator, block);
     }
 

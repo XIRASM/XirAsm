@@ -184,25 +184,8 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
         std.mem.eql(u8, first_word, "continue") or
         std.mem.eql(u8, first_word, "struct") or
         std.mem.eql(u8, first_word, "union") or
-        looksLikeAssignment(trimmed) or
+        identifier.looksLikeAssignment(trimmed) or
         std.mem.startsWith(u8, trimmed, "@");
-}
-
-fn looksLikeAssignment(trimmed: []const u8) bool {
-    const equals_index = std.mem.indexOfScalar(u8, trimmed, '=') orelse return false;
-    if (equals_index == 0) return false;
-
-    if (equals_index + 1 < trimmed.len and trimmed[equals_index + 1] == '=') return false;
-    if (equals_index != 0 and (trimmed[equals_index - 1] == '!' or
-        trimmed[equals_index - 1] == '<' or
-        trimmed[equals_index - 1] == '>' or
-        trimmed[equals_index - 1] == '='))
-    {
-        return false;
-    }
-
-    const name = std.mem.trim(u8, trimmed[0..equals_index], " \t");
-    return identifier.isName(name);
 }
 
 fn looksLikeBareDirective(trimmed: []const u8) bool {

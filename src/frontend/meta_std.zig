@@ -586,7 +586,7 @@ fn evalMapSet(allocator: Allocator, args: []const value_mod.Value) Error!value_m
     if (args.len != 3) return error.InvalidArgument;
     const input = try expectMap(args[0]);
     const key = try expectString(args[1]);
-    const existing_index = mapEntryIndex(input, key);
+    const existing_index = input.indexOfKey(key);
     const output_len = try mapSetOutputLength(input.entries.len, existing_index != null);
     const output = try allocator.alloc(value_mod.MapEntry, output_len);
     var initialized: usize = 0;
@@ -746,13 +746,6 @@ fn expectList(value: value_mod.Value) Error!value_mod.ListValue {
 
 fn expectMap(value: value_mod.Value) Error!value_mod.MapValue {
     return value.expectMap() catch error.TypeMismatch;
-}
-
-fn mapEntryIndex(map: value_mod.MapValue, key: []const u8) ?usize {
-    for (map.entries, 0..) |entry, index| {
-        if (std.mem.eql(u8, entry.key, key)) return index;
-    }
-    return null;
 }
 
 fn expectU8(value: value_mod.Value) Error!u8 {

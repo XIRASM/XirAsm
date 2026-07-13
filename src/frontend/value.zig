@@ -239,12 +239,12 @@ pub const MapValue = struct {
     }
 
     pub fn entryByKey(self: MapValue, key: []const u8) ?*const MapEntry {
-        const index = self.entryIndexByKey(key) orelse return null;
+        const index = self.indexOfKey(key) orelse return null;
         return &self.entries[index];
     }
 
     pub fn setCloned(self: *MapValue, allocator: std.mem.Allocator, key: []const u8, value: Value) MutationError!void {
-        if (self.entryIndexByKey(key)) |index| {
+        if (self.indexOfKey(key)) |index| {
             var replacement = try value.clone(allocator);
             errdefer replacement.deinit(allocator);
 
@@ -268,7 +268,7 @@ pub const MapValue = struct {
         };
     }
 
-    fn entryIndexByKey(self: MapValue, key: []const u8) ?usize {
+    pub fn indexOfKey(self: MapValue, key: []const u8) ?usize {
         for (self.entries, 0..) |entry, index| {
             if (std.mem.eql(u8, entry.key, key)) return index;
         }

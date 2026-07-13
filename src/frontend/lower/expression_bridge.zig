@@ -176,6 +176,11 @@ fn readResolvedMetaFile(
     };
     errdefer include_source.deinit(allocator);
 
+    if (include_source.identity) |identity| {
+        allocator.free(identity);
+        include_source.identity = null;
+    }
+
     return .{
         .path = include_source.path,
         .bytes = include_source.bytes,

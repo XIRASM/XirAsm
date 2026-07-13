@@ -103,7 +103,7 @@ pub const Parser = struct {
                         try statements.append(self.allocator, .{ .meta_continue = .{ .span = token.span } });
                     } else if (looksLikeValueDeclaration(token.text)) {
                         try appendValueDeclaration(&statements, self.allocator, token);
-                    } else if (looksLikeAssignment(token.text)) {
+                    } else if (identifier.looksLikeAssignment(token.text)) {
                         try appendAssignment(&statements, self.allocator, token);
                     } else if (looksLikeMetaReturn(token.text)) {
                         try appendMetaReturn(&statements, self.allocator, token);
@@ -667,7 +667,7 @@ fn appendExecutableStatement(
                 try statements.append(parser.allocator, .{ .meta_continue = .{ .span = statement_token.span } });
             } else if (looksLikeValueDeclaration(statement_token.text)) {
                 try appendValueDeclaration(statements, parser.allocator, statement_token);
-            } else if (looksLikeAssignment(statement_token.text)) {
+            } else if (identifier.looksLikeAssignment(statement_token.text)) {
                 try appendAssignment(statements, parser.allocator, statement_token);
             } else if (looksLikeMetaReturn(statement_token.text)) {
                 try appendMetaReturn(statements, parser.allocator, statement_token);
@@ -1097,24 +1097,6 @@ fn looksLikeValueDeclaration(text: []const u8) bool {
     const trimmed = std.mem.trim(u8, text, " \t");
     return std.mem.startsWith(u8, trimmed, "const ") or
         std.mem.startsWith(u8, trimmed, "let ");
-}
-
-fn looksLikeAssignment(text: []const u8) bool {
-    const trimmed = std.mem.trim(u8, text, " \t");
-    const equals_index = std.mem.indexOfScalar(u8, trimmed, '=') orelse return false;
-    if (equals_index == 0) return false;
-
-    if (equals_index + 1 < trimmed.len and trimmed[equals_index + 1] == '=') return false;
-    if (equals_index != 0 and (trimmed[equals_index - 1] == '!' or
-        trimmed[equals_index - 1] == '<' or
-        trimmed[equals_index - 1] == '>' or
-        trimmed[equals_index - 1] == '='))
-    {
-        return false;
-    }
-
-    const name = std.mem.trim(u8, trimmed[0..equals_index], " \t");
-    return identifier.isName(name);
 }
 
 fn parseValueDeclaration(

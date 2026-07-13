@@ -9,8 +9,7 @@ const Allocator = std.mem.Allocator;
 
 pub const LowerContext = struct {
     include_resolver: ?contracts.IncludeResolver = null,
-    source_stack: std.ArrayList([]const u8) = .empty,
-    imported_sources: std.ArrayList([]u8) = .empty,
+    source_stack: std.ArrayList(SourceFrame) = .empty,
     functions: meta_function.Store = .{},
     scopes: std.ArrayList(MetaScope) = .empty,
     call_depth: u32 = 0,
@@ -28,13 +27,14 @@ pub const LowerContext = struct {
         }
         self.scopes.deinit(allocator);
         self.functions.deinit(allocator);
-        for (self.imported_sources.items) |path| {
-            allocator.free(path);
-        }
-        self.imported_sources.deinit(allocator);
         self.source_stack.deinit(allocator);
         self.* = undefined;
     }
+};
+
+const SourceFrame = struct {
+    path: []const u8,
+    identity: []const u8,
 };
 
 const MetaLocal = struct {
@@ -172,29 +172,12 @@ pub fn resolveLocalValue(context: *anyopaque, allocator: Allocator, name: []cons
 
 pub fn currentSourcePath(context: *const LowerContext) ?[]const u8 {
     if (context.source_stack.items.len == 0) return null;
-    return context.source_stack.items[context.source_stack.items.len - 1];
+    return context.source_stack.items[context.source_stack.items.len - 1].path;
 }
 
-pub fn sourceStackContains(context: *const LowerContext, path: []const u8) bool {
-    for (context.source_stack.items) |stored_path| {
-        if (std.mem.eql(u8, stored_path, path)) return true;
+pub fn sourceStackContains(context: *const LowerContext, identity: []const u8) bool {
+    for (context.source_stack.items) |frame| {
+        if (std.mem.eql(u8, frame.identity, identity)) return true;
     }
     return false;
-}
-
-pub fn sourceImported(context: *const LowerContext, path: []const u8) bool {
-    for (context.imported_sources.items) |stored_path| {
-        if (std.mem.eql(u8, stored_path, path)) return true;
-    }
-    return false;
-}
-
-pub fn rememberImportedSource(
-    allocator: Allocator,
-    context: *LowerContext,
-    path: []const u8,
-) Allocator.Error!void {
-    const owned_path = try allocator.dupe(u8, path);
-    errdefer allocator.free(owned_path);
-    try context.imported_sources.append(allocator, owned_path);
 }

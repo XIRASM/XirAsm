@@ -18,6 +18,7 @@ pub const parser = @import("parser.zig");
 pub const output = @import("output/root.zig");
 pub const section = @import("section.zig");
 pub const source = @import("source.zig");
+pub const source_path = @import("source_path.zig");
 pub const symbol = @import("symbol.zig");
 pub const target = @import("target.zig");
 pub const token_match = @import("token_match.zig");

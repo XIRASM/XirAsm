@@ -2,6 +2,7 @@ const std = @import("std");
 
 const module_mod = @import("../module.zig");
 const pass = @import("../pass.zig");
+const source_path = @import("../source_path.zig");
 const target = @import("../target.zig");
 const types = @import("../types.zig");
 const value_mod = @import("../value.zig");
@@ -651,11 +652,7 @@ fn testResolveIncludePath(
     parent_path: ?[]const u8,
     include_path: []const u8,
 ) Allocator.Error![]u8 {
-    const parent = parent_path orelse return allocator.dupe(u8, include_path);
-    const separator_index = std.mem.lastIndexOfAny(u8, parent, "\\/") orelse return allocator.dupe(u8, include_path);
-    const parent_dir = parent[0..separator_index];
-    if (parent_dir.len == 0) return allocator.dupe(u8, include_path);
-    return std.fmt.allocPrint(allocator, "{s}/{s}", .{ parent_dir, include_path });
+    return source_path.resolveIdentity(allocator, parent_path, include_path);
 }
 
 test "lowering evaluates target width fields in general expressions" {
@@ -776,6 +773,75 @@ test "lowering imports source files only once" {
         .bytes => |bytes| try std.testing.expectEqual(@as(u8, 0x42), bytes.data[0]),
         else => return error.UnexpectedFragment,
     }
+}
+
+test "lowering treats lexical import aliases as one source" {
+    const files = [_]TestIncludeFile{
+        .{
+            .path = "src/shared/once.xir",
+            .bytes =
+            \\emit.u8(0x43);
+            \\
+            ,
+        },
+    };
+    var resolver: TestIncludeResolver = .{ .files = &files };
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+
+    try lowerSourceIntoModuleWithPathOptions(
+        std.testing.allocator,
+        &module,
+        "src/main.xir",
+        \\import("shared/once.xir");
+        \\import("shared/./once.xir");
+        \\
+    ,
+        .{ .include_resolver = .{
+            .context = @ptrCast(&resolver),
+            .resolve = TestIncludeResolver.resolve,
+        } },
+    );
+
+    const text = try module.sections.get(module.default_section);
+    try std.testing.expectEqual(@as(usize, 1), text.fragments.items.len);
+}
+
+test "module remembers imports across separate lowering sessions" {
+    const files = [_]TestIncludeFile{
+        .{
+            .path = "src/shared/once.xir",
+            .bytes =
+            \\emit.u8(0x44);
+            \\
+            ,
+        },
+    };
+    var resolver: TestIncludeResolver = .{ .files = &files };
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+    const options: LowerOptions = .{ .include_resolver = .{
+        .context = @ptrCast(&resolver),
+        .resolve = TestIncludeResolver.resolve,
+    } };
+
+    try lowerSourceIntoModuleWithPathOptions(
+        std.testing.allocator,
+        &module,
+        "src/first.xir",
+        "import(\"shared/once.xir\");\n",
+        options,
+    );
+    try lowerSourceIntoModuleWithPathOptions(
+        std.testing.allocator,
+        &module,
+        "src/second.xir",
+        "import(\"shared/./once.xir\");\n",
+        options,
+    );
+
+    const text = try module.sections.get(module.default_section);
+    try std.testing.expectEqual(@as(usize, 1), text.fragments.items.len);
 }
 
 test "lowering includes source files every time" {
@@ -931,6 +997,32 @@ test "lowering rejects recursive source imports" {
                     .resolve = TestIncludeResolver.resolve,
                 },
             },
+        ),
+    );
+}
+
+test "lowering rejects recursive imports through lexical aliases" {
+    const files = [_]TestIncludeFile{
+        .{
+            .path = "src/main.xir",
+            .bytes = "import(\"./main.xir\");\n",
+        },
+    };
+    var resolver: TestIncludeResolver = .{ .files = &files };
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+
+    try std.testing.expectError(
+        error.IncludeCycle,
+        lowerSourceIntoModuleWithPathOptions(
+            std.testing.allocator,
+            &module,
+            "src/main.xir",
+            "import(\"./main.xir\");\n",
+            .{ .include_resolver = .{
+                .context = @ptrCast(&resolver),
+                .resolve = TestIncludeResolver.resolve,
+            } },
         ),
     );
 }
