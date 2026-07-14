@@ -30,6 +30,7 @@ fn io_windows64_dir_imports(imports: map) -> map {
 // 编译期参数：无。
 // 运行时输入：rsi = UTF-16LE 字符串地址。
 // 返回：rax = 不含零结尾的字节数。
+// 错误：不检测非法指针或缺失零结尾，调用方必须保证输入有效。
 // 所有权：只读调用方或状态块中的字符串。
 // ABI：保持 rsi；破坏 rax、r10。
 fn io_dir_windows64_wstrlen_bytes() {
@@ -86,7 +87,7 @@ fn io_dir_open() {
     mov qword [rdi + 48], 1
     mov qword [rdi + 56], 0
     mov qword [rdi + 64], 0
-    isa(sym.join("mov qword [rdi + 72], ", to_string(io_dir_buffer_size)));
+    mov qword [rdi + 72], io_dir_buffer_size
     xor eax, eax
     xor edx, edx
     isa(sym.join("jmp ", end_label));
@@ -98,12 +99,12 @@ fn io_dir_open() {
 
     label.define(invalid_label);
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_dir_error_invalid_state)));
+    mov edx, io_dir_error_invalid_state
     isa(sym.join("jmp ", end_label));
 
     label.define(already_label);
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_dir_error_already_open)));
+    mov edx, io_dir_error_already_open
 
     label.define(end_label);
 }
@@ -152,13 +153,13 @@ fn io_dir_next() {
     mov [rdi + 16], rax
     pop rsi
     mov eax, [rdi + 80]
-    isa(sym.join("test eax, ", to_string(io_dir_windows64_file_attribute_directory)));
+    test eax, io_dir_windows64_file_attribute_directory
     isa(sym.join("jnz ", directory_label));
-    isa(sym.join("mov qword [rdi + 24], ", to_string(io_dir_kind_file)));
+    mov qword [rdi + 24], io_dir_kind_file
     isa(sym.join("jmp ", success_label));
 
     label.define(directory_label);
-    isa(sym.join("mov qword [rdi + 24], ", to_string(io_dir_kind_directory)));
+    mov qword [rdi + 24], io_dir_kind_directory
 
     label.define(success_label);
     mov qword [rdi + 32], 0
@@ -167,7 +168,7 @@ fn io_dir_next() {
     isa(sym.join("jmp ", end_label));
 
     label.define(next_failed_label);
-    isa(sym.join("cmp edx, ", to_string(io_dir_windows64_error_no_more_files)));
+    cmp edx, io_dir_windows64_error_no_more_files
     isa(sym.join("je ", no_more_label));
     mov rax, -1
     mov [rdi + 32], rdx
@@ -180,12 +181,12 @@ fn io_dir_next() {
 
     label.define(invalid_label);
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_dir_error_invalid_state)));
+    mov edx, io_dir_error_invalid_state
     isa(sym.join("jmp ", end_label));
 
     label.define(not_open_label);
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_dir_error_not_open)));
+    mov edx, io_dir_error_not_open
 
     label.define(end_label);
 }
@@ -231,7 +232,7 @@ fn io_dir_close() {
 
     label.define(invalid_label);
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_dir_error_invalid_state)));
+    mov edx, io_dir_error_invalid_state
 
     label.define(end_label);
 }

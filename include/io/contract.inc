@@ -10,4 +10,5 @@
 const io_result_failure: u64 = 0xffffffffffffffff
 const io_error_none: u64 = 0
 const io_max_transfer_size: u64 = 0xffffffff
+const io_max_read_size: u64 = io_max_transfer_size
 const io_max_write_size: u64 = io_max_transfer_size

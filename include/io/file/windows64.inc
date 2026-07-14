@@ -13,8 +13,12 @@ const io_windows64_open_always: u64 = 4
 const io_windows64_file_attribute_normal: u64 = 0x00000080
 
 // 把本文件模块所需的 KERNEL32 导入加入现有导入 map。
-// 参数：imports = pe_import_new() 或其他 pe_import_use64 返回的 map
-// 返回：包含文件 API 的新 map；原 map 不被隐藏修改
+// 编译期参数：imports = pe_import_new() 或其他 pe_import_use64 返回的 map。
+// 运行时输入寄存器：无；本函数只在汇编期构造导入描述。
+// 返回：包含文件 API 的新 map；原 map 不被隐藏修改。
+// 错误：无运行时错误；无效 map 或导入描述由格式 DSL 在汇编期诊断。
+// 所有权：返回新 map，不修改原 map；调用方继续持有导入 map 值。
+// ABI：不生成运行时代码，不影响寄存器、shadow space 或 rsp。
 fn io_windows64_file_imports(imports: map) -> map {
     const imports1: map = pe_import_use64(imports, "KERNEL32.DLL", "CreateFileW");
     const imports2: map = pe_import_use64(imports1, "KERNEL32.DLL", "CloseHandle");
@@ -27,13 +31,17 @@ fn io_windows64_file_imports(imports: map) -> map {
 }
 
 // 内部 CreateFileW 包装。
-// 参数：
+// 编译期参数：
 //   desired_access       = 编译期访问掩码
 //   creation_disposition = 编译期创建方式
-//   rsi                  = 运行时 UTF-16LE 零结尾路径
+// 运行时输入：
+//   rsi = UTF-16LE 零结尾路径
 // 返回：成功时 rax = HANDLE、rdx = 0；失败时 rax = -1、
 //       rdx = GetLastError() 返回值
+// 错误：CreateFileW 失败时返回 Win32 错误码。
+// 所有权：成功返回的 HANDLE 归调用方；不取得路径字符串所有权。
 // 保留：rsi 及全部 Win64 非易失寄存器
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_windows64_open_path(desired_access: u64, creation_disposition: u64) {
     assert(desired_access <= 0xffffffff, "Windows file access mask is out of range");
     assert(creation_disposition <= 0xffffffff, "Windows file creation disposition is out of range");
@@ -41,13 +49,13 @@ fn io_windows64_open_path(desired_access: u64, creation_disposition: u64) {
     // 32 字节 shadow space、三个栈参数和一个保存的 HANDLE。
     sub rsp, 72
     mov rcx, rsi
-    isa(sym.join("mov edx, ", to_string(desired_access)));
-    isa(sym.join("mov r8d, ", to_string(io_windows64_file_share_all)));
+    mov edx, desired_access
+    mov r8d, io_windows64_file_share_all
     xor r9d, r9d
 
-    isa(sym.join("mov eax, ", to_string(creation_disposition)));
+    mov eax, creation_disposition
     mov [rsp + 32], rax
-    isa(sym.join("mov eax, ", to_string(io_windows64_file_attribute_normal)));
+    mov eax, io_windows64_file_attribute_normal
     mov [rsp + 40], rax
     xor eax, eax
     mov [rsp + 48], rax
@@ -64,12 +72,16 @@ fn io_windows64_open_path(desired_access: u64, creation_disposition: u64) {
 }
 
 // 内部单 HANDLE、BOOL 返回值 WinAPI 包装。
-// 参数：
+// 编译期参数：
 //   api_name = 编译期 API 符号名，例如 CloseHandle
-//   rdi      = Windows 文件句柄
+// 运行时输入：
+//   rdi = Windows 文件句柄
 // 返回：成功时 rax = 0、rdx = 0；失败时 rax = -1、
 //       rdx = GetLastError() 返回值
+// 错误：目标 API 返回 FALSE 时返回 Win32 错误码。
+// 所有权：是否消费 HANDLE 由调用方语义决定；本函数只执行一次 API 调用。
 // 保留：全部 Win64 非易失寄存器
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_windows64_file_bool_handle(api_name: string) {
     assert(len(api_name) > 0, "Windows file API name is empty");
 
@@ -90,39 +102,57 @@ fn io_windows64_file_bool_handle(api_name: string) {
 }
 
 // 只读打开文件。
-// 输入：rsi = UTF-16LE 零结尾路径
-// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值
+// 编译期参数：无。
+// 运行时输入：rsi = UTF-16LE 零结尾路径。
+// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值。
+// 错误：CreateFileW 失败时返回 Win32 错误码。
+// 所有权：成功返回的 HANDLE 归调用方；必须用 io_file_close 消费。
+// ABI：保持 rsi、Win64 非易失寄存器和 rsp；内部使用 shadow space。
 fn io_file_open_read() {
     io_windows64_open_path(io_windows64_generic_read, io_windows64_open_existing);
 }
 
 // 创建新文件或截断已有文件，并以只写方式打开。
-// 输入：rsi = UTF-16LE 零结尾路径
-// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值
+// 编译期参数：无。
+// 运行时输入：rsi = UTF-16LE 零结尾路径。
+// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值。
+// 错误：CreateFileW 失败时返回 Win32 错误码。
+// 所有权：成功返回的 HANDLE 归调用方；必须用 io_file_close 消费。
+// ABI：保持 rsi、Win64 非易失寄存器和 rsp；内部使用 shadow space。
 fn io_file_create_truncate() {
     io_windows64_open_path(io_windows64_generic_write, io_windows64_create_always);
 }
 
 // 创建新文件或以 FILE_APPEND_DATA 打开已有文件。
-// 输入：rsi = UTF-16LE 零结尾路径
-// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值
+// 编译期参数：无。
+// 运行时输入：rsi = UTF-16LE 零结尾路径。
+// 返回：rax = HANDLE 或 -1；rdx = 0 或 GetLastError() 返回值。
+// 错误：CreateFileW 失败时返回 Win32 错误码。
+// 所有权：成功返回的 HANDLE 归调用方；必须用 io_file_close 消费。
+// ABI：保持 rsi、Win64 非易失寄存器和 rsp；内部使用 shadow space。
 fn io_file_open_append() {
     io_windows64_open_path(io_windows64_file_append_data, io_windows64_open_always);
 }
 
 // 关闭 HANDLE。
-// 输入：rdi = HANDLE
+// 编译期参数：无。
+// 运行时输入：rdi = HANDLE。
 // 返回：成功 rax = 0、rdx = 0；失败 rax = -1、rdx = Win32 错误码
 // 所有权：为保持跨平台一致，调用即视为消费 HANDLE，失败后不得复用。
+// ABI：保持 Win64 非易失寄存器和 rsp；内部使用 shadow space。
 fn io_file_close() {
     io_windows64_file_bool_handle("CloseHandle");
 }
 
 // 从 HANDLE 读取数据。
-// 输入：rdi = HANDLE，rsi = 可写缓冲区，rdx = 请求字节数
+// 编译期参数：无。
+// 运行时输入：rdi = HANDLE，rsi = 可写缓冲区，rdx = 请求字节数。
 // 返回：rax = 实际读取字节数（0 表示 EOF）或 -1；
 //       rdx = 0 或 GetLastError() 返回值
+// 错误：ReadFile 失败时返回 Win32 错误码。
+// 所有权：不取得 HANDLE 或缓冲区所有权；短读属于成功。
 // 保留：rdi、rsi 及全部 Win64 非易失寄存器
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_file_read() {
     // 32 字节 shadow space、一个栈参数、两个结果局部量和保存的长度。
     sub rsp, 72
@@ -150,25 +180,36 @@ fn io_file_read() {
 }
 
 // 向 HANDLE 写入数据。
-// 输入：rdi = HANDLE，rsi = 源缓冲区，rdx = 请求字节数
+// 编译期参数：无。
+// 运行时输入：rdi = HANDLE，rsi = 源缓冲区，rdx = 请求字节数。
 // 返回：rax = 实际写入字节数或 -1；rdx = 0 或 Win32 错误码
+// 错误：WriteFile 失败时返回 Win32 错误码。
+// 所有权：不取得 HANDLE 或缓冲区所有权；短写属于成功。
 // 保留：rdi、rsi 及全部 Win64 非易失寄存器
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_file_write() {
     mov rcx, rdi
     io_windows64_write_handle();
 }
 
 // 使用 FlushFileBuffers 把缓冲数据提交给系统存储栈。
-// 输入：rdi = HANDLE
+// 编译期参数：无。
+// 运行时输入：rdi = HANDLE。
 // 返回：成功 rax = 0、rdx = 0；失败 rax = -1、rdx = Win32 错误码
+// 错误：FlushFileBuffers 失败时返回 Win32 错误码。
+// 所有权：不取得、不关闭 HANDLE。
+// ABI：保持 Win64 非易失寄存器和 rsp；内部使用 shadow space。
 fn io_file_flush() {
     io_windows64_file_bool_handle("FlushFileBuffers");
 }
 
 // 使用 SetFilePointerEx 修改文件位置。
-// 参数：origin = io_file_seek_begin/current/end
-// 输入：rdi = HANDLE，rsi = 有符号 64 位位移
+// 编译期参数：origin = io_file_seek_begin/current/end。
+// 运行时输入：rdi = HANDLE，rsi = 有符号 64 位位移。
 // 返回：rax = 新的绝对文件位置或 -1；rdx = 0 或 Win32 错误码
+// 错误：origin 非法在汇编期诊断；SetFilePointerEx 失败时返回 Win32 错误码。
+// 所有权：不取得、不关闭 HANDLE。
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_file_seek(origin: u64) {
     assert(origin <= 2, "file seek origin is invalid");
 
@@ -179,7 +220,7 @@ fn io_file_seek(origin: u64) {
     mov rcx, rdi
     mov rdx, rsi
     lea r8, [rsp + 40]
-    isa(sym.join("mov r9d, ", to_string(origin)));
+    mov r9d, origin
     call [rel SetFilePointerEx]
     mov [rsp + 48], eax
 
@@ -196,8 +237,12 @@ fn io_file_seek(origin: u64) {
 }
 
 // 使用 GetFileSizeEx 查询文件大小。
-// 输入：rdi = HANDLE
+// 编译期参数：无。
+// 运行时输入：rdi = HANDLE。
 // 返回：rax = 文件字节数或 -1；rdx = 0 或 Win32 错误码
+// 错误：GetFileSizeEx 失败时返回 Win32 错误码。
+// 所有权：不取得、不关闭 HANDLE。
+// ABI：内部保留 shadow space，保持 call 前 16 字节对齐并恢复 rsp。
 fn io_file_size() {
     // 32 字节 shadow space、一个 LARGE_INTEGER 结果和一个 BOOL 局部量。
     sub rsp, 56

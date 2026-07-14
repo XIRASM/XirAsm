@@ -83,31 +83,31 @@ fn io_path_query() {
     mov edx, eax
     mov r11d, [rsp + 40]
 
-    isa(sym.join("cmp r11d, ", to_string(io_path_windows64_invalid_attributes)));
+    cmp r11d, io_path_windows64_invalid_attributes
     isa(sym.join("jne ", classify_label));
-    isa(sym.join("cmp edx, ", to_string(io_path_windows64_error_file_not_found)));
+    cmp edx, io_path_windows64_error_file_not_found
     isa(sym.join("je ", missing_label));
-    isa(sym.join("cmp edx, ", to_string(io_path_windows64_error_path_not_found)));
+    cmp edx, io_path_windows64_error_path_not_found
     isa(sym.join("je ", missing_label));
     mov rax, -1
     isa(sym.join("jmp ", end_label));
 
     label.define(classify_label);
-    isa(sym.join("test r11d, ", to_string(io_path_windows64_attribute_directory)));
+    test r11d, io_path_windows64_attribute_directory
     isa(sym.join("jnz ", directory_label));
-    isa(sym.join("test r11d, ", to_string(io_path_windows64_attribute_device)));
+    test r11d, io_path_windows64_attribute_device
     isa(sym.join("jnz ", other_label));
-    isa(sym.join("mov eax, ", to_string(io_path_kind_file)));
+    mov eax, io_path_kind_file
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
     label.define(directory_label);
-    isa(sym.join("mov eax, ", to_string(io_path_kind_directory)));
+    mov eax, io_path_kind_directory
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
     label.define(other_label);
-    isa(sym.join("mov eax, ", to_string(io_path_kind_other)));
+    mov eax, io_path_kind_other
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
@@ -154,18 +154,18 @@ fn io_path_make_dir() {
     const end_label: string = sym.unique("__iop_wmd_end_")
 
     io_windows64_path_bool1("CreateDirectoryW");
-    isa(sym.join("cmp edx, ", to_string(io_path_windows64_error_already_exists)));
+    cmp edx, io_path_windows64_error_already_exists
     isa(sym.join("je ", existed_label));
     isa(sym.join("jmp ", end_label));
 
     label.define(existed_label);
     io_path_query();
-    isa(sym.join("cmp rax, ", to_string(io_path_kind_directory)));
+    cmp rax, io_path_kind_directory
     isa(sym.join("je ", success_label));
     cmp rax, -1
     isa(sym.join("je ", end_label));
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_path_windows64_error_already_exists)));
+    mov edx, io_path_windows64_error_already_exists
     isa(sym.join("jmp ", end_label));
 
     label.define(success_label);
@@ -198,7 +198,7 @@ fn io_path_rename_replace() {
     sub rsp, 40
     mov rcx, rsi
     mov rdx, rdi
-    isa(sym.join("mov r8d, ", to_string(io_path_windows64_move_replace_existing)));
+    mov r8d, io_path_windows64_move_replace_existing
     call [rel MoveFileExW]
     mov [rsp + 32], eax
     call [rel GetLastError]

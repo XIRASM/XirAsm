@@ -33,8 +33,12 @@ const io_file_error_buffer_too_small: u64 = 0x7fff1002
 const io_file_error_no_progress: u64 = 0x7fff1003
 
 // 使用编译期标签调用 io_file_open_read。
-// 参数：path_label = 平台原生零结尾路径的标签名
-// 返回：与 io_file_open_read 相同
+// 编译期参数：path_label = 平台原生零结尾路径的标签名。
+// 运行时输入寄存器：调用点无需预置；本函数生成 rsi 后转交。
+// 返回：与 io_file_open_read 相同。
+// 错误：标签为空在汇编期诊断；运行时错误由平台实现返回。
+// 所有权：不取得路径字符串所有权；成功返回的句柄归调用方。
+// ABI：保留/破坏寄存器及栈要求与 io_file_open_read 相同。
 fn io_file_open_read_label(path_label: string) {
     assert(len(path_label) > 0, "file path label is empty");
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
@@ -42,8 +46,12 @@ fn io_file_open_read_label(path_label: string) {
 }
 
 // 使用编译期标签创建或截断文件。
-// 参数：path_label = 平台原生零结尾路径的标签名
-// 返回：与 io_file_create_truncate 相同
+// 编译期参数：path_label = 平台原生零结尾路径的标签名。
+// 运行时输入寄存器：调用点无需预置；本函数生成 rsi 后转交。
+// 返回：与 io_file_create_truncate 相同。
+// 错误：标签为空在汇编期诊断；运行时错误由平台实现返回。
+// 所有权：不取得路径字符串所有权；成功返回的句柄归调用方。
+// ABI：保留/破坏寄存器及栈要求与 io_file_create_truncate 相同。
 fn io_file_create_truncate_label(path_label: string) {
     assert(len(path_label) > 0, "file path label is empty");
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
@@ -51,8 +59,12 @@ fn io_file_create_truncate_label(path_label: string) {
 }
 
 // 使用编译期标签创建文件或以追加模式打开现有文件。
-// 参数：path_label = 平台原生零结尾路径的标签名
-// 返回：与 io_file_open_append 相同
+// 编译期参数：path_label = 平台原生零结尾路径的标签名。
+// 运行时输入寄存器：调用点无需预置；本函数生成 rsi 后转交。
+// 返回：与 io_file_open_append 相同。
+// 错误：标签为空在汇编期诊断；运行时错误由平台实现返回。
+// 所有权：不取得路径字符串所有权；成功返回的句柄归调用方。
+// ABI：保留/破坏寄存器及栈要求与 io_file_open_append 相同。
 fn io_file_open_append_label(path_label: string) {
     assert(len(path_label) > 0, "file path label is empty");
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
@@ -60,36 +72,48 @@ fn io_file_open_append_label(path_label: string) {
 }
 
 // 从 rdi 句柄读取到编译期指定的缓冲区标签。
-// 参数：
+// 编译期参数：
 //   buffer_label = 可写缓冲区标签名
 //   length       = 编译期请求字节数
+// 运行时输入：rdi = 平台原生句柄；本函数生成 rsi/rdx 后转交。
 // 返回：rax = 实际读取字节数或 -1；rdx = 0 或平台错误码
+// 错误：标签为空或长度过大在汇编期诊断；运行时错误由平台实现返回。
+// 所有权：不取得句柄或缓冲区所有权；短读属于成功。
+// ABI：保留/破坏寄存器及栈要求与 io_file_read 相同。
 fn io_file_read_label(buffer_label: string, length: u64) {
     assert(len(buffer_label) > 0, "file read buffer label is empty");
     assert(length <= io_max_transfer_size, "file read byte count exceeds the portable limit");
 
     isa(sym.join("lea rsi, [rel ", buffer_label, "]"));
-    isa(sym.join("mov rdx, ", to_string(length)));
+    mov rdx, length
     io_file_read();
 }
 
 // 从编译期指定的缓冲区标签写入 rdi 句柄。
-// 参数：
+// 编译期参数：
 //   buffer_label = 源缓冲区标签名
 //   length       = 编译期请求字节数
+// 运行时输入：rdi = 平台原生句柄；本函数生成 rsi/rdx 后转交。
 // 返回：rax = 实际写入字节数或 -1；rdx = 0 或平台错误码
+// 错误：标签为空或长度过大在汇编期诊断；运行时错误由平台实现返回。
+// 所有权：不取得句柄或缓冲区所有权；短写属于成功。
+// ABI：保留/破坏寄存器及栈要求与 io_file_write 相同。
 fn io_file_write_label(buffer_label: string, length: u64) {
     assert(len(buffer_label) > 0, "file write buffer label is empty");
     assert(length <= io_max_transfer_size, "file write byte count exceeds the portable limit");
 
     isa(sym.join("lea rsi, [rel ", buffer_label, "]"));
-    isa(sym.join("mov rdx, ", to_string(length)));
+    mov rdx, length
     io_file_write();
 }
 
 // 把 rdi 句柄的位置重置到文件开头。
-// 输入：rdi = 句柄
+// 编译期参数：无。
+// 运行时输入：rdi = 句柄。
 // 返回：成功时 rax = 0、rdx = 0；失败时 rax = -1、rdx = 错误码
+// 错误：由 io_file_seek 返回平台错误码。
+// 所有权：不取得、不关闭句柄。
+// ABI：保留/破坏寄存器及栈要求与 io_file_seek 相同。
 fn io_file_rewind() {
     mov rsi, 0
     io_file_seek(io_file_seek_begin);
@@ -192,7 +216,7 @@ fn io_file_load() {
     isa(sym.join("jmp ", close_label));
 
     label.define(too_small_label);
-    isa(sym.join("mov rbp, ", to_string(io_file_error_buffer_too_small)));
+    mov rbp, io_file_error_buffer_too_small
     isa(sym.join("jmp ", close_label));
 
     label.define(read_error_label);
@@ -200,7 +224,7 @@ fn io_file_load() {
     isa(sym.join("jmp ", close_label));
 
     label.define(no_progress_label);
-    isa(sym.join("mov rbp, ", to_string(io_file_error_no_progress)));
+    mov rbp, io_file_error_no_progress
 
     label.define(close_label);
     mov rdi, rbx
@@ -339,7 +363,7 @@ fn io_file_store() {
     isa(sym.join("jmp ", close_label));
 
     label.define(no_progress_label);
-    isa(sym.join("mov r15, ", to_string(io_file_error_no_progress)));
+    mov r15, io_file_error_no_progress
 
     label.define(close_label);
     mov rdi, rbx
@@ -389,7 +413,8 @@ fn io_file_store() {
 //   buffer_label = 调用方可写缓冲区标签
 //   capacity     = 缓冲区容量，最大 io_max_transfer_size
 // 运行时输入寄存器：调用点无需预置；本函数生成 rsi/rdi/rcx 后转交。
-// 返回、错误、所有权、保留/破坏寄存器及栈要求：与 io_file_load 相同。
+// 返回：与 io_file_load 相同。
+// 错误、所有权、保留/破坏寄存器及栈要求：与 io_file_load 相同。
 fn io_file_load_label(path_label: string, buffer_label: string, capacity: u64) {
     assert(len(path_label) > 0, "file load path label is empty");
     assert(len(buffer_label) > 0, "file load buffer label is empty");
@@ -397,7 +422,7 @@ fn io_file_load_label(path_label: string, buffer_label: string, capacity: u64) {
 
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
     isa(sym.join("lea rdi, [rel ", buffer_label, "]"));
-    isa(sym.join("mov rcx, ", to_string(capacity)));
+    mov rcx, capacity
     io_file_load();
 }
 
@@ -407,7 +432,8 @@ fn io_file_load_label(path_label: string, buffer_label: string, capacity: u64) {
 //   data_label = 调用方只读数据标签
 //   size       = 写入字节数，最大 io_max_transfer_size
 // 运行时输入寄存器：调用点无需预置；本函数生成 rsi/rdi/rcx 后转交。
-// 返回、错误、所有权、保留/破坏寄存器及栈要求：与 io_file_store 相同。
+// 返回：与 io_file_store 相同。
+// 错误、所有权、保留/破坏寄存器及栈要求：与 io_file_store 相同。
 fn io_file_store_label(path_label: string, data_label: string, size: u64) {
     assert(len(path_label) > 0, "file store path label is empty");
     assert(len(data_label) > 0, "file store data label is empty");
@@ -415,6 +441,6 @@ fn io_file_store_label(path_label: string, data_label: string, size: u64) {
 
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
     isa(sym.join("lea rdi, [rel ", data_label, "]"));
-    isa(sym.join("mov rcx, ", to_string(size)));
+    mov rcx, size
     io_file_store();
 }

@@ -807,7 +807,8 @@ fn io_stream_close() {
 //   buffer_label = 调用方可写缓冲区标签
 //   capacity     = 编译期缓冲区容量，范围 1..0xffffffff
 // 运行时输入寄存器：调用点无需预置；本函数生成 rdi/rsi/rcx/r8 后转交。
-// 返回、错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
+// 返回：与 io_stream_open_read 相同。
+// 错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
 //   与 io_stream_open_read 相同。
 fn io_stream_open_read_label(state_label: string, path_label: string, buffer_label: string, capacity: u64) {
     assert(len(state_label) > 0, "stream state label is empty");
@@ -819,7 +820,7 @@ fn io_stream_open_read_label(state_label: string, path_label: string, buffer_lab
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
     isa(sym.join("lea rcx, [rel ", buffer_label, "]"));
-    isa(sym.join("mov r8, ", to_string(capacity)));
+    mov r8, capacity
     io_stream_open_read();
 }
 
@@ -827,7 +828,8 @@ fn io_stream_open_read_label(state_label: string, path_label: string, buffer_lab
 // 编译期参数：state_label=状态块，path_label=原生路径，
 //             buffer_label=调用方缓冲区，capacity=1..0xffffffff。
 // 运行时输入寄存器：调用点无需预置；本函数生成 rdi/rsi/rcx/r8 后转交。
-// 返回、错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
+// 返回：与 io_stream_create_truncate 相同。
+// 错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
 //   与 io_stream_create_truncate 相同。
 fn io_stream_create_truncate_label(state_label: string, path_label: string, buffer_label: string, capacity: u64) {
     assert(len(state_label) > 0, "stream state label is empty");
@@ -839,7 +841,7 @@ fn io_stream_create_truncate_label(state_label: string, path_label: string, buff
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
     isa(sym.join("lea rcx, [rel ", buffer_label, "]"));
-    isa(sym.join("mov r8, ", to_string(capacity)));
+    mov r8, capacity
     io_stream_create_truncate();
 }
 
@@ -847,7 +849,8 @@ fn io_stream_create_truncate_label(state_label: string, path_label: string, buff
 // 编译期参数：state_label=状态块，path_label=原生路径，
 //             buffer_label=调用方缓冲区，capacity=1..0xffffffff。
 // 运行时输入寄存器：调用点无需预置；本函数生成 rdi/rsi/rcx/r8 后转交。
-// 返回、错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
+// 返回：与 io_stream_open_append 相同。
+// 错误、句柄与缓冲区所有权、保留/破坏寄存器及栈要求：
 //   与 io_stream_open_append 相同。
 fn io_stream_open_append_label(state_label: string, path_label: string, buffer_label: string, capacity: u64) {
     assert(len(state_label) > 0, "stream state label is empty");
@@ -859,7 +862,7 @@ fn io_stream_open_append_label(state_label: string, path_label: string, buffer_l
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
     isa(sym.join("lea rcx, [rel ", buffer_label, "]"));
-    isa(sym.join("mov r8, ", to_string(capacity)));
+    mov r8, capacity
     io_stream_open_append();
 }
 
@@ -876,7 +879,7 @@ fn io_stream_write_label(state_label: string, data_label: string, length: u64) {
 
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", data_label, "]"));
-    isa(sym.join("mov rdx, ", to_string(length)));
+    mov rdx, length
     io_stream_write();
 }
 
@@ -894,14 +897,15 @@ fn io_stream_read_label(state_label: string, buffer_label: string, length: u64) 
 
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", buffer_label, "]"));
-    isa(sym.join("mov rdx, ", to_string(length)));
+    mov rdx, length
     io_stream_read();
 }
 
 // 用编译期标签刷新写流。
 // 编译期参数：state_label = 已打开的写流状态块。
 // 运行时输入寄存器：调用点无需预置；本函数生成 rdi 后转交。
-// 返回、错误、所有权、保留/破坏寄存器及栈要求：与 io_stream_flush 相同。
+// 返回：与 io_stream_flush 相同。
+// 错误、所有权、保留/破坏寄存器及栈要求：与 io_stream_flush 相同。
 fn io_stream_flush_label(state_label: string) {
     assert(len(state_label) > 0, "stream state label is empty");
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
@@ -911,7 +915,8 @@ fn io_stream_flush_label(state_label: string) {
 // 用编译期标签关闭流。
 // 编译期参数：state_label = 已打开的读流或写流状态块。
 // 运行时输入寄存器：调用点无需预置；本函数生成 rdi 后转交。
-// 返回、错误、句柄消费、缓冲区所有权、保留/破坏寄存器及栈要求：
+// 返回：与 io_stream_close 相同。
+// 错误、句柄消费、缓冲区所有权、保留/破坏寄存器及栈要求：
 //   与 io_stream_close 相同。
 fn io_stream_close_label(state_label: string) {
     assert(len(state_label) > 0, "stream state label is empty");

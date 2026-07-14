@@ -39,21 +39,21 @@ fn io_path_query() {
     const end_label: string = sym.unique("__iop_lq_end_")
 
     push rsi
-    isa(sym.join("sub rsp, ", to_string(io_path_linux64_stat_size)));
+    sub rsp, io_path_linux64_stat_size
     mov rdi, rsi
     mov rsi, rsp
-    isa(sym.join("mov eax, ", to_string(io_path_linux64_sys_stat)));
+    mov eax, io_path_linux64_sys_stat
     syscall
     mov r8, rax
-    isa(sym.join("mov r9d, [rsp + ", to_string(io_path_linux64_stat_mode_offset), "]"));
-    isa(sym.join("add rsp, ", to_string(io_path_linux64_stat_size)));
+    mov r9d, [rsp + io_path_linux64_stat_mode_offset]
+    add rsp, io_path_linux64_stat_size
     pop rsi
 
     test r8, r8
     isa(sym.join("jns ", classify_label));
-    isa(sym.join("cmp r8, -", to_string(io_path_linux64_enoent)));
+    cmp r8, -io_path_linux64_enoent
     isa(sym.join("je ", missing_label));
-    isa(sym.join("cmp r8, -", to_string(io_path_linux64_enotdir)));
+    cmp r8, -io_path_linux64_enotdir
     isa(sym.join("je ", missing_label));
     mov rax, r8
     io_linux64_normalize_count_result();
@@ -61,22 +61,22 @@ fn io_path_query() {
 
     label.define(classify_label);
     mov eax, r9d
-    isa(sym.join("and eax, ", to_string(io_path_linux64_mode_mask)));
-    isa(sym.join("cmp eax, ", to_string(io_path_linux64_mode_file)));
+    and eax, io_path_linux64_mode_mask
+    cmp eax, io_path_linux64_mode_file
     isa(sym.join("je ", file_label));
-    isa(sym.join("cmp eax, ", to_string(io_path_linux64_mode_directory)));
+    cmp eax, io_path_linux64_mode_directory
     isa(sym.join("je ", directory_label));
-    isa(sym.join("mov eax, ", to_string(io_path_kind_other)));
+    mov eax, io_path_kind_other
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
     label.define(file_label);
-    isa(sym.join("mov eax, ", to_string(io_path_kind_file)));
+    mov eax, io_path_kind_file
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
     label.define(directory_label);
-    isa(sym.join("mov eax, ", to_string(io_path_kind_directory)));
+    mov eax, io_path_kind_directory
     xor edx, edx
     isa(sym.join("jmp ", end_label));
 
@@ -121,24 +121,24 @@ fn io_path_make_dir() {
 
     push rsi
     mov rdi, rsi
-    isa(sym.join("mov esi, ", to_string(io_path_linux64_create_mode)));
-    isa(sym.join("mov eax, ", to_string(io_path_linux64_sys_mkdir)));
+    mov esi, io_path_linux64_create_mode
+    mov eax, io_path_linux64_sys_mkdir
     syscall
     pop rsi
 
-    isa(sym.join("cmp rax, -", to_string(io_path_linux64_eexist)));
+    cmp rax, -io_path_linux64_eexist
     isa(sym.join("je ", existed_label));
     io_linux64_normalize_count_result();
     isa(sym.join("jmp ", end_label));
 
     label.define(existed_label);
     io_path_query();
-    isa(sym.join("cmp rax, ", to_string(io_path_kind_directory)));
+    cmp rax, io_path_kind_directory
     isa(sym.join("je ", success_label));
     cmp rax, -1
     isa(sym.join("je ", end_label));
     mov rax, -1
-    isa(sym.join("mov edx, ", to_string(io_path_linux64_eexist)));
+    mov edx, io_path_linux64_eexist
     isa(sym.join("jmp ", end_label));
 
     label.define(success_label);
@@ -158,7 +158,7 @@ fn io_path_make_dir() {
 fn io_path_remove_file() {
     push rsi
     mov rdi, rsi
-    isa(sym.join("mov eax, ", to_string(io_path_linux64_sys_unlink)));
+    mov eax, io_path_linux64_sys_unlink
     syscall
     pop rsi
     io_linux64_normalize_count_result();
@@ -177,7 +177,7 @@ fn io_path_rename_replace() {
     mov r10, rdi
     mov rdi, rsi
     mov rsi, r10
-    isa(sym.join("mov eax, ", to_string(io_path_linux64_sys_rename)));
+    mov eax, io_path_linux64_sys_rename
     syscall
     pop rsi
     pop rdi

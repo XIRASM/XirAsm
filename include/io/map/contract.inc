@@ -1,6 +1,6 @@
 // 跨平台 x86-64 文件内存映射公共契约。
 //
-// 本模块把 EASM 的 FileMapOpen/FileMapCreate 生命周期清洗成显式状态块：
+// 本模块把文件映射打开/创建生命周期清洗成显式状态块：
 // 调用方提供 48 字节清零状态，IO 层只在成功后记录原生句柄和映射视图。
 // 不复制旧式隐藏文件状态，不隐藏分配，也不把普通数据映射成可执行内存。
 //
@@ -66,7 +66,7 @@ fn io_map_create_label(state_label: string, path_label: string, length: u64) {
 
     isa(sym.join("lea rdi, [rel ", state_label, "]"));
     isa(sym.join("lea rsi, [rel ", path_label, "]"));
-    isa(sym.join("mov rcx, ", to_string(length)));
+    mov rcx, length
     io_map_create();
 }
 

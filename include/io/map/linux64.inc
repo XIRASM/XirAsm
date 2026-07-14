@@ -1,7 +1,7 @@
 // Linux x86-64 文件内存映射入口。
 //
 // 本文件直接使用 Linux syscall，不依赖 libc。映射只覆盖完整文件且偏移为
-// 0；普通 IO 数据映射只使用读/写页权限，不继承 EASM 参考里的可执行页权限。
+// 0；普通 IO 数据映射只使用读/写页权限，不默认请求可执行页权限。
 // 调用方提供状态块，关闭时由状态块消费 fd 和 mmap 视图。
 
 assert(target.bits == 64, "io/map/linux64.inc currently supports x86-64 only");
@@ -33,6 +33,7 @@ const io_map_linux64_stat_size_offset: u64 = 48
 // 编译期参数：无。
 // 运行时输入：rbx = 状态块地址。
 // 返回：不设置 rax/rdx；调用方负责最终结果。
+// 错误：不返回错误；调用方负责在进入前保证 rbx 有效。
 // 所有权：仅清空记录，不关闭任何原生资源。
 // ABI：保持 rbx 和 rsp；只写状态块内 48 字节。
 fn io_map_linux64_clear_state() {
@@ -52,13 +53,13 @@ fn io_map_linux64_clear_state() {
 // ABI：保持 rdi、rsp；syscall 破坏 rcx/r11，本函数破坏易失寄存器。
 fn io_map_linux64_file_size() {
     push rdi
-    isa(sym.join("sub rsp, ", to_string(io_map_linux64_stat_size)));
+    sub rsp, io_map_linux64_stat_size
     mov rsi, rsp
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_fstat)));
+    mov eax, io_map_linux64_sys_fstat
     syscall
     mov r8, rax
-    isa(sym.join("mov r9, [rsp + ", to_string(io_map_linux64_stat_size_offset), "]"));
-    isa(sym.join("add rsp, ", to_string(io_map_linux64_stat_size)));
+    mov r9, [rsp + io_map_linux64_stat_size_offset]
+    add rsp, io_map_linux64_stat_size
     pop rdi
 
     io_linux64_normalize_count_result();
@@ -110,11 +111,11 @@ fn io_map_open_read() {
 
     xor edi, edi
     mov rsi, rax
-    isa(sym.join("mov edx, ", to_string(io_map_linux64_prot_read)));
-    isa(sym.join("mov r10d, ", to_string(io_map_linux64_map_shared)));
+    mov edx, io_map_linux64_prot_read
+    mov r10d, io_map_linux64_map_shared
     mov r8, r12
     xor r9d, r9d
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_mmap)));
+    mov eax, io_map_linux64_sys_mmap
     syscall
     io_linux64_normalize_count_result();
     cmp rax, -1
@@ -135,7 +136,7 @@ fn io_map_open_read() {
     label.define(size_failed_label);
     mov r13, rdx
     mov rdi, [rbx]
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_close)));
+    mov eax, io_map_linux64_sys_close
     syscall
     io_map_linux64_clear_state();
     mov rax, -1
@@ -145,7 +146,7 @@ fn io_map_open_read() {
     label.define(map_failed_label);
     mov r13, rdx
     mov rdi, [rbx]
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_close)));
+    mov eax, io_map_linux64_sys_close
     syscall
     io_map_linux64_clear_state();
     mov rax, -1
@@ -214,7 +215,7 @@ fn io_map_create() {
 
     mov rdi, r13
     mov rsi, r12
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_ftruncate)));
+    mov eax, io_map_linux64_sys_ftruncate
     syscall
     io_linux64_normalize_count_result();
     cmp rax, -1
@@ -222,11 +223,11 @@ fn io_map_create() {
 
     xor edi, edi
     mov rsi, r12
-    isa(sym.join("mov edx, ", to_string(io_map_linux64_prot_read | io_map_linux64_prot_write)));
-    isa(sym.join("mov r10d, ", to_string(io_map_linux64_map_shared)));
+    mov edx, io_map_linux64_prot_read | io_map_linux64_prot_write
+    mov r10d, io_map_linux64_map_shared
     mov r8, r13
     xor r9d, r9d
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_mmap)));
+    mov eax, io_map_linux64_sys_mmap
     syscall
     io_linux64_normalize_count_result();
     cmp rax, -1
@@ -241,7 +242,7 @@ fn io_map_create() {
     label.define(truncate_failed_label);
     mov r12, rdx
     mov rdi, [rbx]
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_close)));
+    mov eax, io_map_linux64_sys_close
     syscall
     io_map_linux64_clear_state();
     mov rax, -1
@@ -251,7 +252,7 @@ fn io_map_create() {
     label.define(map_failed_label);
     mov r12, rdx
     mov rdi, [rbx]
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_close)));
+    mov eax, io_map_linux64_sys_close
     syscall
     io_map_linux64_clear_state();
     mov rax, -1
@@ -303,8 +304,8 @@ fn io_map_flush() {
     test rsi, rsi
     isa(sym.join("jz ", read_label));
     mov rdi, [rdi + 16]
-    isa(sym.join("mov edx, ", to_string(io_map_linux64_ms_sync)));
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_msync)));
+    mov edx, io_map_linux64_ms_sync
+    mov eax, io_map_linux64_sys_msync
     syscall
     io_linux64_normalize_count_result();
     isa(sym.join("jmp ", end_label));
@@ -364,7 +365,7 @@ fn io_map_close() {
     isa(sym.join("jz ", skip_unmap_label));
     test rsi, rsi
     isa(sym.join("jz ", skip_unmap_label));
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_munmap)));
+    mov eax, io_map_linux64_sys_munmap
     syscall
     io_linux64_normalize_count_result();
     test rdx, rdx
@@ -376,7 +377,7 @@ fn io_map_close() {
     label.define(keep_unmap_error_label);
     label.define(skip_unmap_label);
     mov rdi, [rbx]
-    isa(sym.join("mov eax, ", to_string(io_map_linux64_sys_close)));
+    mov eax, io_map_linux64_sys_close
     syscall
     io_linux64_normalize_count_result();
     test rdx, rdx

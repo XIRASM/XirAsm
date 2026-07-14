@@ -39,6 +39,7 @@ fn io_windows64_map_imports(imports: map) -> map {
 // 编译期参数：无。
 // 运行时输入：rbx = 状态块地址。
 // 返回：不设置 rax/rdx；调用方负责最终结果。
+// 错误：不返回错误；调用方负责在进入前保证 rbx 有效。
 // 所有权：仅清空记录，不关闭任何原生资源。
 // ABI：保持 rbx 和 rsp；只写状态块内 48 字节。
 fn io_map_windows64_clear_state() {
@@ -129,7 +130,7 @@ fn io_map_open_read() {
     sub rsp, 56
     mov rcx, r12
     xor edx, edx
-    isa(sym.join("mov r8d, ", to_string(io_map_windows64_page_readonly)));
+    mov r8d, io_map_windows64_page_readonly
     xor r9d, r9d
     mov qword [rsp + 32], 0
     mov qword [rsp + 40], 0
@@ -145,7 +146,7 @@ fn io_map_open_read() {
 
     sub rsp, 72
     mov rcx, r14
-    isa(sym.join("mov edx, ", to_string(io_map_windows64_file_map_read)));
+    mov edx, io_map_windows64_file_map_read
     xor r8d, r8d
     xor r9d, r9d
     mov qword [rsp + 32], 0
@@ -255,7 +256,7 @@ fn io_map_create() {
     sub rsp, 56
     mov rcx, r13
     xor edx, edx
-    isa(sym.join("mov r8d, ", to_string(io_map_windows64_page_readwrite)));
+    mov r8d, io_map_windows64_page_readwrite
     mov r9, r12
     shr r9, 32
     mov [rsp + 32], r12d
@@ -272,7 +273,7 @@ fn io_map_create() {
 
     sub rsp, 72
     mov rcx, r14
-    isa(sym.join("mov edx, ", to_string(io_map_windows64_file_map_write)));
+    mov edx, io_map_windows64_file_map_write
     xor r8d, r8d
     xor r9d, r9d
     mov qword [rsp + 32], 0
