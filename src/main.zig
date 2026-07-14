@@ -45,7 +45,6 @@ const CliOptions = struct {
     listing_path: ?[]const u8 = null,
     progress: ProgressMode = .auto,
     timings: TimingMode = .off,
-    write_stdout: bool = false,
     show_help: bool = false,
     show_version: bool = false,
     target: xirasm.Target = xirasm.Target.default,
@@ -108,7 +107,6 @@ const CliParseIssue = union(enum) {
         value: []const u8,
     },
     misplaced_subcommand: []const u8,
-    conflicting_output_mode,
 };
 
 const ParseCliResult = union(enum) {
@@ -142,7 +140,6 @@ const TimingStage = enum {
     defer_finalizers,
     write_output,
     write_listing,
-    write_stdout,
 };
 
 const TimingRecord = struct {
@@ -292,11 +289,6 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
             index += 1;
             continue;
         }
-        if (std.mem.eql(u8, arg, "--stdout")) {
-            options.write_stdout = true;
-            index += 1;
-            continue;
-        }
         if (std.mem.eql(u8, arg, "-o")) {
             if (index + 1 >= args.len) return .{ .err = .missing_output_path };
             options.output_path = args[index + 1];
@@ -329,9 +321,6 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
         index += 1;
     }
 
-    if (options.write_stdout and options.output_path != null) {
-        return .{ .err = .conflicting_output_mode };
-    }
     return .{ .ok = .{ .assemble = options } };
 }
 
@@ -567,7 +556,6 @@ fn timingStageName(stage: TimingStage) []const u8 {
         .defer_finalizers => "defer_finalizers",
         .write_output => "write_output",
         .write_listing => "write_listing",
-        .write_stdout => "write_stdout",
     };
 }
 
@@ -611,14 +599,6 @@ fn writeTimingReport(
     }
 }
 
-fn shouldStartProgress(options: AssembleOptions) bool {
-    return switch (options.progress) {
-        .always => !options.write_stdout,
-        .never => false,
-        .auto => !options.write_stdout,
-    };
-}
-
 fn runAssembleCommand(
     arena: Allocator,
     gpa: Allocator,
@@ -645,7 +625,7 @@ fn runAssembleCommand(
         std.process.exit(2);
     };
 
-    const progress_enabled = shouldStartProgress(options);
+    const progress_enabled = options.progress != .never;
     var progress_root = if (progress_enabled)
         std.Progress.start(io, .{ .root_name = "xirasm assemble", .estimated_total_items = 3 })
     else
@@ -688,25 +668,6 @@ fn runAssembleCommand(
         try stderr.print("error: {d} unresolved fixup(s)\n", .{assembled.pending_fixups});
         try stderr.flush();
         std.process.exit(1);
-    }
-
-    if (options.write_stdout) {
-        const node = progress_root.start("write stdout", 1);
-        defer node.end();
-        const stage_start = nowNs(io);
-        try Io.File.stdout().writeStreamingAll(io, assembled.bytes);
-        timing_trace.add(.write_stdout, elapsedSince(stage_start, nowNs(io)));
-        if (options.listing_path) |listing_path| {
-            const listing_start = nowNs(io);
-            const listing_bytes = try renderListing(arena, source_path, &assembled);
-            try writeOutputFile(io, listing_path, listing_bytes);
-            timing_trace.add(.write_listing, elapsedSince(listing_start, nowNs(io)));
-        }
-        if (options.timings.enabled()) {
-            try writeTimingReport(stderr, "assemble", options.target, &assembled, &timing_trace, timing_trace.totalNs(io), options.timings);
-            try stderr.flush();
-        }
-        return;
     }
 
     const output_path = options.output_path orelse try defaultOutputPath(arena, source_path);
@@ -1692,7 +1653,6 @@ fn helpText() []const u8 {
     \\  --abi             Set init template ABI field
     \\  --progress        Force terminal progress while assembling
     \\  --no-progress     Disable terminal progress
-    \\  --stdout          Write direct-source bytes to stdout (not supported by build)
     \\
     \\Examples:
     \\  xirasm demo.xir
@@ -1783,7 +1743,6 @@ fn writeCliParseIssue(writer: *Io.Writer, issue: CliParseIssue) Io.Writer.Error!
         .invalid_target => |target| try writer.print("error: invalid target {s}\n", .{target}),
         .invalid_init_value => |item| try writer.print("error: invalid init value for {s}: {s}\n", .{ item.key, item.value }),
         .misplaced_subcommand => |subcommand| try writer.print("error: {s} subcommand must appear before its options; use `xirasm {s} [options]`\n", .{ subcommand, subcommand }),
-        .conflicting_output_mode => try writer.writeAll("error: --stdout cannot be combined with -o\n"),
     }
 }
 
@@ -1803,17 +1762,6 @@ test "parseCliArgs accepts assemble progress target output and timings" {
                 try std.testing.expectEqual(xirasm.Isa.riscv64, options.target.isa());
                 try std.testing.expectEqual(@as(u16, 64), options.target.bits().?);
             },
-            else => return error.WrongCommand,
-        },
-        .err => return error.ParseFailed,
-    }
-}
-
-test "parseCliArgs accepts stdout for direct source assembly" {
-    const result = parseCliArgs(&.{ "xirasm", "demo.xir", "--stdout" });
-    switch (result) {
-        .ok => |command| switch (command) {
-            .assemble => |options| try std.testing.expect(options.write_stdout),
             else => return error.WrongCommand,
         },
         .err => return error.ParseFailed,

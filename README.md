@@ -107,8 +107,7 @@ Each generated project contains `xirasm.toml`; run `xirasm build` inside that
 project to assemble its configured source and output.
 
 CLI subcommands come before their options. For example, use
-`xirasm build --timings`, not `xirasm --timings build`. The `--stdout` option
-belongs to direct-source assembly and is not supported by `build`.
+`xirasm build --timings`, not `xirasm --timings build`.
 
 ## Supported Targets
 
@@ -161,7 +160,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.11**
+Current version: **0.2.12**
 
 XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
 and editor integration are usable now, while public contracts may still be

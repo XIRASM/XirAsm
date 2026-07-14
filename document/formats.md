@@ -287,8 +287,7 @@ explicitly. This guide remains focused on complete workflows.
 The CLI can generate starter projects that already use the ordinary facade.
 The subcommand comes first, followed by its source override and options:
 `xirasm build [source.xir] [options]`. For example, write
-`xirasm build --timings`, not `xirasm --timings build`. The direct-source
-`--stdout` option is not supported by `build`.
+`xirasm build --timings`, not `xirasm --timings build`.
 
 Create a PE64 project:
 

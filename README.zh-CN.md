@@ -101,8 +101,7 @@ xirasm init hello-linux --isa x86-64 --os linux --abi sysv
 源码和输出路径完成汇编。
 
 CLI 子命令必须写在其选项之前。例如应写 `xirasm build --timings`，不要写成
-`xirasm --timings build`。`--stdout` 只用于直接汇编源码，不支持与 `build` 一起
-使用。
+`xirasm --timings build`。
 
 ## 支持的目标
 
@@ -154,7 +153,7 @@ CLI 也可以直接创建可构建的 Windows 与 Linux 起始项目。PE、COFF
 
 ## 状态
 
-当前版本：**0.2.11**
+当前版本：**0.2.12**
 
 XIRASM 仍处于 1.0 之前：汇编器、语言 API、格式库、CLI 与编辑器集成已经可以实际
 使用，但公开契约在 1.0 前仍可能继续收敛。仓库质量门覆盖文档化 API、成功与失败
