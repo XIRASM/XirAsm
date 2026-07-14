@@ -25,7 +25,6 @@ pub const StageObserver = struct {
 
 pub const FlatResult = struct {
     layout: frontend.ModuleLayout,
-    default_section_layout_index: usize,
     bytes: []u8,
     encoded_count: usize,
     pending_fixups: usize,
@@ -64,7 +63,6 @@ pub fn assembleFlat(
     };
     errdefer module_layout.deinit(allocator);
 
-    const default_section_layout_index = moduleLayoutIndex(&module_layout, module.default_section) orelse return error.InvalidSection;
     var writer_result = materialize: {
         stageBegin(observer, .materialize);
         defer stageEnd(observer, .materialize);
@@ -90,7 +88,6 @@ pub fn assembleFlat(
 
     return .{
         .layout = module_layout,
-        .default_section_layout_index = default_section_layout_index,
         .bytes = output_bytes,
         .encoded_count = encode_result.encoded_count,
         .pending_fixups = fixup_result.pending_count,
@@ -103,13 +100,6 @@ fn stageBegin(observer: ?StageObserver, stage: Stage) void {
 
 fn stageEnd(observer: ?StageObserver, stage: Stage) void {
     if (observer) |active| active.end(active.context, stage);
-}
-
-fn moduleLayoutIndex(module_layout: *const frontend.ModuleLayout, section_id: frontend.section.SectionId) ?usize {
-    for (module_layout.sections, 0..) |section_layout, index| {
-        if (section_layout.section.index == section_id.index) return index;
-    }
-    return null;
 }
 
 fn runDeferredFinalizers(

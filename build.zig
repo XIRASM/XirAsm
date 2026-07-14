@@ -4092,6 +4092,27 @@ pub fn build(b: *std.Build) void {
             "emit.u16(0x55cc);",
         },
     );
+    addListingFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        text_contains_checker,
+        "tests/listing/multi_section.asm",
+        "listing-multi-section.bin",
+        "listing-multi-section.lst",
+        "x64",
+        "aa00000031c0c300000000000000000011223344",
+        &.{
+            "Output size: 20 bytes",
+            "0000000000401000 00000004 31 c0",
+            "xor eax, eax",
+            "0000000000401002 00000006 c3",
+            "ret",
+            "0000000000402000 00000010 11 22 33 44",
+            "dd(0x44332211);",
+        },
+    );
     addAsmFixture(
         b,
         fixture_step,

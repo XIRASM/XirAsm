@@ -25,7 +25,7 @@ pub const RenderOptions = struct {
 pub fn renderFlat(
     allocator: Allocator,
     module: *const module_mod.Module,
-    section_layout: *const layout_mod.SectionLayout,
+    module_layout: *const layout_mod.ModuleLayout,
     options: RenderOptions,
 ) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
@@ -38,9 +38,14 @@ pub fn renderFlat(
     try appendFmt(&out, allocator, " Line Address          FileOff  Bytes                    Source\n", .{});
     try appendFmt(&out, allocator, " ---- ---------------- -------- ------------------------ ----------------\n", .{});
 
-    for (section_layout.fragments) |entry| {
-        const stored_fragment = try fragmentAt(module, entry.fragment);
-        try appendFragmentRows(&out, allocator, module, section_layout, entry, stored_fragment, options.output_bytes);
+    for (module_layout.sections) |section_layout| {
+        const stored_section = try module.sections.get(section_layout.section);
+        if (stored_section.kind == .virtual_output) continue;
+
+        for (section_layout.fragments) |entry| {
+            const stored_fragment = try fragmentAt(module, entry.fragment);
+            try appendFragmentRows(&out, allocator, module, section_layout, entry, stored_fragment, options.output_bytes);
+        }
     }
 
     return out.toOwnedSlice(allocator);
@@ -50,7 +55,7 @@ fn appendFragmentRows(
     out: *std.ArrayList(u8),
     allocator: Allocator,
     module: *const module_mod.Module,
-    section_layout: *const layout_mod.SectionLayout,
+    section_layout: layout_mod.SectionLayout,
     entry: layout_mod.FragmentLayout,
     stored_fragment: fragment_mod.Fragment,
     output_bytes: []const u8,
@@ -60,6 +65,7 @@ fn appendFragmentRows(
     const location = try module.sources.location(span);
     const line = locationLine(location);
     const address = std.math.add(u64, section_layout.origin, entry.offset) catch return error.OffsetOverflow;
+    const file_offset = std.math.add(u64, section_layout.file_offset, entry.offset) catch return error.OffsetOverflow;
 
     if (entry.file_size == 0) {
         try appendListingRow(out, allocator, .{
@@ -72,8 +78,8 @@ fn appendFragmentRows(
         return;
     }
 
-    const bytes = try outputBytesForFragment(output_bytes, entry);
-    try appendByteRows(out, allocator, line, address, entry.offset, bytes, source_text);
+    const bytes = try outputBytesForFragment(output_bytes, file_offset, entry.file_size);
+    try appendByteRows(out, allocator, line, address, file_offset, bytes, source_text);
 }
 
 fn appendByteRows(
@@ -142,9 +148,9 @@ fn fragmentAt(module: *const module_mod.Module, id: fragment_mod.FragmentId) !fr
     return module.fragments.items.items[id.index];
 }
 
-fn outputBytesForFragment(output_bytes: []const u8, entry: layout_mod.FragmentLayout) ![]const u8 {
-    const start = try fileSizeToUsize(entry.offset);
-    const size = try fileSizeToUsize(entry.file_size);
+fn outputBytesForFragment(output_bytes: []const u8, file_offset: u64, file_size: u64) ![]const u8 {
+    const start = try fileSizeToUsize(file_offset);
+    const size = try fileSizeToUsize(file_size);
     const end = std.math.add(usize, start, size) catch return error.OffsetOverflow;
     if (end > output_bytes.len) return error.InvalidFragment;
     return output_bytes[start..end];
@@ -258,8 +264,7 @@ test "listing renders source rows and bytes" {
 
     var module_layout = try layout_mod.layoutModule(std.testing.allocator, &module);
     defer module_layout.deinit(std.testing.allocator);
-    const text_layout = module_layout.sectionLayout(module.default_section) orelse return error.InvalidSection;
-    const listing = try renderFlat(std.testing.allocator, &module, text_layout, .{
+    const listing = try renderFlat(std.testing.allocator, &module, &module_layout, .{
         .source_path = "demo.asm",
         .output_bytes = &.{ 0xeb, 0x55, 0xaa },
     });
@@ -286,8 +291,7 @@ test "listing renders finalized byte image instead of original fragments" {
 
     var module_layout = try layout_mod.layoutModule(std.testing.allocator, &module);
     defer module_layout.deinit(std.testing.allocator);
-    const text_layout = module_layout.sectionLayout(module.default_section) orelse return error.InvalidSection;
-    const listing = try renderFlat(std.testing.allocator, &module, text_layout, .{
+    const listing = try renderFlat(std.testing.allocator, &module, &module_layout, .{
         .source_path = "patched.asm",
         .output_bytes = &.{ 0x78, 0x56, 0x34, 0x12 },
     });
@@ -295,4 +299,59 @@ test "listing renders finalized byte image instead of original fragments" {
 
     try std.testing.expect(std.mem.indexOf(u8, listing, "0000000000004000 00000000 78 56 34 12") != null);
     try std.testing.expect(std.mem.indexOf(u8, listing, "00 00 00 00") == null);
+}
+
+test "listing renders ISA fragments from output sections at absolute file offsets" {
+    var module = try module_mod.Module.init(std.testing.allocator, .default);
+    defer module.deinit();
+
+    const source_text =
+        \\emit.u8(0xaa);
+        \\xor eax, eax
+        \\emit.u32(0x44332211);
+        \\emit.u8(0xff);
+        \\
+    ;
+    const source_id = try module.addSource("multi-section.asm", source_text);
+    const header_span = try testSpan(source_id, source_text, "emit.u8(0xaa);");
+    const instruction_span = try testSpan(source_id, source_text, "xor eax, eax");
+    const data_span = try testSpan(source_id, source_text, "emit.u32(0x44332211);");
+    const virtual_span = try testSpan(source_id, source_text, "emit.u8(0xff);");
+
+    _ = try module.emitBytes(module.default_section, &.{0xaa}, header_span);
+
+    const text_section = try module.createOutputSection(".text", 0x401000, 4);
+    const instruction_id = try module.appendIsaInstruction(text_section, module.target, "xor eax, eax", instruction_span);
+    try module.fragments.updateIsaInstructionFacts(std.testing.allocator, instruction_id, &.{ 0x31, 0xc0 }, 2, 2, 2, false);
+
+    const data_section = try module.createOutputSection(".data", 0x402000, 0x10);
+    _ = try module.emitBytes(data_section, &.{ 0x11, 0x22, 0x33, 0x44 }, data_span);
+
+    const virtual_section = try module.createVirtualSection(0x500000);
+    _ = try module.emitBytes(virtual_section, &.{0xff}, virtual_span);
+
+    var module_layout = try layout_mod.layoutModule(std.testing.allocator, &module);
+    defer module_layout.deinit(std.testing.allocator);
+    const listing = try renderFlat(std.testing.allocator, &module, &module_layout, .{
+        .source_path = "multi-section.asm",
+        .output_bytes = &.{ 0xaa, 0, 0, 0, 0x31, 0xc0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x11, 0x22, 0x33, 0x44 },
+    });
+    defer std.testing.allocator.free(listing);
+
+    try std.testing.expect(std.mem.indexOf(u8, listing, "0000000000401000 00000004 31 c0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, listing, "xor eax, eax") != null);
+    try std.testing.expect(std.mem.indexOf(u8, listing, "0000000000402000 00000010 11 22 33 44") != null);
+    try std.testing.expect(std.mem.indexOf(u8, listing, "emit.u32(0x44332211);") != null);
+    try std.testing.expect(std.mem.indexOf(u8, listing, "emit.u8(0xff);") == null);
+}
+
+fn testSpan(source_id: source_mod.SourceId, source_text: []const u8, needle: []const u8) !source_mod.SourceSpan {
+    const start = std.mem.indexOf(u8, source_text, needle) orelse return error.MissingTestSource;
+    const end = std.math.add(usize, start, needle.len) catch return error.OffsetOverflow;
+    if (end > std.math.maxInt(u32)) return error.OffsetOverflow;
+    return .{
+        .source = source_id,
+        .start = @intCast(start),
+        .end = @intCast(end),
+    };
 }

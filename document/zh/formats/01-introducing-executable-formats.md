@@ -189,6 +189,11 @@ format_segment_end(plan, name)
 
 命令行工具可以生成已经使用常用格式接口的初始项目。
 
+构建子命令必须写在源码覆盖参数和其他选项之前，完整形式为
+`xirasm build [source.xir] [options]`。例如应写 `xirasm build --timings`，不要写成
+`xirasm --timings build`。直接汇编源码时可用的 `--stdout` 不支持与 `build` 一起
+使用。
+
 创建 PE64 项目：
 
 ```powershell

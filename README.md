@@ -106,6 +106,10 @@ xirasm init hello-linux --isa x86-64 --os linux --abi sysv
 Each generated project contains `xirasm.toml`; run `xirasm build` inside that
 project to assemble its configured source and output.
 
+CLI subcommands come before their options. For example, use
+`xirasm build --timings`, not `xirasm --timings build`. The `--stdout` option
+belongs to direct-source assembly and is not supported by `build`.
+
 ## Supported Targets
 
 | CLI target | Instruction set |
@@ -157,7 +161,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.10**
+Current version: **0.2.11**
 
 XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
 and editor integration are usable now, while public contracts may still be

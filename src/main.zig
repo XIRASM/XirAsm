@@ -107,6 +107,7 @@ const CliParseIssue = union(enum) {
         key: []const u8,
         value: []const u8,
     },
+    misplaced_subcommand: []const u8,
     conflicting_output_mode,
 };
 
@@ -118,7 +119,6 @@ const ParseCliResult = union(enum) {
 const AssembledFlat = struct {
     module: xirasm.Module,
     layout: xirasm.ModuleLayout,
-    default_section_layout_index: usize,
     bytes: []u8,
     encoded_count: usize,
     pending_fixups: usize,
@@ -128,10 +128,6 @@ const AssembledFlat = struct {
         self.layout.deinit(allocator);
         self.module.deinit();
         self.* = undefined;
-    }
-
-    fn defaultSectionLayout(self: *const AssembledFlat) *const xirasm.SectionLayout {
-        return &self.layout.sections[self.default_section_layout_index];
     }
 };
 
@@ -193,7 +189,6 @@ fn finishAssembledFlat(module: *xirasm.Module, core: AssembledFlatCore, module_o
     return .{
         .module = module.*,
         .layout = core.layout,
-        .default_section_layout_index = core.default_section_layout_index,
         .bytes = core.bytes,
         .encoded_count = core.encoded_count,
         .pending_fixups = core.pending_fixups,
@@ -320,6 +315,9 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
             options.target = parseTarget(args[index + 1]) orelse return .{ .err = .{ .invalid_target = args[index + 1] } };
             index += 2;
             continue;
+        }
+        if (std.mem.eql(u8, arg, "build")) {
+            return .{ .err = .{ .misplaced_subcommand = arg } };
         }
         if (std.mem.startsWith(u8, arg, "-")) {
             return .{ .err = .{ .unknown_option = arg } };
@@ -1252,7 +1250,7 @@ fn timingStageForAssembly(stage: xirasm.assembly.Stage) TimingStage {
 }
 
 fn renderListing(allocator: Allocator, source_path: []const u8, assembled: *const AssembledFlat) ![]u8 {
-    return xirasm.renderFlatListing(allocator, &assembled.module, assembled.defaultSectionLayout(), .{
+    return xirasm.renderFlatListing(allocator, &assembled.module, &assembled.layout, .{
         .source_path = source_path,
         .output_bytes = assembled.bytes,
     });
@@ -1694,7 +1692,7 @@ fn helpText() []const u8 {
     \\  --abi             Set init template ABI field
     \\  --progress        Force terminal progress while assembling
     \\  --no-progress     Disable terminal progress
-    \\  --stdout          Write assembled bytes to stdout
+    \\  --stdout          Write direct-source bytes to stdout (not supported by build)
     \\
     \\Examples:
     \\  xirasm demo.xir
@@ -1708,6 +1706,7 @@ fn helpText() []const u8 {
     \\  xirasm help targets
     \\
     \\Notes:
+    \\  - Subcommands come first: use `xirasm build --timings`, not `xirasm --timings build`
     \\  - build uses the source and output path from xirasm.toml
     \\  - x86 Windows/Linux init templates use import("format/format.inc")
     \\  - bin, none, and RISC-V init templates remain flat binary starters
@@ -1783,6 +1782,7 @@ fn writeCliParseIssue(writer: *Io.Writer, issue: CliParseIssue) Io.Writer.Error!
         .unknown_help_topic => |topic| try writer.print("error: unknown help topic {s}\n", .{topic}),
         .invalid_target => |target| try writer.print("error: invalid target {s}\n", .{target}),
         .invalid_init_value => |item| try writer.print("error: invalid init value for {s}: {s}\n", .{ item.key, item.value }),
+        .misplaced_subcommand => |subcommand| try writer.print("error: {s} subcommand must appear before its options; use `xirasm {s} [options]`\n", .{ subcommand, subcommand }),
         .conflicting_output_mode => try writer.writeAll("error: --stdout cannot be combined with -o\n"),
     }
 }
@@ -1803,6 +1803,17 @@ test "parseCliArgs accepts assemble progress target output and timings" {
                 try std.testing.expectEqual(xirasm.Isa.riscv64, options.target.isa());
                 try std.testing.expectEqual(@as(u16, 64), options.target.bits().?);
             },
+            else => return error.WrongCommand,
+        },
+        .err => return error.ParseFailed,
+    }
+}
+
+test "parseCliArgs accepts stdout for direct source assembly" {
+    const result = parseCliArgs(&.{ "xirasm", "demo.xir", "--stdout" });
+    switch (result) {
+        .ok => |command| switch (command) {
+            .assemble => |options| try std.testing.expect(options.write_stdout),
             else => return error.WrongCommand,
         },
         .err => return error.ParseFailed,
@@ -1833,6 +1844,17 @@ test "parseCliArgs accepts build timing summary" {
             else => return error.WrongCommand,
         },
         .err => return error.ParseFailed,
+    }
+}
+
+test "parseCliArgs rejects options before build subcommand" {
+    const result = parseCliArgs(&.{ "xirasm", "--timings", "build" });
+    switch (result) {
+        .ok => return error.ExpectedParseFailure,
+        .err => |issue| switch (issue) {
+            .misplaced_subcommand => |subcommand| try std.testing.expectEqualStrings("build", subcommand),
+            else => return error.WrongParseIssue,
+        },
     }
 }
 

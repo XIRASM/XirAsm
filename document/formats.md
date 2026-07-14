@@ -18,9 +18,9 @@ Advanced format-specific helpers are intentionally outside this ordinary
 guide and will be documented separately.
 
 Read the [Language Guide](language.md) first when you need the general rules for
-values, functions, labels, data emission, output regions, or finalizers. Read
-the [CLI Guide](cli.md) when you want XIRASM to generate a buildable starter
-project.
+values, functions, labels, data emission, output regions, or finalizers. The
+[README quick start](../README.md#quick-start) shows how to generate and build
+a starter project from the CLI.
 
 ## Guide Map
 
@@ -285,6 +285,10 @@ explicitly. This guide remains focused on complete workflows.
 ### Starting from the CLI
 
 The CLI can generate starter projects that already use the ordinary facade.
+The subcommand comes first, followed by its source override and options:
+`xirasm build [source.xir] [options]`. For example, write
+`xirasm build --timings`, not `xirasm --timings build`. The direct-source
+`--stdout` option is not supported by `build`.
 
 Create a PE64 project:
 
