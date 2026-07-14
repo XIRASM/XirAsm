@@ -329,6 +329,34 @@ sub rsp, sizeof(SaveArea)
 
 使用符号化的布局计算，可以避免新增字段或更改类型后，源代码其他位置仍残留过期的硬编码大小。
 
+## 在 x86-64 栈上使用结构体布局
+
+复合类型是汇编期的布局描述。x86 没有可以把整个结构体值一次性压栈的指令。正确做法是先在栈上分配记录空间，再把 `offset_of` 直接用于普通内存操作数：
+
+```asm
+x86.use64();
+
+struct StackFrame {
+    tag: u8,
+    value: u32,
+    tail: u16,
+}
+
+assert(sizeof(StackFrame) == 12);
+assert(offset_of(StackFrame, value) == 4);
+assert(offset_of(StackFrame, tail) == 8);
+
+sub rsp, sizeof(StackFrame)
+mov dword [rsp + offset_of(StackFrame, value)], 0x44332211
+mov eax, [rsp + offset_of(StackFrame, value)]
+mov word [rsp + offset_of(StackFrame, tail)], 0x6655
+add rsp, sizeof(StackFrame)
+```
+
+紧凑布局与嵌套布局使用相同写法。嵌套字段可以直接写成 `[rsp + offset_of(NestedFrame, point.y)]`。如果这段代码还要调用 Windows x64 函数，必须另外满足 ABI 的栈对齐与 shadow space（影子空间）要求；`sizeof(StackFrame)` 只描述结构体记录本身。
+
+完整的编码测试与可运行 PE64 测试位于 `tests/format/pe64_stack_struct_member_access/`。
+
 ## 打包并写出结构体值
 
 `pack(value)` 会把复合值转换为 `bytes` 值：

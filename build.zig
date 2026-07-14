@@ -2167,6 +2167,16 @@ pub fn build(b: *std.Build) void {
         "project-include-search.bin",
         "07c3",
     );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/format/pe64_stack_struct_member_access/stack_member_offsets.asm",
+        "format-pe64-stack-struct-member-access.bin",
+        "x64",
+        "4883ec0cc7442404112233448b44240466c744240855664883c40c4883ec07c7442401556677888b44240166c744240599aa4883c4074883ec08c7442403aabbccdd8b4424034883c408",
+    );
     addAsmSizeFixtureWithInputs(
         b,
         fixture_step,
@@ -2255,6 +2265,17 @@ pub fn build(b: *std.Build) void {
         "x64",
         "1536",
         &.{ "include/format/pe_import.inc", "include/format/pe.inc", "include/format/pe_const.inc" },
+    );
+    addAsmSizeFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/format/pe64_stack_struct_member_access/runtime_pe64.asm",
+        "format-pe64-stack-struct-member-runtime.exe",
+        "x64",
+        "1536",
+        &.{ "include/format/pe64.inc", "include/format/pe_import.inc", "include/format/pe.inc", "include/format/pe_const.inc" },
     );
     addAsmSizeFixtureWithInputs(
         b,

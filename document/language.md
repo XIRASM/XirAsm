@@ -183,7 +183,8 @@ This distinction is fundamental:
 The following rules are enough to read the examples in the first part of this
 guide:
 
-- `//` starts a line comment.
+- `//` starts a line comment. It may appear after ISA text; quoted ISA operands
+  may contain `//` as ordinary text.
 - A label ends with `:`.
 - ISA instruction lines do not end with semicolons.
 - Function and API calls end with `;`.
@@ -2655,6 +2656,40 @@ sub rsp, sizeof(SaveArea)
 Keeping layout calculations symbolic prevents a field addition or type change
 from leaving stale hardcoded sizes elsewhere in the source.
 
+### Using Aggregate Layouts on the x86-64 Stack
+
+An aggregate type is an assembly-time layout description. x86 does not provide
+an instruction that pushes a complete struct value. Allocate the record on the
+stack, then use `offset_of` in ordinary memory operands:
+
+```asm
+x86.use64();
+
+struct StackFrame {
+    tag: u8,
+    value: u32,
+    tail: u16,
+}
+
+assert(sizeof(StackFrame) == 12);
+assert(offset_of(StackFrame, value) == 4);
+assert(offset_of(StackFrame, tail) == 8);
+
+sub rsp, sizeof(StackFrame)
+mov dword [rsp + offset_of(StackFrame, value)], 0x44332211
+mov eax, [rsp + offset_of(StackFrame, value)]
+mov word [rsp + offset_of(StackFrame, tail)], 0x6655
+add rsp, sizeof(StackFrame)
+```
+
+The same form works with packed and nested layouts. A nested field can be used
+directly, for example `[rsp + offset_of(NestedFrame, point.y)]`. When this code
+calls a Windows x64 function, satisfy the ABI's stack-alignment and shadow-space
+requirements separately; `sizeof(StackFrame)` describes only the record.
+
+The complete encoding and runnable PE64 fixtures are in
+`tests/format/pe64_stack_struct_member_access/`.
+
 ### Packing and Emitting Struct Values
 
 `pack(value)` converts an aggregate value to a `bytes` value:
@@ -2806,6 +2841,12 @@ XIRASM provides two separate file-loading models:
 Keeping these roles separate makes a project easier to reason about. Source
 files contribute declarations or output operations. Data files produce values
 that the source can inspect, transform, and emit.
+
+> **Current I/O status:** `include/io/` is still under development. It is not a
+> supported standard-library surface and must not be imported or used by user
+> programs yet. The compile-time `fs.*` APIs described in this chapter remain
+> supported for reading assembly inputs. Runtime I/O currently requires
+> user-owned ISA/ABI routines until `include/io/` is declared stable.
 
 ### Importing a Source Module
 

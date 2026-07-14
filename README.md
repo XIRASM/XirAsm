@@ -157,7 +157,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.8**
+Current version: **0.2.9**
 
 XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
 and editor integration are usable now, while public contracts may still be

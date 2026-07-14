@@ -250,15 +250,24 @@ fn appendOwnedText(
     comptime kind: lexer.TokenKind,
     token: lexer.Token,
 ) ParseError!void {
-    const owned_text = try allocator.dupe(u8, token.text);
+    const statement_text = if (kind == .isa_line) lexer.isaTextBeforeComment(token.text) else token.text;
+    const owned_text = try allocator.dupe(u8, statement_text);
     errdefer allocator.free(owned_text);
+
+    var statement_span = token.span;
+    if (kind == .isa_line) {
+        const removed_bytes = token.text.len - statement_text.len;
+        if (removed_bytes > std.math.maxInt(u32)) return error.SourceTooLarge;
+        statement_span.end = std.math.sub(u32, statement_span.end, @intCast(removed_bytes)) catch
+            return error.SourceTooLarge;
+    }
 
     switch (kind) {
         .isa_line => {
             try statements.append(allocator, .{
                 .isa_instruction = .{
                     .text = owned_text,
-                    .span = token.span,
+                    .span = statement_span,
                 },
             });
         },
@@ -1502,7 +1511,7 @@ pub fn parseStructLiteralText(allocator: Allocator, text: []const u8) ParseError
 test "parser keeps labels ISA statements and Meta statements separate" {
     var statements = try parseSource(std.testing.allocator,
         \\loop:
-        \\    mov rax, 0
+        \\    mov rax, 0 // ISA comment
         \\origin(0x7c00);
         \\emit.u16(0xaa55);
         \\packed struct DosHeader {

@@ -156,6 +156,37 @@ fn isCommentLine(trimmed: []const u8) bool {
         std.mem.startsWith(u8, trimmed, "#");
 }
 
+pub fn isaTextBeforeComment(line: []const u8) []const u8 {
+    var quote: ?u8 = null;
+    var index: usize = 0;
+    while (index < line.len) : (index += 1) {
+        const byte = line[index];
+        if (quote) |delimiter| {
+            if (byte == '\\' and index + 1 < line.len) {
+                index += 1;
+                continue;
+            }
+            if (byte == delimiter) {
+                if (index + 1 < line.len and line[index + 1] == delimiter) {
+                    index += 1;
+                } else {
+                    quote = null;
+                }
+            }
+            continue;
+        }
+
+        switch (byte) {
+            '"', '\'' => quote = byte,
+            '/' => if (index + 1 < line.len and line[index + 1] == '/') {
+                return std.mem.trimEnd(u8, line[0..index], " \t");
+            },
+            else => {},
+        }
+    }
+    return line;
+}
+
 fn isStandaloneLabel(trimmed: []const u8) bool {
     if (trimmed.len < 2) return false;
     if (trimmed[trimmed.len - 1] != ':') return false;
@@ -375,4 +406,19 @@ test "lexer handles crlf line endings" {
     try std.testing.expectEqual(TokenKind.isa_line, ret.kind);
     try std.testing.expectEqualStrings("ret", ret.text);
     try std.testing.expect(lexer.done());
+}
+
+test "ISA comment scanner ignores quoted text" {
+    try std.testing.expectEqualStrings(
+        "mov rax, rbx",
+        isaTextBeforeComment("mov rax, rbx // copy the value"),
+    );
+    try std.testing.expectEqualStrings(
+        "OpName %1 \"https://xirasm.dev\"",
+        isaTextBeforeComment("OpName %1 \"https://xirasm.dev\" // keep the URL operand"),
+    );
+    try std.testing.expectEqualStrings(
+        "OpName %1 \"quoted \\\"//\\\" text\"",
+        isaTextBeforeComment("OpName %1 \"quoted \\\"//\\\" text\" // trailing comment"),
+    );
 }
