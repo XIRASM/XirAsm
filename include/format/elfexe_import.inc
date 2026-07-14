@@ -1,7 +1,7 @@
 // ELF64 executable dynamic import helpers for XIRASM.
 //
 // This is the executable counterpart to elfso_import.inc. It keeps the same
-// explicit immutable import-list model, but emits ET_EXEC-friendly dynamic
+// explicit value-style import-list model, but emits ET_EXEC-friendly dynamic
 // records: PT_INTERP, PT_DYNAMIC, .dynsym, .dynstr, .hash, .rela.dyn, and
 // writable import slots. Each slot is fixed by an R_X86_64_64 dynamic
 // relocation, so user code can call through the slot without hardcoding the
@@ -66,8 +66,9 @@ fn elfexe_import_use64_as(imports: list, library: string, name: string, slot: st
         }
     }
 
-    const next: map = elfexe_import_entry(library, name, slot);
-    return list.push(imports, next);
+    let next_imports: list = imports
+    list.push_mut(next_imports, elfexe_import_entry(library, name, slot));
+    return next_imports;
 }
 
 fn elfexe_import_use64_plt(imports: list, library: string, name: string) -> list {
@@ -76,18 +77,28 @@ fn elfexe_import_use64_plt(imports: list, library: string, name: string) -> list
 
 fn elfexe_import_use64_plt_as(imports: list, library: string, name: string, slot: string, plt: string) -> list {
     assert(len(plt) > 0, "ELF executable import PLT label is empty");
-    const next_imports: list = elfexe_import_use64_as(imports, library, name, slot);
-    const last_index: u64 = len(next_imports) - 1;
-    const entry: map = list.get(next_imports, last_index);
-    const with_plt: map = map.set(entry, "plt", plt);
-    return list.set(next_imports, last_index, with_plt);
+    let next_imports: list = elfexe_import_use64_as(imports, library, name, slot)
+    for i in range(0, len(next_imports)) {
+        const entry: map = list.get(next_imports, i)
+        if map.get(entry, "slot") != slot {
+            continue;
+        }
+
+        let with_plt: map = entry
+        map.set_mut(with_plt, "plt", plt);
+        list.set_mut(next_imports, i, with_plt);
+        return next_imports;
+    }
+    assert(false, "ELF executable import slot was not recorded");
+    return next_imports;
 }
 
 fn elfexe_import_entry(library: string, name: string, slot: string) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "library", library);
-    const entry2: map = map.set(entry1, "name", name);
-    return map.set(entry2, "slot", slot);
+    let entry: map = map.new()
+    map.set_mut(entry, "library", library);
+    map.set_mut(entry, "name", name);
+    map.set_mut(entry, "slot", slot);
+    return entry;
 }
 
 fn elfexe_import_r_info64(symbol_index: u64, reloc_type: u64) -> u64 {
@@ -299,20 +310,15 @@ fn elfexe_import_name_offset_from(imports: list, target_index: u64, index: u64, 
 }
 
 fn elfexe_import_libraries(imports: list) -> list {
-    const libraries: list = list.new();
-    return elfexe_import_libraries_from(imports, 0, libraries);
-}
-
-fn elfexe_import_libraries_from(imports: list, index: u64, libraries: list) -> list {
-    if (index == len(imports)) {
-        return libraries;
+    let libraries: list = list.new()
+    for entry in imports {
+        const library: string = map.get(entry, "library");
+        if (elfexe_import_list_has(libraries, library)) {
+            continue;
+        }
+        list.push_mut(libraries, library);
     }
-    const entry: map = list.get(imports, index);
-    const library: string = map.get(entry, "library");
-    if (elfexe_import_list_has(libraries, library)) {
-        return elfexe_import_libraries_from(imports, index + 1, libraries);
-    }
-    return elfexe_import_libraries_from(imports, index + 1, list.push(libraries, library));
+    return libraries;
 }
 
 fn elfexe_import_list_has(values: list, needle: string) -> bool {

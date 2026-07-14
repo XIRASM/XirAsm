@@ -1,6 +1,6 @@
 // ELF64 shared-object import helpers for XIRASM.
 //
-// This layer deliberately models imports as an explicit immutable Meta value.
+// This layer deliberately models imports through explicit value-style Meta APIs.
 // Including a large catalog should only define helper wrappers and metadata;
 // nothing is emitted until elfso_import_* emitters are called with the final
 // import set. The current usable model emits writable import slots plus
@@ -50,8 +50,9 @@ fn elfso_import_use64_as(imports: list, library: string, name: string, slot: str
         }
     }
 
-    const next: map = elfso_import_entry(library, name, slot);
-    return list.push(imports, next);
+    let next_imports: list = imports
+    list.push_mut(next_imports, elfso_import_entry(library, name, slot));
+    return next_imports;
 }
 
 fn elfso_import_use64_plt(imports: list, library: string, name: string) -> list {
@@ -60,18 +61,28 @@ fn elfso_import_use64_plt(imports: list, library: string, name: string) -> list 
 
 fn elfso_import_use64_plt_as(imports: list, library: string, name: string, slot: string, plt: string) -> list {
     assert(len(plt) > 0, "ELF SO import PLT label is empty");
-    const next_imports: list = elfso_import_use64_as(imports, library, name, slot);
-    const last_index: u64 = len(next_imports) - 1;
-    const entry: map = list.get(next_imports, last_index);
-    const with_plt: map = map.set(entry, "plt", plt);
-    return list.set(next_imports, last_index, with_plt);
+    let next_imports: list = elfso_import_use64_as(imports, library, name, slot)
+    for i in range(0, len(next_imports)) {
+        const entry: map = list.get(next_imports, i)
+        if map.get(entry, "slot") != slot {
+            continue;
+        }
+
+        let with_plt: map = entry
+        map.set_mut(with_plt, "plt", plt);
+        list.set_mut(next_imports, i, with_plt);
+        return next_imports;
+    }
+    assert(false, "ELF SO import slot was not recorded");
+    return next_imports;
 }
 
 fn elfso_import_entry(library: string, name: string, slot: string) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "library", library);
-    const entry2: map = map.set(entry1, "name", name);
-    return map.set(entry2, "slot", slot);
+    let entry: map = map.new()
+    map.set_mut(entry, "library", library);
+    map.set_mut(entry, "name", name);
+    map.set_mut(entry, "slot", slot);
+    return entry;
 }
 
 fn elfso_import_r_info64(symbol_index: u64, reloc_type: u64) -> u64 {
@@ -271,20 +282,15 @@ fn elfso_import_name_offset_from(imports: list, target_index: u64, index: u64, o
 }
 
 fn elfso_import_libraries(imports: list) -> list {
-    const libraries: list = list.new();
-    return elfso_import_libraries_from(imports, 0, libraries);
-}
-
-fn elfso_import_libraries_from(imports: list, index: u64, libraries: list) -> list {
-    if (index == len(imports)) {
-        return libraries;
+    let libraries: list = list.new()
+    for entry in imports {
+        const library: string = map.get(entry, "library");
+        if (elfso_import_list_has(libraries, library)) {
+            continue;
+        }
+        list.push_mut(libraries, library);
     }
-    const entry: map = list.get(imports, index);
-    const library: string = map.get(entry, "library");
-    if (elfso_import_list_has(libraries, library)) {
-        return elfso_import_libraries_from(imports, index + 1, libraries);
-    }
-    return elfso_import_libraries_from(imports, index + 1, list.push(libraries, library));
+    return libraries;
 }
 
 fn elfso_import_list_has(values: list, needle: string) -> bool {

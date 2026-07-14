@@ -3,7 +3,7 @@
 // This file intentionally keeps PE32 and PE64 in one helper layer. The format
 // data is the same except for thunk width, thunk alignment, and ordinal flag.
 //
-// Import sets are explicit immutable Meta values:
+// Import sets use value-style Meta APIs:
 //
 // const imports0: map = pe_import_new()
 // const imports1: map = pe_import_use64(imports0, "KERNEL32.DLL", "ExitProcess")
@@ -37,8 +37,11 @@ fn pe_import_use32(imports: map, dll: string, name: string) -> map {
         }
     }
 
-    const next: map = pe_import_name_entry(name, name);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_name_entry(name, name));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_use64(imports: map, dll: string, name: string) -> map {
@@ -54,8 +57,11 @@ fn pe_import_use64(imports: map, dll: string, name: string) -> map {
         }
     }
 
-    const next: map = pe_import_name_entry(name, name);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_name_entry(name, name));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_use32_as(imports: map, dll: string, name: string, slot: string) -> map {
@@ -72,8 +78,11 @@ fn pe_import_use32_as(imports: map, dll: string, name: string, slot: string) -> 
         }
     }
 
-    const next: map = pe_import_name_entry(slot, name);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_name_entry(slot, name));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_use64_as(imports: map, dll: string, name: string, slot: string) -> map {
@@ -90,8 +99,11 @@ fn pe_import_use64_as(imports: map, dll: string, name: string, slot: string) -> 
         }
     }
 
-    const next: map = pe_import_name_entry(slot, name);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_name_entry(slot, name));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_use32_ordinal_as(imports: map, dll: string, ordinal: u64, slot: string) -> map {
@@ -108,8 +120,11 @@ fn pe_import_use32_ordinal_as(imports: map, dll: string, ordinal: u64, slot: str
         }
     }
 
-    const next: map = pe_import_ordinal_entry(slot, ordinal);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_ordinal_entry(slot, ordinal));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_use64_ordinal_as(imports: map, dll: string, ordinal: u64, slot: string) -> map {
@@ -126,24 +141,29 @@ fn pe_import_use64_ordinal_as(imports: map, dll: string, ordinal: u64, slot: str
         }
     }
 
-    const next: map = pe_import_ordinal_entry(slot, ordinal);
-    return map.set(imports, dll, list.push(entries, next));
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_ordinal_entry(slot, ordinal));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
 }
 
 fn pe_import_name_entry(slot: string, name: string) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "slot", slot);
-    const entry2: map = map.set(entry1, "name", name);
-    const entry3: map = map.set(entry2, "kind", 0);
-    return map.set(entry3, "hint", 0);
+    let entry: map = map.new()
+    map.set_mut(entry, "slot", slot);
+    map.set_mut(entry, "name", name);
+    map.set_mut(entry, "kind", 0);
+    map.set_mut(entry, "hint", 0);
+    return entry;
 }
 
 fn pe_import_ordinal_entry(slot: string, ordinal: u64) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "slot", slot);
-    const entry2: map = map.set(entry1, "ordinal", ordinal);
-    const entry3: map = map.set(entry2, "kind", 1);
-    return map.set(entry3, "hint", 0);
+    let entry: map = map.new()
+    map.set_mut(entry, "slot", slot);
+    map.set_mut(entry, "ordinal", ordinal);
+    map.set_mut(entry, "kind", 1);
+    map.set_mut(entry, "hint", 0);
+    return entry;
 }
 
 fn pe_import_descriptor(lookup_rva: u64, dll_name_rva: u64, address_rva: u64) {

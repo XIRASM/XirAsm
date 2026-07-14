@@ -43,10 +43,12 @@ fn pe_reloc_add_dir64_at(relocs: list, section_rva: u64, label_address: u64, sec
 
 fn pe_reloc_add(relocs: list, rva: u64, kind: u64) -> list {
     assert(kind <= 0xf, "PE relocation type is out of range");
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "rva", rva);
-    const entry2: map = map.set(entry1, "kind", kind);
-    return list.push(relocs, entry2);
+    let entry: map = map.new()
+    map.set_mut(entry, "rva", rva);
+    map.set_mut(entry, "kind", kind);
+    let next_relocs: list = relocs
+    list.push_mut(next_relocs, entry);
+    return next_relocs;
 }
 
 fn pe_reloc_block_size(entry_count: u64) -> u64 {

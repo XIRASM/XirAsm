@@ -1,6 +1,6 @@
 // ELF64 shared-object export helpers for XIRASM.
 //
-// Export sets are explicit immutable Meta values. Including a large catalog
+// Export sets use explicit value-style Meta APIs. Including a large catalog
 // should define metadata and helper wrappers only; nothing is emitted until
 // elf_export_* emitters are called at the chosen .dynsym/.dynstr/.hash/.dynamic
 // placement points. This keeps export generation deterministic and avoids a
@@ -23,16 +23,18 @@ fn elf_export_use64(exports: list, target_label: string, export_name: string, se
         }
     }
 
-    const next: map = elf_export_entry(target_label, export_name, section_index, symbol_size);
-    return list.push(exports, next);
+    let next_exports: list = exports
+    list.push_mut(next_exports, elf_export_entry(target_label, export_name, section_index, symbol_size));
+    return next_exports;
 }
 
 fn elf_export_entry(target_label: string, export_name: string, section_index: u64, symbol_size: u64) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "target", target_label);
-    const entry2: map = map.set(entry1, "name", export_name);
-    const entry3: map = map.set(entry2, "section", section_index);
-    return map.set(entry3, "size", symbol_size);
+    let entry: map = map.new()
+    map.set_mut(entry, "target", target_label);
+    map.set_mut(entry, "name", export_name);
+    map.set_mut(entry, "section", section_index);
+    map.set_mut(entry, "size", symbol_size);
+    return entry;
 }
 
 fn elf_export_emit_dynsym64(exports: list, first_export_name_offset: u64) {

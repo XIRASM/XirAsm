@@ -89,7 +89,7 @@ fn pe_resource_emit_from_res(path: string, rsrc_rva: u64) {
         if data_size > 0 {
             const payload: bytes = load.bytes(input_base + header_end, data_size)
             const record: map = pe_resource_record(type_info, name_info, language_id, payload, data_size, input_order);
-            records = list.push(records, record)
+            list.push_mut(records, record);
             input_order = input_order + 1
         }
         cursor = next_record
@@ -158,29 +158,33 @@ fn pe_resource_parse_res_identifier(input_base: u64, offset: u64, header_end: u6
 }
 
 fn pe_resource_identifier(is_id: u64, id: u64, address: u64, units: u64, value: bytes, next: u64) -> map {
-    const result0: map = map.set(map.new(), "is_id", is_id);
-    const result1: map = map.set(result0, "id", id);
-    const result2: map = map.set(result1, "address", address);
-    const result3: map = map.set(result2, "units", units);
-    const result4: map = map.set(result3, "bytes", value);
-    return map.set(result4, "next", next);
+    let result = map.new()
+    map.set_mut(result, "is_id", is_id);
+    map.set_mut(result, "id", id);
+    map.set_mut(result, "address", address);
+    map.set_mut(result, "units", units);
+    map.set_mut(result, "bytes", value);
+    map.set_mut(result, "next", next);
+    return result;
 }
 
 fn pe_resource_record(type_info: map, name_info: map, language_id: u64, payload: bytes, payload_size: u64, input_order: u64) -> map {
-    const result0: map = map.set(map.new(), "type_is_id", map.get(type_info, "is_id"));
-    const result1: map = map.set(result0, "type_id", map.get(type_info, "id"));
-    const result2: map = map.set(result1, "type_name_address", map.get(type_info, "address"));
-    const result3: map = map.set(result2, "type_name_units", map.get(type_info, "units"));
-    const result4: map = map.set(result3, "type_name", map.get(type_info, "bytes"));
-    const result5: map = map.set(result4, "name_is_id", map.get(name_info, "is_id"));
-    const result6: map = map.set(result5, "name_id", map.get(name_info, "id"));
-    const result7: map = map.set(result6, "name_address", map.get(name_info, "address"));
-    const result8: map = map.set(result7, "name_units", map.get(name_info, "units"));
-    const result9: map = map.set(result8, "name", map.get(name_info, "bytes"));
-    const result10: map = map.set(result9, "language_id", language_id);
-    const result11: map = map.set(result10, "payload", payload);
-    const result12: map = map.set(result11, "payload_size", payload_size);
-    return map.set(result12, "input_order", input_order);
+    let result = map.new()
+    map.set_mut(result, "type_is_id", map.get(type_info, "is_id"));
+    map.set_mut(result, "type_id", map.get(type_info, "id"));
+    map.set_mut(result, "type_name_address", map.get(type_info, "address"));
+    map.set_mut(result, "type_name_units", map.get(type_info, "units"));
+    map.set_mut(result, "type_name", map.get(type_info, "bytes"));
+    map.set_mut(result, "name_is_id", map.get(name_info, "is_id"));
+    map.set_mut(result, "name_id", map.get(name_info, "id"));
+    map.set_mut(result, "name_address", map.get(name_info, "address"));
+    map.set_mut(result, "name_units", map.get(name_info, "units"));
+    map.set_mut(result, "name", map.get(name_info, "bytes"));
+    map.set_mut(result, "language_id", language_id);
+    map.set_mut(result, "payload", payload);
+    map.set_mut(result, "payload_size", payload_size);
+    map.set_mut(result, "input_order", input_order);
+    return result;
 }
 
 fn pe_resource_sort_records(records: list) -> list {
@@ -189,19 +193,16 @@ fn pe_resource_sort_records(records: list) -> list {
     while index < len(records) {
         const record: map = list.get(sorted, index);
         let insert_index = index
-        let scanning = 1
-        while insert_index > 0 && scanning != 0 {
+        while insert_index > 0 {
             const previous: map = list.get(sorted, insert_index - 1);
             const should_move: bool = pe_resource_record_less(record, previous);
-            if should_move {
-                sorted = list.set(sorted, insert_index, previous)
-                insert_index = insert_index - 1
-            }
             if !should_move {
-                scanning = 0
+                break;
             }
+            list.set_mut(sorted, insert_index, previous);
+            insert_index = insert_index - 1
         }
-        sorted = list.set(sorted, insert_index, record)
+        list.set_mut(sorted, insert_index, record);
         index = index + 1
     }
     return sorted;
@@ -254,24 +255,18 @@ fn pe_resource_utf16_less(left_address: u64, left_units: u64, right_address: u64
         common_units = right_units
     }
     let index = 0
-    let result = 0
-    let decided = 0
-    while index < common_units && decided == 0 {
+    while index < common_units {
         const left_unit: u64 = load.u16(left_address + index * 2)
         const right_unit: u64 = load.u16(right_address + index * 2)
         if left_unit < right_unit {
-            result = 1
-            decided = 1
+            return true;
         }
         if left_unit > right_unit {
-            decided = 1
+            return false;
         }
         index = index + 1
     }
-    if decided == 0 {
-        return left_units < right_units;
-    }
-    return result != 0;
+    return left_units < right_units;
 }
 
 fn pe_resource_build_nodes(records: list) -> map {
@@ -291,11 +286,12 @@ fn pe_resource_build_nodes(records: list) -> map {
 
         if new_type != 0 {
             current_type_index = len(types)
-            types = list.push(types, pe_resource_type_node(record, index, len(names)))
+            list.push_mut(types, pe_resource_type_node(record, index, len(names)));
         }
         if new_type == 0 {
-            const current_type: map = list.get(types, current_type_index);
-            types = list.set(types, current_type_index, map.set(current_type, "record_count", map.get(current_type, "record_count") + 1))
+            let current_type: map = list.get(types, current_type_index);
+            map.set_mut(current_type, "record_count", map.get(current_type, "record_count") + 1);
+            list.set_mut(types, current_type_index, current_type);
         }
 
         let new_name = new_type
@@ -303,39 +299,47 @@ fn pe_resource_build_nodes(records: list) -> map {
             new_name = 1
         }
         if new_name != 0 {
-            names = list.push(names, pe_resource_name_node(record, index, current_type_index))
-            const current_type: map = list.get(types, current_type_index);
-            types = list.set(types, current_type_index, map.set(current_type, "name_count", map.get(current_type, "name_count") + 1))
+            list.push_mut(names, pe_resource_name_node(record, index, current_type_index));
+            let current_type: map = list.get(types, current_type_index);
+            map.set_mut(current_type, "name_count", map.get(current_type, "name_count") + 1);
+            list.set_mut(types, current_type_index, current_type);
         }
         if new_name == 0 {
             const current_name_index: u64 = len(names) - 1
-            const current_name: map = list.get(names, current_name_index);
-            names = list.set(names, current_name_index, map.set(current_name, "record_count", map.get(current_name, "record_count") + 1))
+            let current_name: map = list.get(names, current_name_index);
+            map.set_mut(current_name, "record_count", map.get(current_name, "record_count") + 1);
+            list.set_mut(names, current_name_index, current_name);
         }
         index = index + 1
     }
 
-    const result0: map = map.set(map.new(), "types", types);
-    return map.set(result0, "names", names);
+    let result = map.new()
+    map.set_mut(result, "types", types);
+    map.set_mut(result, "names", names);
+    return result;
 }
 
 fn pe_resource_type_node(record: map, first_record: u64, first_name: u64) -> map {
-    const result0: map = map.set(map.new(), "is_id", map.get(record, "type_is_id"));
-    const result1: map = map.set(result0, "id", map.get(record, "type_id"));
-    const result2: map = map.set(result1, "name", map.get(record, "type_name"));
-    const result3: map = map.set(result2, "first_record", first_record);
-    const result4: map = map.set(result3, "record_count", 1);
-    const result5: map = map.set(result4, "first_name", first_name);
-    return map.set(result5, "name_count", 0);
+    let result = map.new()
+    map.set_mut(result, "is_id", map.get(record, "type_is_id"));
+    map.set_mut(result, "id", map.get(record, "type_id"));
+    map.set_mut(result, "name", map.get(record, "type_name"));
+    map.set_mut(result, "first_record", first_record);
+    map.set_mut(result, "record_count", 1);
+    map.set_mut(result, "first_name", first_name);
+    map.set_mut(result, "name_count", 0);
+    return result;
 }
 
 fn pe_resource_name_node(record: map, first_record: u64, type_index: u64) -> map {
-    const result0: map = map.set(map.new(), "is_id", map.get(record, "name_is_id"));
-    const result1: map = map.set(result0, "id", map.get(record, "name_id"));
-    const result2: map = map.set(result1, "name", map.get(record, "name"));
-    const result3: map = map.set(result2, "first_record", first_record);
-    const result4: map = map.set(result3, "record_count", 1);
-    return map.set(result4, "type_index", type_index);
+    let result = map.new()
+    map.set_mut(result, "is_id", map.get(record, "name_is_id"));
+    map.set_mut(result, "id", map.get(record, "name_id"));
+    map.set_mut(result, "name", map.get(record, "name"));
+    map.set_mut(result, "first_record", first_record);
+    map.set_mut(result, "record_count", 1);
+    map.set_mut(result, "type_index", type_index);
+    return result;
 }
 
 fn pe_resource_same_type(left: map, right: map) -> bool {
@@ -382,7 +386,9 @@ fn pe_resource_add_unique_name(strings: list, value: bytes) -> list {
             return strings;
         }
     }
-    return list.push(strings, value);
+    let next = strings
+    list.push_mut(next, value);
+    return next;
 }
 
 fn pe_resource_type_directories_size(types: list) -> u64 {
@@ -435,19 +441,14 @@ fn pe_resource_name_directory_offset(types: list, names: list, name_index: u64) 
 
 fn pe_resource_name_string_offset(strings: list, value: bytes, directories_size: u64) -> u64 {
     let offset = directories_size
-    let found = 0
-    let result = 0
     for current in strings {
-        if found == 0 && bytes.eq(current, value) {
-            result = offset
-            found = 1
+        if bytes.eq(current, value) {
+            return offset;
         }
-        if found == 0 {
-            offset = offset + 2 + len(current)
-        }
+        offset = offset + 2 + len(current)
     }
-    assert(found != 0, "PE resource UTF-16 name is missing from the name table");
-    return result;
+    assert(false, "PE resource UTF-16 name is missing from the name table");
+    return 0;
 }
 
 fn pe_resource_payload_offset(records: list, record_index: u64, payloads_offset: u64) -> u64 {

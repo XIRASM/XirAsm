@@ -83,8 +83,10 @@ fn format_section(name: string, attributes: u64) -> map {
     assert(purpose != 0, "format section requires one purpose");
     assert((purpose & (purpose - 1)) == 0, "format section has multiple purposes");
 
-    const section0: map = map.set(map.new(), "name", name)
-    return map.set(section0, "attributes", attributes);
+    let section: map = map.new()
+    map.set_mut(section, "name", name);
+    map.set_mut(section, "attributes", attributes);
+    return section;
 }
 
 fn format_validate_sections(sections: list) -> bool {
@@ -146,10 +148,12 @@ fn format_pe_plan(kind: u64, options: u64, sections: list) -> map {
     assert(format_validate_sections(sections), "invalid PE section list");
     assert(format_validate_short_section_names(sections), "invalid PE section names");
 
-    const plan0: map = map.set(map.new(), "kind", kind)
-    const plan1: map = map.set(plan0, "options", options)
-    const plan2: map = map.set(plan1, "sections", sections)
-    return map.set(plan2, "entry", 0);
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", kind);
+    map.set_mut(plan, "options", options);
+    map.set_mut(plan, "sections", sections);
+    map.set_mut(plan, "entry", 0);
+    return plan;
 }
 
 fn format_pe32(options: u64, sections: list) -> map {
@@ -179,11 +183,13 @@ fn format_validate_coff_sections(sections: list) -> bool {
 
 fn format_coff_plan(kind: u64, sections: list) -> map {
     assert(format_validate_coff_sections(sections), "invalid COFF section list");
-    const plan0: map = map.set(map.new(), "kind", kind)
-    const plan1: map = map.set(plan0, "sections", sections)
-    const plan2: map = map.set(plan1, "symbols", list.new())
-    const plan3: map = map.set(plan2, "relocs", list.new())
-    return map.set(plan3, "entry", 0);
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", kind);
+    map.set_mut(plan, "sections", sections);
+    map.set_mut(plan, "symbols", list.new());
+    map.set_mut(plan, "relocs", list.new());
+    map.set_mut(plan, "entry", 0);
+    return plan;
 }
 
 fn format_coff32(sections: list) -> map {
@@ -198,30 +204,36 @@ fn format_coff_public(name: string, section_name: string, section_start: u64, ad
     assert(len(name) > 0 && len(name) <= 8, "COFF user symbol names must fit in eight bytes");
     assert(len(section_name) > 0, "COFF public symbol requires a section name");
     assert(address >= section_start, "COFF public symbol is before its section start");
-    const symbol0: map = map.set(map.new(), "kind", format_coff_symbol_public)
-    const symbol1: map = map.set(symbol0, "name", name)
-    const symbol2: map = map.set(symbol1, "section", section_name)
-    const symbol3: map = map.set(symbol2, "value", address - section_start)
-    return map.set(symbol3, "type", sym_type);
+    let symbol: map = map.new()
+    map.set_mut(symbol, "kind", format_coff_symbol_public);
+    map.set_mut(symbol, "name", name);
+    map.set_mut(symbol, "section", section_name);
+    map.set_mut(symbol, "value", address - section_start);
+    map.set_mut(symbol, "type", sym_type);
+    return symbol;
 }
 
 fn format_coff_extern(name: string, sym_type: u16) -> map {
     assert(len(name) > 0 && len(name) <= 8, "COFF user symbol names must fit in eight bytes");
-    const symbol0: map = map.set(map.new(), "kind", format_coff_symbol_extern)
-    const symbol1: map = map.set(symbol0, "name", name)
-    const symbol2: map = map.set(symbol1, "section", "")
-    const symbol3: map = map.set(symbol2, "value", 0)
-    return map.set(symbol3, "type", sym_type);
+    let symbol: map = map.new()
+    map.set_mut(symbol, "kind", format_coff_symbol_extern);
+    map.set_mut(symbol, "name", name);
+    map.set_mut(symbol, "section", "");
+    map.set_mut(symbol, "value", 0);
+    map.set_mut(symbol, "type", sym_type);
+    return symbol;
 }
 
 fn format_coff_reloc(section_name: string, section_start: u64, address: u64, symbol_name: string, reloc_type: u16) -> map {
     assert(len(section_name) > 0, "COFF relocation requires a section name");
     assert(len(symbol_name) > 0 && len(symbol_name) <= 8, "COFF relocation symbol names must fit in eight bytes");
     assert(address >= section_start, "COFF relocation is before its section start");
-    const reloc0: map = map.set(map.new(), "section", section_name)
-    const reloc1: map = map.set(reloc0, "offset", address - section_start)
-    const reloc2: map = map.set(reloc1, "symbol", symbol_name)
-    return map.set(reloc2, "type", reloc_type);
+    let reloc: map = map.new()
+    map.set_mut(reloc, "section", section_name);
+    map.set_mut(reloc, "offset", address - section_start);
+    map.set_mut(reloc, "symbol", symbol_name);
+    map.set_mut(reloc, "type", reloc_type);
+    return reloc;
 }
 
 fn format_coff_symbol_index(symbols: list, name: string) -> u64 {
@@ -268,8 +280,10 @@ fn format_coff_tables(plan: map, symbols: list, relocs: list) -> map {
     const kind: u64 = map.get(plan, "kind")
     assert(kind == format_kind_coff32 || kind == format_kind_coff64, "format plan is not a COFF object");
     assert(format_validate_coff_tables(plan, symbols, relocs), "invalid COFF user tables");
-    const plan0: map = map.set(plan, "symbols", symbols)
-    return map.set(plan0, "relocs", relocs);
+    let next: map = plan
+    map.set_mut(next, "symbols", symbols);
+    map.set_mut(next, "relocs", relocs);
+    return next;
 }
 
 fn format_validate_elfobj_sections(sections: list) -> bool {
@@ -295,11 +309,13 @@ fn format_elfobj_plan(kind: u64, sections: list) -> map {
     assert(kind == format_kind_elfobj32 || kind == format_kind_elfobj64, "invalid ELF object kind");
     assert(format_validate_elfobj_sections(sections), "invalid ELF object section list");
 
-    const plan0: map = map.set(map.new(), "kind", kind)
-    const plan1: map = map.set(plan0, "sections", sections)
-    const plan2: map = map.set(plan1, "symbols", list.new())
-    const plan3: map = map.set(plan2, "relocs", list.new())
-    return map.set(plan3, "entry", 0);
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", kind);
+    map.set_mut(plan, "sections", sections);
+    map.set_mut(plan, "symbols", list.new());
+    map.set_mut(plan, "relocs", list.new());
+    map.set_mut(plan, "entry", 0);
+    return plan;
 }
 
 fn format_elfobj32(sections: list) -> map {
@@ -315,23 +331,27 @@ fn format_elfobj_public(name: string, section_name: string, section_start: u64, 
     assert(len(section_name) > 0, "ELF object public symbol requires a section name");
     assert(address >= section_start, "ELF object public symbol is before its section start");
 
-    const symbol0: map = map.set(map.new(), "kind", format_elfobj_symbol_public)
-    const symbol1: map = map.set(symbol0, "name", name)
-    const symbol2: map = map.set(symbol1, "section", section_name)
-    const symbol3: map = map.set(symbol2, "value", address - section_start)
-    const symbol4: map = map.set(symbol3, "size", symbol_size)
-    return map.set(symbol4, "type", symbol_type);
+    let symbol: map = map.new()
+    map.set_mut(symbol, "kind", format_elfobj_symbol_public);
+    map.set_mut(symbol, "name", name);
+    map.set_mut(symbol, "section", section_name);
+    map.set_mut(symbol, "value", address - section_start);
+    map.set_mut(symbol, "size", symbol_size);
+    map.set_mut(symbol, "type", symbol_type);
+    return symbol;
 }
 
 fn format_elfobj_extern(name: string, symbol_type: u8) -> map {
     assert(len(name) > 0, "ELF object external symbol name is empty");
 
-    const symbol0: map = map.set(map.new(), "kind", format_elfobj_symbol_extern)
-    const symbol1: map = map.set(symbol0, "name", name)
-    const symbol2: map = map.set(symbol1, "section", "")
-    const symbol3: map = map.set(symbol2, "value", 0)
-    const symbol4: map = map.set(symbol3, "size", 0)
-    return map.set(symbol4, "type", symbol_type);
+    let symbol: map = map.new()
+    map.set_mut(symbol, "kind", format_elfobj_symbol_extern);
+    map.set_mut(symbol, "name", name);
+    map.set_mut(symbol, "section", "");
+    map.set_mut(symbol, "value", 0);
+    map.set_mut(symbol, "size", 0);
+    map.set_mut(symbol, "type", symbol_type);
+    return symbol;
 }
 
 fn format_elfobj_reloc(section_name: string, section_start: u64, address: u64, symbol_name: string, reloc_type: u64, addend: u64) -> map {
@@ -339,12 +359,14 @@ fn format_elfobj_reloc(section_name: string, section_start: u64, address: u64, s
     assert(len(symbol_name) > 0, "ELF object relocation symbol name is empty");
     assert(address >= section_start, "ELF object relocation is before its section start");
 
-    const reloc0: map = map.set(map.new(), "section", section_name)
-    const reloc1: map = map.set(reloc0, "offset", address - section_start)
-    const reloc2: map = map.set(reloc1, "address", address)
-    const reloc3: map = map.set(reloc2, "symbol", symbol_name)
-    const reloc4: map = map.set(reloc3, "type", reloc_type)
-    return map.set(reloc4, "addend", addend);
+    let reloc: map = map.new()
+    map.set_mut(reloc, "section", section_name);
+    map.set_mut(reloc, "offset", address - section_start);
+    map.set_mut(reloc, "address", address);
+    map.set_mut(reloc, "symbol", symbol_name);
+    map.set_mut(reloc, "type", reloc_type);
+    map.set_mut(reloc, "addend", addend);
+    return reloc;
 }
 
 fn format_elfobj_symbol_index(plan: map, symbols: list, name: string) -> u64 {
@@ -392,8 +414,10 @@ fn format_elfobj_tables(plan: map, symbols: list, relocs: list) -> map {
     const kind: u64 = map.get(plan, "kind")
     assert(kind == format_kind_elfobj32 || kind == format_kind_elfobj64, "format plan is not an ELF object");
     assert(format_validate_elfobj_tables(plan, symbols, relocs), "invalid ELF object user tables");
-    const plan0: map = map.set(plan, "symbols", symbols)
-    return map.set(plan0, "relocs", relocs);
+    let next: map = plan
+    map.set_mut(next, "symbols", symbols);
+    map.set_mut(next, "relocs", relocs);
+    return next;
 }
 
 fn format_segment(name: string, attributes: u64) -> map {
@@ -404,8 +428,10 @@ fn format_segment(name: string, attributes: u64) -> map {
     assert(purpose != 0, "format segment requires one purpose");
     assert((purpose & (purpose - 1)) == 0, "format segment has multiple purposes");
 
-    const segment0: map = map.set(map.new(), "name", name)
-    return map.set(segment0, "attributes", attributes);
+    let segment: map = map.new()
+    map.set_mut(segment, "name", name);
+    map.set_mut(segment, "attributes", attributes);
+    return segment;
 }
 
 fn format_validate_segments(segments: list) -> bool {
@@ -441,11 +467,13 @@ fn format_elf_plan(kind: u64, options: u64, segments: list) -> map {
     assert(format_validate_elf_options(kind, options), "invalid ELF format options");
     assert(format_validate_segments(segments), "invalid ELF segment list");
 
-    const plan0: map = map.set(map.new(), "kind", kind)
-    const plan1: map = map.set(plan0, "options", options)
-    const plan2: map = map.set(plan1, "segments", segments)
-    const plan3: map = map.set(plan2, "entry", 0)
-    return map.set(plan3, "imports", list.new());
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", kind);
+    map.set_mut(plan, "options", options);
+    map.set_mut(plan, "segments", segments);
+    map.set_mut(plan, "entry", 0);
+    map.set_mut(plan, "imports", list.new());
+    return plan;
 }
 
 fn format_elf32(options: u64, segments: list) -> map {
@@ -462,10 +490,12 @@ fn format_elfexe_import_plt(library: string, name: string, slot_label: string, p
     assert(len(slot_label) > 0, "ELF executable import slot label is empty");
     assert(len(plt_label) > 0, "ELF executable import PLT label is empty");
 
-    const entry0: map = map.set(map.new(), "library", library)
-    const entry1: map = map.set(entry0, "name", name)
-    const entry2: map = map.set(entry1, "slot", slot_label)
-    return map.set(entry2, "plt", plt_label);
+    let entry: map = map.new()
+    map.set_mut(entry, "library", library);
+    map.set_mut(entry, "name", name);
+    map.set_mut(entry, "slot", slot_label);
+    map.set_mut(entry, "plt", plt_label);
+    return entry;
 }
 
 fn format_validate_elfexe_tables(plan: map, imports: list) -> bool {
@@ -494,20 +524,24 @@ fn format_validate_elfexe_tables(plan: map, imports: list) -> bool {
 
 fn format_elfexe_tables(plan: map, imports: list) -> map {
     assert(format_validate_elfexe_tables(plan, imports), "invalid ELF executable import table");
-    return map.set(plan, "imports", imports);
+    let next: map = plan
+    map.set_mut(next, "imports", imports);
+    return next;
 }
 
 fn format_elf64_so(soname: string, segments: list) -> map {
     assert(len(soname) > 0, "ELF shared object SONAME is empty");
     assert(format_validate_segments(segments), "invalid ELF shared-object segment list");
 
-    const plan0: map = map.set(map.new(), "kind", format_kind_elfso64)
-    const plan1: map = map.set(plan0, "options", 0)
-    const plan2: map = map.set(plan1, "segments", segments)
-    const plan3: map = map.set(plan2, "soname", soname)
-    const plan4: map = map.set(plan3, "exports", list.new())
-    const plan5: map = map.set(plan4, "imports", list.new())
-    return map.set(plan5, "entry", 0);
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", format_kind_elfso64);
+    map.set_mut(plan, "options", 0);
+    map.set_mut(plan, "segments", segments);
+    map.set_mut(plan, "soname", soname);
+    map.set_mut(plan, "exports", list.new());
+    map.set_mut(plan, "imports", list.new());
+    map.set_mut(plan, "entry", 0);
+    return plan;
 }
 
 fn format_elfso_export(target_label: string, export_name: string, segment_name: string, symbol_size: u64) -> map {
@@ -516,10 +550,12 @@ fn format_elfso_export(target_label: string, export_name: string, segment_name: 
     assert(len(segment_name) > 0, "ELF shared-object export segment name is empty");
     assert(symbol_size > 0, "ELF shared-object export size is zero");
 
-    const entry0: map = map.set(map.new(), "target", target_label)
-    const entry1: map = map.set(entry0, "name", export_name)
-    const entry2: map = map.set(entry1, "segment", segment_name)
-    return map.set(entry2, "size", symbol_size);
+    let entry: map = map.new()
+    map.set_mut(entry, "target", target_label);
+    map.set_mut(entry, "name", export_name);
+    map.set_mut(entry, "segment", segment_name);
+    map.set_mut(entry, "size", symbol_size);
+    return entry;
 }
 
 fn format_elfso_import_plt(library: string, name: string, slot_label: string, plt_label: string) -> map {
@@ -528,10 +564,12 @@ fn format_elfso_import_plt(library: string, name: string, slot_label: string, pl
     assert(len(slot_label) > 0, "ELF shared-object import slot label is empty");
     assert(len(plt_label) > 0, "ELF shared-object import PLT label is empty");
 
-    const entry0: map = map.set(map.new(), "library", library)
-    const entry1: map = map.set(entry0, "name", name)
-    const entry2: map = map.set(entry1, "slot", slot_label)
-    return map.set(entry2, "plt", plt_label);
+    let entry: map = map.new()
+    map.set_mut(entry, "library", library);
+    map.set_mut(entry, "name", name);
+    map.set_mut(entry, "slot", slot_label);
+    map.set_mut(entry, "plt", plt_label);
+    return entry;
 }
 
 fn format_validate_elfso_tables(plan: map, exports: list, imports: list) -> bool {
@@ -568,8 +606,10 @@ fn format_validate_elfso_tables(plan: map, exports: list, imports: list) -> bool
 
 fn format_elfso_tables(plan: map, exports: list, imports: list) -> map {
     assert(format_validate_elfso_tables(plan, exports, imports), "invalid ELF shared-object user tables");
-    const plan0: map = map.set(plan, "exports", exports)
-    return map.set(plan0, "imports", imports);
+    let next: map = plan
+    map.set_mut(next, "exports", exports);
+    map.set_mut(next, "imports", imports);
+    return next;
 }
 
 fn format_entry(plan: map, address: u64) -> map {
@@ -582,7 +622,9 @@ fn format_entry(plan: map, address: u64) -> map {
         "format plan does not use an executable entry"
     );
     assert(address != 0, "format entry address is zero");
-    return map.set(plan, "entry", address);
+    let next: map = plan
+    map.set_mut(next, "entry", address);
+    return next;
 }
 
 fn format_section_row(plan: map, name: string) -> u64 {
@@ -1839,11 +1881,12 @@ fn format_elfobj_finish_tables(plan: map) {
                 }
             }
             const relocation_size: u64 = file_cursor_real() - relocation_foa
-            const relocation0: map = map.set(map.new(), "name", format_elfobj_reloc_section_name(kind, section_name))
-            const relocation1: map = map.set(relocation0, "target_row", row)
-            const relocation2: map = map.set(relocation1, "offset", relocation_foa)
-            const relocation3: map = map.set(relocation2, "size", relocation_size)
-            relocation_sections = list.push(relocation_sections, relocation3)
+            let relocation = map.new()
+            map.set_mut(relocation, "name", format_elfobj_reloc_section_name(kind, section_name));
+            map.set_mut(relocation, "target_row", row);
+            map.set_mut(relocation, "offset", relocation_foa);
+            map.set_mut(relocation, "size", relocation_size);
+            list.push_mut(relocation_sections, relocation);
         }
     }
 
@@ -1874,19 +1917,19 @@ fn format_elfobj_finish_tables(plan: map) {
 
     let section_names = list.new()
     for section in sections {
-        section_names = list.push(section_names, map.get(section, "name"))
+        list.push_mut(section_names, map.get(section, "name"));
     }
     for relocation_section in relocation_sections {
-        section_names = list.push(section_names, map.get(relocation_section, "name"))
+        list.push_mut(section_names, map.get(relocation_section, "name"));
     }
     const symtab_name_index: u64 = len(section_names)
-    section_names = list.push(section_names, ".symtab")
+    list.push_mut(section_names, ".symtab");
     const strtab_name_index: u64 = len(section_names)
-    section_names = list.push(section_names, ".strtab")
+    list.push_mut(section_names, ".strtab");
     const shstrtab_name_index: u64 = len(section_names)
-    section_names = list.push(section_names, ".shstrtab")
+    list.push_mut(section_names, ".shstrtab");
     const stack_note_name_index: u64 = len(section_names)
-    section_names = list.push(section_names, ".note.GNU-stack")
+    list.push_mut(section_names, ".note.GNU-stack");
 
     const shstrtab_foa: u64 = file_cursor_real()
     format_emit_string_table(section_names);
@@ -2073,7 +2116,7 @@ fn format_elfobj_finish_tables(plan: map) {
 fn format_elfobj_symbol_names(symbols: list) -> list {
     let names = list.new()
     for symbol in symbols {
-        names = list.push(names, map.get(symbol, "name"))
+        list.push_mut(names, map.get(symbol, "name"));
     }
     return names;
 }
@@ -2114,20 +2157,20 @@ fn format_elfso_imports64(imports: list) -> list {
 fn format_elfso_section_names(plan: map, has_imports: bool) -> list {
     let names = list.new()
     for segment in map.get(plan, "segments") {
-        names = list.push(names, map.get(segment, "name"))
+        list.push_mut(names, map.get(segment, "name"));
     }
     if has_imports {
-        names = list.push(names, ".plt")
-        names = list.push(names, ".got.plt")
+        list.push_mut(names, ".plt");
+        list.push_mut(names, ".got.plt");
     }
-    names = list.push(names, ".dynsym")
-    names = list.push(names, ".dynstr")
-    names = list.push(names, ".hash")
+    list.push_mut(names, ".dynsym");
+    list.push_mut(names, ".dynstr");
+    list.push_mut(names, ".hash");
     if has_imports {
-        names = list.push(names, ".rela.plt")
+        list.push_mut(names, ".rela.plt");
     }
-    names = list.push(names, ".dynamic")
-    names = list.push(names, ".shstrtab")
+    list.push_mut(names, ".dynamic");
+    list.push_mut(names, ".shstrtab");
     return names;
 }
 

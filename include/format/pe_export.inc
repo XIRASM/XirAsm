@@ -1,6 +1,6 @@
 // PE export table helpers for XIRASM.
 //
-// Export sets are explicit immutable Meta values. Nothing is emitted until
+// Export sets use explicit value-style Meta APIs. Nothing is emitted until
 // pe_export_emit32/64 is called from the final .edata placement point.
 //
 // Export names are sorted by their emitted byte representation before the PE
@@ -35,14 +35,16 @@ fn pe_export_use(exports: list, target_label: string, export_name: string) -> li
         }
     }
 
-    const next: map = pe_export_entry(target_label, export_name);
-    return list.push(exports, next);
+    let next_exports: list = exports
+    list.push_mut(next_exports, pe_export_entry(target_label, export_name));
+    return next_exports;
 }
 
 fn pe_export_entry(target_label: string, export_name: string) -> map {
-    const entry0: map = map.new();
-    const entry1: map = map.set(entry0, "target", target_label);
-    return map.set(entry1, "name", export_name);
+    let entry: map = map.new()
+    map.set_mut(entry, "target", target_label);
+    map.set_mut(entry, "name", export_name);
+    return entry;
 }
 
 fn pe_export_emit32(exports: list, dll_name: string, edata_rva: u64, edata_start: u64) {
@@ -61,9 +63,10 @@ fn pe_export_emit(exports: list, dll_name: string, edata_rva: u64, edata_start: 
     let sortable_exports = list.new()
     for entry in exports {
         const name: string = map.get(entry, "name")
-        const prepared0: map = map.set(entry, "sort_address", here());
-        const prepared: map = map.set(prepared0, "sort_length", len(name));
-        sortable_exports = list.push(sortable_exports, prepared)
+        let prepared: map = entry
+        map.set_mut(prepared, "sort_address", here());
+        map.set_mut(prepared, "sort_length", len(name));
+        list.push_mut(sortable_exports, prepared);
         db(name);
     }
     const sorted_exports: list = pe_export_sort_entries(sortable_exports)
@@ -107,24 +110,22 @@ fn pe_export_emit(exports: list, dll_name: string, edata_rva: u64, edata_start: 
 }
 
 fn pe_export_sort_entries(exports: list) -> list {
-    let sorted = exports
+    let sorted: list = exports
     let index = 1
     while index < len(exports) {
         const entry: map = list.get(sorted, index);
         let insert_index = index
-        let scanning = 1
-        while insert_index > 0 && scanning != 0 {
+        while insert_index > 0 {
             const previous: map = list.get(sorted, insert_index - 1);
             const should_move: bool = pe_export_name_less(entry, previous);
             if should_move {
-                sorted = list.set(sorted, insert_index, previous)
+                list.set_mut(sorted, insert_index, previous);
                 insert_index = insert_index - 1
+                continue;
             }
-            if !should_move {
-                scanning = 0
-            }
+            break;
         }
-        sorted = list.set(sorted, insert_index, entry)
+        list.set_mut(sorted, insert_index, entry);
         index = index + 1
     }
     return sorted;
@@ -142,24 +143,18 @@ fn pe_export_name_less(left: map, right: map) -> bool {
     }
 
     let index = 0
-    let result = 0
-    let decided = 0
-    while index < common_length && decided == 0 {
+    while index < common_length {
         const left_byte: u64 = load.u8(left_address + index)
         const right_byte: u64 = load.u8(right_address + index)
         if left_byte < right_byte {
-            result = 1
-            decided = 1
+            return true;
         }
         if left_byte > right_byte {
-            decided = 1
+            return false;
         }
         index = index + 1
     }
 
-    if decided != 0 {
-        return result != 0;
-    }
     return left_length < right_length;
 }
 
