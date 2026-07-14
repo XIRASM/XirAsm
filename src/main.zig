@@ -291,6 +291,7 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
         }
         if (std.mem.eql(u8, arg, "-o")) {
             if (index + 1 >= args.len) return .{ .err = .missing_output_path };
+            if (std.mem.startsWith(u8, args[index + 1], "-")) return .{ .err = .missing_output_path };
             options.output_path = args[index + 1];
             index += 2;
             continue;
@@ -354,6 +355,7 @@ fn parseBuildArgs(args: []const []const u8) ParseCliResult {
         }
         if (std.mem.eql(u8, arg, "-o")) {
             if (index + 1 >= args.len) return .{ .err = .missing_output_path };
+            if (std.mem.startsWith(u8, args[index + 1], "-")) return .{ .err = .missing_output_path };
             options.output_path = args[index + 1];
             index += 2;
             continue;
@@ -1768,6 +1770,28 @@ test "parseCliArgs accepts assemble progress target output and timings" {
     }
 }
 
+test "parseCliArgs rejects removed stdout option" {
+    const result = parseCliArgs(&.{ "xirasm", "demo.xir", "--stdout" });
+    switch (result) {
+        .ok => return error.ExpectedParseFailure,
+        .err => |issue| switch (issue) {
+            .unknown_option => |option| try std.testing.expectEqualStrings("--stdout", option),
+            else => return error.WrongParseIssue,
+        },
+    }
+}
+
+test "parseCliArgs rejects option token as assemble output path" {
+    const result = parseCliArgs(&.{ "xirasm", "demo.xir", "-o", "--stdout" });
+    switch (result) {
+        .ok => return error.ExpectedParseFailure,
+        .err => |issue| switch (issue) {
+            .missing_output_path => {},
+            else => return error.WrongParseIssue,
+        },
+    }
+}
+
 test "parseCliArgs accepts build defaults" {
     const result = parseCliArgs(&.{ "xirasm", "build" });
     switch (result) {
@@ -1792,6 +1816,17 @@ test "parseCliArgs accepts build timing summary" {
             else => return error.WrongCommand,
         },
         .err => return error.ParseFailed,
+    }
+}
+
+test "parseCliArgs rejects option token as build output path" {
+    const result = parseCliArgs(&.{ "xirasm", "build", "-o", "--stdout" });
+    switch (result) {
+        .ok => return error.ExpectedParseFailure,
+        .err => |issue| switch (issue) {
+            .missing_output_path => {},
+            else => return error.WrongParseIssue,
+        },
     }
 }
 
