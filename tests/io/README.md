@@ -1,17 +1,16 @@
 # XIRASM IO Test Suite
 
-This directory is the dedicated test root for the XIRASM runtime IO library.
+This directory contains the XIRASM runtime IO library fixtures under the
+repository's single `tests/` root. The IO library is experimental, but its
+fixtures follow the same repository-level ownership as compiler, frontend,
+format, API, and integration tests.
 
-It is intentionally separate from the existing repository `tests/` tree.
-The existing tree belongs to compiler, frontend, format, API-matrix, and
-integration workstreams and must not receive IO-library fixtures.
-
-## Why `test/io/`
+## Why `tests/io/`
 
 The test path mirrors the published package:
 
 ```text
-include/io/  <->  test/io/
+include/io/  <->  tests/io/
 ```
 
 The portable IO facade is a first-class library domain. It is not a child of
@@ -21,8 +20,8 @@ the raw operating-system API layer, so its tests do not belong under
 Future raw platform-library tests may use:
 
 ```text
-test/os/linux/
-test/os/windows/
+tests/os/linux/
+tests/os/windows/
 ```
 
 Those tests will validate syscall tables, ABI helpers, Win32 declarations, and
@@ -31,7 +30,7 @@ other OS-specific surfaces independently from the portable IO contract.
 ## Planned Layout
 
 ```text
-test/io/
+tests/io/
 ├─ contract/       # shared portable-contract fixtures
 ├─ abi/            # ABI boundary and register/stack probes
 ├─ file/           # file-operation fixtures
@@ -47,15 +46,14 @@ Create subdirectories only when their first real fixture is added.
 Platform and width belong in fixture names:
 
 ```text
-test/io/file/linux64-core.asm
-test/io/file/windows64-core.asm
+tests/io/file/linux64-core.asm
+tests/io/file/windows64-core.asm
 ```
 
 ## Rules
 
 - Test XIRASM `.inc` libraries with XIRASM `.asm` sources.
 - Do not add Zig test implementations for this workstream.
-- Do not modify `build.zig` to register IO tests.
 - Use existing documented XIRASM command entry points.
 - Keep Linux and Windows runtime execution separate.
 - Run Windows fixtures natively and Linux fixtures under WSL.
@@ -63,4 +61,6 @@ test/io/file/windows64-core.asm
   to match.
 - Review every generated binary with static tools before runtime execution.
 - Keep raw OS API tests out of this directory.
-- Do not place IO fixtures under the existing `tests/` tree.
+- Register deterministic compile-time or byte-level checks in the repository
+  build when they can run on every supported development host. Keep native
+  runtime execution behind explicit platform-specific gates.
