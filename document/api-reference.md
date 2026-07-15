@@ -1271,6 +1271,7 @@ resolved relative to the `module` directory.
 | Target family condition | `target.isa == .name` | Tests the active ISA family in `if`. |
 | x86 mode | `x86.use16()`, `x86.use32()`, `x86.use64()` | Selects x86 and its mode. |
 | RISC-V mode | `riscv.use32()`, `riscv.use64()` | Selects RISC-V and its XLEN. |
+| SPIR-V module | `spv.use()` | Selects SPIR-V 1.6 complete-module output. |
 | Generated ISA text | `isa(text)` | Appends one instruction from a text value. |
 | Logical origin | `origin(address)` | Sets the base address of the active output region. |
 | Current address | `here()` | Returns the current logical address. |
@@ -1317,6 +1318,7 @@ fragments. Instructions already recorded keep their earlier target.
 | `x86.use64()` | x86-64 mode |
 | `riscv.use32()` | RISC-V with XLEN 32 |
 | `riscv.use64()` | RISC-V with XLEN 64 |
+| `spv.use()` | SPIR-V 1.6 module text |
 
 ```asm
 x86.use16()
@@ -1337,6 +1339,23 @@ isa("addi x2, x0, 2")
 
 These procedures are ordinary source operations. They do not change the
 meaning of earlier instructions and are not finalizer operations.
+
+`spv.use()` begins a complete SPIR-V module. SPIR-V lines use standard `Op*`
+spelling and numeric raw IDs:
+
+```asm
+spv.use()
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid
+```
+
+The complete output must contain only SPIR-V ISA fragments in one section and
+at one version. Mixing SPIR-V with another ISA, emitted data, reservations, or
+alignment operations is rejected. Symbolic SPIR-V result IDs are not currently
+accepted; use `%1`, `%2`, and other numeric IDs. CLI `--target spv` and
+`--target spirv` both select version 1.6.
 
 #### Generated ISA Text
 

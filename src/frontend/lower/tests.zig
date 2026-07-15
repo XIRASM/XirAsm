@@ -513,6 +513,8 @@ test "lowering target mode APIs snapshot subsequent ISA fragments" {
         \\    addi x1, x0, 1
         \\riscv.use64();
         \\    addi x2, x0, 2
+        \\spv.use();
+        \\    OpCapability Shader
         \\
     ,
         .{},
@@ -520,12 +522,13 @@ test "lowering target mode APIs snapshot subsequent ISA fragments" {
     defer module.deinit();
 
     const text = try module.sections.get(module.default_section);
-    try std.testing.expectEqual(@as(usize, 4), text.fragments.items.len);
+    try std.testing.expectEqual(@as(usize, 5), text.fragments.items.len);
 
     const first = module.fragments.items.items[text.fragments.items[0].index];
     const second = module.fragments.items.items[text.fragments.items[1].index];
     const third = module.fragments.items.items[text.fragments.items[2].index];
     const fourth = module.fragments.items.items[text.fragments.items[3].index];
+    const fifth = module.fragments.items.items[text.fragments.items[4].index];
 
     switch (first) {
         .isa_instruction => |instruction| {
@@ -555,9 +558,16 @@ test "lowering target mode APIs snapshot subsequent ISA fragments" {
         },
         else => return error.UnexpectedFragment,
     }
+    switch (fifth) {
+        .isa_instruction => |instruction| {
+            try std.testing.expectEqual(target.Isa.spirv, instruction.target.isa());
+            try std.testing.expectEqual(@as(?u16, null), instruction.target.bits());
+        },
+        else => return error.UnexpectedFragment,
+    }
 
-    try std.testing.expectEqual(target.Isa.riscv64, module.target.isa());
-    try std.testing.expectEqual(@as(u16, 64), module.target.bits().?);
+    try std.testing.expectEqual(target.Isa.spirv, module.target.isa());
+    try std.testing.expectEqual(@as(?u16, null), module.target.bits());
 }
 
 test "lowering evaluates modern defined meta conditionals" {

@@ -43,14 +43,17 @@ pub const ScalarType = union(enum) {
 
 pub const ParseContext = struct {
     scalar_types: std.AutoHashMapUnmanaged(Word, ScalarType) = .empty,
+    ext_inst_sets: std.AutoHashMapUnmanaged(Word, tables.ExtInstSet) = .empty,
 
     pub fn deinit(self: *ParseContext, allocator: Allocator) void {
         self.scalar_types.deinit(allocator);
+        self.ext_inst_sets.deinit(allocator);
         self.* = undefined;
     }
 
     pub fn reset(self: *ParseContext) void {
         self.scalar_types.clearRetainingCapacity();
+        self.ext_inst_sets.clearRetainingCapacity();
     }
 };
 
@@ -246,7 +249,8 @@ fn appendOperand(
             );
         },
         .literal_ext_inst_integer => {
-            try appendExtInst(allocator, context, out, tokenizer, max_id);
+            const set_id = if (out.items.len == 0) null else out.items[out.items.len - 1];
+            try appendExtInst(allocator, context, out, tokenizer, set_id, max_id);
         },
         .literal_spec_constant_op_integer => {
             try appendSpecConstantOp(allocator, context, out, tokenizer, result_type_id, max_id);
@@ -284,14 +288,21 @@ fn appendExtInst(
     context: ?*ParseContext,
     out: *std.ArrayListUnmanaged(Word),
     tokenizer: *Tokenizer,
+    set_id: ?Word,
     max_id: *Word,
 ) ParseError!void {
     const token = tokenizer.next() orelse return error.ExpectedOperand;
-    if (tables.lookupGlslStd450ExtInst(token)) |inst| {
+    const set = if (context) |ctx|
+        if (set_id) |id| ctx.ext_inst_sets.get(id) else null
+    else
+        null;
+    const instruction = if (set) |known_set|
+        tables.lookupExtInst(known_set, token)
+    else
+        tables.lookupGlslStd450ExtInst(token);
+    if (instruction) |inst| {
         try appendWord(allocator, out, inst.value);
-        for (inst.operands) |operand| {
-            try appendOperand(allocator, context, out, tokenizer, operand.kind, null, max_id);
-        }
+        try appendDynamicOperands(allocator, context, out, tokenizer, inst.operands, null, max_id);
         return;
     }
     try appendWord(allocator, out, try parseWord(token));
@@ -308,24 +319,36 @@ fn appendSpecConstantOp(
     const token = tokenizer.next() orelse return error.ExpectedOperand;
     if (tables.lookupSpecConstantOpcode(token)) |opcode| {
         try appendWord(allocator, out, opcode.opcode);
-        for (opcode.operands) |operand| {
-            switch (operand.quantifier) {
-                .one => try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id),
-                .optional => {
-                    if (tokenizer.peek() != null) {
-                        try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id);
-                    }
-                },
-                .variable => {
-                    while (tokenizer.peek() != null) {
-                        try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id);
-                    }
-                },
-            }
-        }
+        try appendDynamicOperands(allocator, context, out, tokenizer, opcode.operands, result_type_id, max_id);
         return;
     }
     try appendWord(allocator, out, try parseWord(token));
+}
+
+fn appendDynamicOperands(
+    allocator: Allocator,
+    context: ?*ParseContext,
+    out: *std.ArrayListUnmanaged(Word),
+    tokenizer: *Tokenizer,
+    operands: []const tables.OperandInfo,
+    result_type_id: ?Word,
+    max_id: *Word,
+) ParseError!void {
+    for (operands) |operand| {
+        switch (operand.quantifier) {
+            .one => try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id),
+            .optional => {
+                if (tokenizer.peek() != null) {
+                    try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id);
+                }
+            },
+            .variable => {
+                while (tokenizer.peek() != null) {
+                    try appendOperand(allocator, context, out, tokenizer, operand.kind, result_type_id, max_id);
+                }
+            },
+        }
+    }
 }
 
 fn appendContextDependentNumber(
@@ -359,6 +382,10 @@ fn appendTypedContextDependentNumber(
 ) ParseError!void {
     switch (scalar) {
         .float => |info| switch (info.width) {
+            16 => {
+                const value = std.fmt.parseFloat(f16, token) catch return error.InvalidInteger;
+                try appendWord(allocator, out, @as(u16, @bitCast(value)));
+            },
             32 => {
                 const value = std.fmt.parseFloat(f32, token) catch return error.InvalidInteger;
                 try appendWord(allocator, out, @bitCast(value));
@@ -371,17 +398,37 @@ fn appendTypedContextDependentNumber(
             },
             else => return error.InvalidInteger,
         },
-        .int => |info| switch (info.width) {
-            32 => {
-                if (info.signed) {
-                    try appendWord(allocator, out, try parseSignedWord(token));
-                } else {
-                    try appendWord(allocator, out, try parseWord(token));
-                }
-            },
-            else => return error.InvalidInteger,
-        },
+        .int => |info| try appendTypedInteger(allocator, out, token, info.width, info.signed),
     }
+}
+
+fn appendTypedInteger(
+    allocator: Allocator,
+    out: *std.ArrayListUnmanaged(Word),
+    token: []const u8,
+    width: u32,
+    signed: bool,
+) ParseError!void {
+    if (width == 0 or width > 64) return error.InvalidInteger;
+    const raw: u64 = if (signed) signed_value: {
+        const value = std.fmt.parseInt(i64, token, 0) catch return error.InvalidInteger;
+        if (width < 64) {
+            const shift: u6 = @intCast(width - 1);
+            const magnitude = @as(i64, 1) << shift;
+            if (value < -magnitude or value > magnitude - 1) return error.InvalidInteger;
+        }
+        break :signed_value @bitCast(value);
+    } else unsigned_value: {
+        const value = try parseUnsigned64(token);
+        if (width < 64) {
+            const shift: u6 = @intCast(width);
+            if (value >= @as(u64, 1) << shift) return error.InvalidInteger;
+        }
+        break :unsigned_value value;
+    };
+
+    try appendWord(allocator, out, @truncate(raw));
+    if (width > 32) try appendWord(allocator, out, @truncate(raw >> 32));
 }
 
 fn appendValueEnum(
@@ -494,12 +541,16 @@ fn parseId(token: []const u8) ParseError!Word {
 }
 
 fn parseWord(token: []const u8) ParseError!Word {
+    const value = try parseUnsigned64(token);
+    return std.math.cast(Word, value) orelse error.InvalidInteger;
+}
+
+fn parseUnsigned64(token: []const u8) ParseError!u64 {
     if (token.len == 0) return error.InvalidInteger;
     const base: u8 = if (std.mem.startsWith(u8, token, "0x") or std.mem.startsWith(u8, token, "0X")) 16 else 10;
     const digits = if (base == 16) token[2..] else token;
     if (digits.len == 0) return error.InvalidInteger;
-    const value = std.fmt.parseUnsigned(u64, digits, base) catch return error.InvalidInteger;
-    return std.math.cast(Word, value) orelse error.InvalidInteger;
+    return std.fmt.parseUnsigned(u64, digits, base) catch return error.InvalidInteger;
 }
 
 fn parseSignedWord(token: []const u8) ParseError!Word {
@@ -585,6 +636,12 @@ fn recordParsedFacts(
     words: []const Word,
 ) Allocator.Error!void {
     switch (opcode) {
+        11 => {
+            if (words.len < 3) return;
+            if (extInstSetFromWords(words[2..])) |set| {
+                try context.ext_inst_sets.put(allocator, words[1], set);
+            }
+        },
         21 => {
             if (words.len < 4) return;
             try context.scalar_types.put(allocator, words[1], .{ .int = .{
@@ -600,6 +657,22 @@ fn recordParsedFacts(
         },
         else => {},
     }
+}
+
+fn extInstSetFromWords(words: []const Word) ?tables.ExtInstSet {
+    var name_storage: [64]u8 = undefined;
+    var name_len: usize = 0;
+    for (words) |word| {
+        for (0..@sizeOf(Word)) |byte_index| {
+            const shift: u5 = @intCast(byte_index * 8);
+            const byte: u8 = @truncate(word >> shift);
+            if (byte == 0) return tables.lookupExtInstSet(name_storage[0..name_len]);
+            if (name_len == name_storage.len) return null;
+            name_storage[name_len] = byte;
+            name_len += 1;
+        }
+    }
+    return null;
 }
 
 test "parse raw-id capability and memory model" {
@@ -709,6 +782,101 @@ test "parse source emits full module in source order" {
     }, parsed.words);
 }
 
+test "parse context-dependent scalar widths" {
+    const testing = std.testing;
+    var context: ParseContext = .{};
+    defer context.deinit(testing.allocator);
+
+    const type_lines = [_][]const u8{
+        "%1 = OpTypeInt 8 1",
+        "%2 = OpTypeInt 16 1",
+        "%3 = OpTypeInt 64 0",
+        "%4 = OpTypeFloat 16",
+        "%9 = OpTypeFloat 64",
+    };
+    for (type_lines) |line| {
+        var parsed = try parseLineWithContext(testing.allocator, &context, line, .{});
+        parsed.deinit(testing.allocator);
+    }
+
+    var int8 = try parseLineWithContext(testing.allocator, &context, "%5 = OpConstant %1 -1", .{});
+    defer int8.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0004002b, 1, 5, 0xffff_ffff }, int8.words);
+
+    var int16 = try parseLineWithContext(testing.allocator, &context, "%6 = OpConstant %2 -2", .{});
+    defer int16.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0004002b, 2, 6, 0xffff_fffe }, int16.words);
+
+    var uint64 = try parseLineWithContext(testing.allocator, &context, "%7 = OpConstant %3 18446744073709551615", .{});
+    defer uint64.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0005002b, 3, 7, 0xffff_ffff, 0xffff_ffff }, uint64.words);
+
+    var float16 = try parseLineWithContext(testing.allocator, &context, "%8 = OpConstant %4 0x1p-1", .{});
+    defer float16.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0004002b, 4, 8, 0x0000_3800 }, float16.words);
+
+    var float64 = try parseLineWithContext(testing.allocator, &context, "%10 = OpConstant %9 3.5", .{});
+    defer float64.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0005002b, 9, 10, 0, 0x400c_0000 }, float64.words);
+
+    try testing.expectError(
+        error.InvalidInteger,
+        parseLineWithContext(testing.allocator, &context, "%11 = OpConstant %1 -129", .{}),
+    );
+}
+
+test "parse extended instruction sets from imports" {
+    const testing = std.testing;
+    var context: ParseContext = .{};
+    defer context.deinit(testing.allocator);
+
+    const import_lines = [_][]const u8{
+        "%1 = OpExtInstImport \"OpenCL.std\"",
+        "%2 = OpExtInstImport \"OpenCL.DebugInfo.100\"",
+        "%3 = OpExtInstImport \"NonSemantic.Shader.DebugInfo.100\"",
+    };
+    for (import_lines) |line| {
+        var parsed = try parseLineWithContext(testing.allocator, &context, line, .{});
+        parsed.deinit(testing.allocator);
+    }
+
+    const acos = tables.lookupExtInst(.opencl_std, "acos").?;
+    var opencl = try parseLineWithContext(testing.allocator, &context, "%5 = OpExtInst %4 %1 acos %6", .{});
+    defer opencl.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0006000c, 4, 5, 1, acos.value, 6 }, opencl.words);
+
+    const printf = tables.lookupExtInst(.opencl_std, "printf").?;
+    var opencl_variable = try parseLineWithContext(testing.allocator, &context, "%7 = OpExtInst %4 %1 printf %6", .{});
+    defer opencl_variable.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0006000c, 4, 7, 1, printf.value, 6 }, opencl_variable.words);
+
+    const debug_basic = tables.lookupExtInst(.opencl_debug_info_100, "DebugTypeBasic").?;
+    var opencl_debug = try parseLineWithContext(
+        testing.allocator,
+        &context,
+        "%9 = OpExtInst %8 %2 DebugTypeBasic %10 %11 Signed",
+        .{},
+    );
+    defer opencl_debug.deinit(testing.allocator);
+    try testing.expectEqual(debug_basic.value, opencl_debug.words[4]);
+
+    const debug_source = tables.lookupExtInst(.opencl_debug_info_100, "DebugSource").?;
+    var opencl_debug_optional = try parseLineWithContext(testing.allocator, &context, "%14 = OpExtInst %8 %2 DebugSource %10", .{});
+    defer opencl_debug_optional.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0006000c, 8, 14, 2, debug_source.value, 10 }, opencl_debug_optional.words);
+
+    const debug_none = tables.lookupExtInst(.nonsemantic_shader_debug_info_100, "DebugInfoNone").?;
+    var nonsemantic_debug = try parseLineWithContext(testing.allocator, &context, "%13 = OpExtInst %12 %3 DebugInfoNone", .{});
+    defer nonsemantic_debug.deinit(testing.allocator);
+    try testing.expectEqualSlices(Word, &.{ 0x0005000c, 12, 13, 3, debug_none.value }, nonsemantic_debug.words);
+}
+
+test "parse source honors requested module version" {
+    var parsed = try parseSource(std.testing.allocator, "OpCapability Shader", .{ .version = .v1_0 });
+    defer parsed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(module_mod.Version.v1_0.toWord(), parsed.words[1]);
+}
+
 fn allocationFailureParseProbe(allocator: Allocator) !void {
     var context: ParseContext = .{};
     defer context.deinit(allocator);
@@ -721,6 +889,12 @@ fn allocationFailureParseProbe(allocator: Allocator) !void {
 
     var name = try parseLineWithContext(allocator, &context, "OpName %2 \"a\\\"b\\\\c\"", .{});
     defer name.deinit(allocator);
+
+    var import = try parseLineWithContext(allocator, &context, "%3 = OpExtInstImport \"OpenCL.std\"", .{});
+    defer import.deinit(allocator);
+
+    var ext_inst = try parseLineWithContext(allocator, &context, "%4 = OpExtInst %1 %3 acos %2", .{});
+    defer ext_inst.deinit(allocator);
 }
 
 test "parse line handles allocation failures without leaks" {

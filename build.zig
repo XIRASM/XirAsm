@@ -357,6 +357,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-system-float-atomic.asm"));
     run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-bit-vector-compressed.asm"));
     run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-compressed-control.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/spv/minimal-compute.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/data.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/data_aliases.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/emit_align_queries.asm"));
@@ -4100,6 +4101,25 @@ pub fn build(b: *std.Build) void {
         "rv32",
         &.{},
         "unsupported RISC-V instruction form",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/spv/minimal-compute.asm",
+        "spv-minimal-compute.spv",
+        "spv",
+        "030223070006010000000000050000000000000011000200010000000e00030000000000010000000f00050005000000030000006d61696e0000000010000600030000001100000001000000010000000100000013000200010000002100030002000000010000003600050001000000030000000000000002000000f800020004000000fd00010038000100",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/spv/negative/mixed-data.asm",
+        "spv",
+        &.{},
+        "SPIR-V module instructions cannot be mixed with other ISA, data, reserve, or alignment fragments",
     );
     addFailingAsmFixtureWithInputs(
         b,

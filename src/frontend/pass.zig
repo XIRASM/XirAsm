@@ -47,6 +47,10 @@ pub fn encodeInstructionFragments(
     allocator: Allocator,
     module: *module_mod.Module,
 ) PassError!EncodeInstructionsResult {
+    if (try validateSpirvModuleFragments(allocator, module)) |first_instruction| {
+        return encodeSpirvModuleFragments(allocator, module, first_instruction);
+    }
+
     var encoded_count: usize = 0;
     var changed_count: usize = 0;
 
@@ -228,6 +232,173 @@ pub fn encodeInstructionFragments(
         .encoded_count = encoded_count,
         .changed_count = changed_count,
     };
+}
+
+fn validateSpirvModuleFragments(
+    allocator: Allocator,
+    module: *module_mod.Module,
+) PassError!?fragment.IsaInstructionFragment {
+    var first_instruction: ?fragment.IsaInstructionFragment = null;
+    for (module.fragments.items.items) |stored_fragment| {
+        const instruction = switch (stored_fragment) {
+            .isa_instruction => |active| active,
+            else => continue,
+        };
+        if (instruction.target.isa() != .spirv) continue;
+        if (first_instruction) |first| {
+            const first_version = switch (first.target) {
+                .spirv => |config| config.version,
+                .x86, .riscv => return error.InvalidModeBits,
+            };
+            const active_version = switch (instruction.target) {
+                .spirv => |config| config.version,
+                .x86, .riscv => return error.InvalidModeBits,
+            };
+            if (instruction.section.index != first.section.index or active_version != first_version) {
+                try addSpirvDiagnostic(
+                    allocator,
+                    module,
+                    instruction.span,
+                    "all SPIR-V instructions in one output must use the same section and module version",
+                );
+                return error.FrontendDiagnostics;
+            }
+        } else {
+            first_instruction = instruction;
+        }
+    }
+
+    if (first_instruction == null) return null;
+    for (module.fragments.items.items) |stored_fragment| {
+        const incompatible_span = switch (stored_fragment) {
+            .isa_instruction => |instruction| if (instruction.target.isa() == .spirv) null else instruction.span,
+            .bytes => |bytes| if (bytes.data.len == 0) null else bytes.span,
+            .reserve => |reserve| if (reserve.size == 0) null else reserve.span,
+            .alignment => |alignment| alignment.span,
+        };
+        if (incompatible_span) |span| {
+            try addSpirvDiagnostic(
+                allocator,
+                module,
+                span,
+                "SPIR-V module instructions cannot be mixed with other ISA, data, reserve, or alignment fragments",
+            );
+            return error.FrontendDiagnostics;
+        }
+    }
+    return first_instruction;
+}
+
+fn encodeSpirvModuleFragments(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    first_instruction: fragment.IsaInstructionFragment,
+) PassError!EncodeInstructionsResult {
+    var source_text: std.ArrayList(u8) = .empty;
+    defer source_text.deinit(allocator);
+
+    var encoded_count: usize = 0;
+    for (module.fragments.items.items) |stored_fragment| {
+        const instruction = switch (stored_fragment) {
+            .isa_instruction => |active| active,
+            else => continue,
+        };
+        if (instruction.target.isa() != .spirv) continue;
+        if (source_text.items.len != 0) try source_text.append(allocator, '\n');
+        try source_text.appendSlice(allocator, instruction.text);
+        encoded_count += 1;
+    }
+
+    var facts = backend_adapter.encodeSpirvSource(
+        allocator,
+        source_text.items,
+        first_instruction.target,
+    ) catch |err| switch (err) {
+        error.UnsupportedSpirvInstruction => {
+            try addSpirvDiagnostic(
+                allocator,
+                module,
+                first_instruction.span,
+                "unsupported SPIR-V instruction or operand syntax",
+            );
+            return error.FrontendDiagnostics;
+        },
+        error.InvalidSpirvVersion => {
+            try addSpirvDiagnostic(
+                allocator,
+                module,
+                first_instruction.span,
+                "unsupported SPIR-V module version",
+            );
+            return error.FrontendDiagnostics;
+        },
+        error.InstructionTooLarge => return error.InstructionTooLarge,
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    defer facts.deinit(allocator);
+
+    var changed_count: usize = 0;
+    var wrote_module = false;
+    for (module.fragments.items.items, 0..) |stored_fragment, index| {
+        const instruction = switch (stored_fragment) {
+            .isa_instruction => |active| active,
+            else => continue,
+        };
+        if (instruction.target.isa() != .spirv) continue;
+        const id: fragment.FragmentId = .{ .index = @intCast(index) };
+        if (!wrote_module) {
+            if (instructionFactsChanged(instruction, facts)) changed_count += 1;
+            try module.fragments.updateIsaInstructionFacts(
+                allocator,
+                id,
+                facts.bytes,
+                facts.min_size,
+                facts.max_size,
+                facts.current_size,
+                false,
+            );
+            wrote_module = true;
+            continue;
+        }
+
+        if (instruction.min_size != 0 or
+            instruction.max_size != 0 or
+            instruction.current_size != 0 or
+            instruction.relaxable or
+            instruction.encoded_bytes.len != 0)
+        {
+            changed_count += 1;
+        }
+        try module.fragments.updateIsaInstructionFacts(
+            allocator,
+            id,
+            &.{},
+            0,
+            0,
+            0,
+            false,
+        );
+    }
+
+    try syncAnchoredLabelOffsets(allocator, module);
+    return .{
+        .encoded_count = encoded_count,
+        .changed_count = changed_count,
+    };
+}
+
+fn addSpirvDiagnostic(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    span: @import("source.zig").SourceSpan,
+    message: []const u8,
+) Allocator.Error!void {
+    try module.diagnostics.add(
+        allocator,
+        diagnostic.Severity.err,
+        span,
+        message,
+    );
 }
 
 pub fn resolveFixups(
@@ -488,6 +659,66 @@ test "pass encodes x86 instruction fragments through backend adapter" {
         },
         else => return error.UnexpectedFragment,
     }
+}
+
+test "pass encodes a complete spirv module without pass drift" {
+    const spirv_target = @import("target.zig").Target.spv();
+    var module = try module_mod.Module.init(std.testing.allocator, spirv_target);
+    defer module.deinit();
+
+    const capability = try module.appendIsaInstruction(
+        module.default_section,
+        spirv_target,
+        "OpCapability Shader",
+        @import("source.zig").unknown_span,
+    );
+    const memory_model = try module.appendIsaInstruction(
+        module.default_section,
+        spirv_target,
+        "OpMemoryModel Logical GLSL450",
+        @import("source.zig").unknown_span,
+    );
+    const void_type = try module.appendIsaInstruction(
+        module.default_section,
+        spirv_target,
+        "%1 = OpTypeVoid",
+        @import("source.zig").unknown_span,
+    );
+
+    const first = try encodeInstructionFragments(std.testing.allocator, &module);
+    try std.testing.expectEqual(@as(usize, 3), first.encoded_count);
+    try std.testing.expectEqual(@as(usize, 1), first.changed_count);
+
+    const capability_fragment = module.fragments.items.items[capability.index].isa_instruction;
+    try std.testing.expectEqual(@as(usize, 12 * @sizeOf(u32)), capability_fragment.encoded_bytes.len);
+    try std.testing.expectEqual(@as(u32, 0x07230203), std.mem.readInt(u32, capability_fragment.encoded_bytes[0..4], .little));
+    try std.testing.expectEqual(@as(u32, 2), std.mem.readInt(u32, capability_fragment.encoded_bytes[12..16], .little));
+    try std.testing.expectEqual(@as(usize, 0), module.fragments.items.items[memory_model.index].isa_instruction.encoded_bytes.len);
+    try std.testing.expectEqual(@as(usize, 0), module.fragments.items.items[void_type.index].isa_instruction.encoded_bytes.len);
+
+    const second = try encodeInstructionFragments(std.testing.allocator, &module);
+    try std.testing.expectEqual(@as(usize, 3), second.encoded_count);
+    try std.testing.expectEqual(@as(usize, 0), second.changed_count);
+}
+
+test "pass rejects mixed spirv and raw data fragments" {
+    const spirv_target = @import("target.zig").Target.spv();
+    var module = try module_mod.Module.init(std.testing.allocator, spirv_target);
+    defer module.deinit();
+
+    _ = try module.appendIsaInstruction(
+        module.default_section,
+        spirv_target,
+        "OpCapability Shader",
+        @import("source.zig").unknown_span,
+    );
+    _ = try module.emitBytes(module.default_section, &.{0xaa}, @import("source.zig").unknown_span);
+
+    try std.testing.expectError(
+        error.FrontendDiagnostics,
+        encodeInstructionFragments(std.testing.allocator, &module),
+    );
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
 }
 
 test "pass encoded size drives later layout offsets" {

@@ -87,6 +87,7 @@ fn integerArgAs(
 // api-matrix-lower: "x86.use64"
 // api-matrix-lower: "riscv.use32"
 // api-matrix-lower: "riscv.use64"
+// api-matrix-lower: "spv.use"
 // api-matrix-lower: "emit.u8"
 // api-matrix-lower: "emit.u16"
 // api-matrix-lower: "emit.u32"
@@ -281,6 +282,13 @@ pub fn lowerApiCall(
     if (std.mem.eql(u8, call.callee, "riscv.use64")) {
         try callbacks.require_arg_count(call, 0);
         active.target = try target.Target.initRiscv(64);
+        module.target = active.target;
+        return;
+    }
+
+    if (std.mem.eql(u8, call.callee, "spv.use")) {
+        try callbacks.require_arg_count(call, 0);
+        active.target = target.Target.spv();
         module.target = active.target;
         return;
     }

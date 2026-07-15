@@ -31,6 +31,12 @@ pub const AdapterError = Allocator.Error || error{
     UnsupportedPrefixes,
 };
 
+pub const SpirvAdapterError = Allocator.Error || error{
+    InstructionTooLarge,
+    InvalidSpirvVersion,
+    UnsupportedSpirvInstruction,
+};
+
 pub const FixupFact = struct {
     target: []u8,
     kind: fixup.FixupKind,
@@ -106,6 +112,64 @@ pub fn encodeInstruction(
         .x86_64 => encodeX86Instruction(allocator, instruction, options),
         .riscv64 => encodeRiscvInstruction(allocator, instruction, options),
         .spirv => error.UnsupportedInstructionTarget,
+    };
+}
+
+pub fn encodeSpirvSource(
+    allocator: Allocator,
+    source_text: []const u8,
+    options: target.Target,
+) SpirvAdapterError!InstructionFacts {
+    const version = try spirvVersion(options);
+    const bytes = backend.spirv.text.parseSourceToOwnedBytes(
+        allocator,
+        source_text,
+        .{ .version = version },
+    ) catch |err| return mapSpirvTextError(err);
+    errdefer allocator.free(bytes);
+
+    const current_size = sizeToU32(bytes.len) catch return error.InstructionTooLarge;
+    return .{
+        .bytes = bytes,
+        .min_size = current_size,
+        .max_size = current_size,
+        .current_size = current_size,
+    };
+}
+
+fn spirvVersion(options: target.Target) SpirvAdapterError!backend.spirv.module.Version {
+    const raw_version = switch (options) {
+        .spirv => |config| config.version,
+        .x86, .riscv => return error.InvalidSpirvVersion,
+    };
+    return switch (raw_version) {
+        0x00010000 => .v1_0,
+        0x00010100 => .v1_1,
+        0x00010200 => .v1_2,
+        0x00010300 => .v1_3,
+        0x00010400 => .v1_4,
+        0x00010500 => .v1_5,
+        0x00010600 => .v1_6,
+        else => error.InvalidSpirvVersion,
+    };
+}
+
+fn mapSpirvTextError(err: backend.spirv.text.ParseError) SpirvAdapterError {
+    return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.EmptyOrComment,
+        error.UnknownOpcode,
+        error.UnknownOperand,
+        error.ExpectedId,
+        error.ExpectedEquals,
+        error.ExpectedOperand,
+        error.TooManyOperands,
+        error.InvalidInteger,
+        error.InvalidString,
+        error.InstructionTooLong,
+        error.InvalidHeaderBound,
+        error.IdBoundOverflow,
+        => error.UnsupportedSpirvInstruction,
     };
 }
 
@@ -745,4 +809,20 @@ test "backend adapter records and resolves riscv branch labels through re-encodi
         &.{.{ .target = "forward", .value = 0x3c }},
     );
     try std.testing.expectEqualSlices(u8, &.{ 0x63, 0x04, 0xb5, 0x00 }, encoded.asSlice());
+}
+
+test "backend adapter encodes complete spirv source modules" {
+    const source_text =
+        \\OpCapability Shader
+        \\OpMemoryModel Logical GLSL450
+        \\%1 = OpTypeVoid
+    ;
+    var facts = try encodeSpirvSource(std.testing.allocator, source_text, target.Target.spv());
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 12 * @sizeOf(u32)), facts.bytes.len);
+    try std.testing.expectEqual(@as(u32, 0x07230203), std.mem.readInt(u32, facts.bytes[0..4], .little));
+    try std.testing.expectEqual(@as(u32, 0x00010600), std.mem.readInt(u32, facts.bytes[4..8], .little));
+    try std.testing.expectEqual(@as(u32, 2), std.mem.readInt(u32, facts.bytes[12..16], .little));
+    try std.testing.expectEqual(@as(u32, 0x00020011), std.mem.readInt(u32, facts.bytes[20..24], .little));
 }

@@ -58,6 +58,7 @@ api.x86_use32	api	x86.use32	call.callee, "x86.use32"	x86.use32()	x86 32-bit inst
 api.x86_use64	api	x86.use64	call.callee, "x86.use64"	x86.use64()	x86 64-bit instruction mode.
 api.riscv_use32	api	riscv.use32	call.callee, "riscv.use32"	riscv.use32()	RISC-V xlen 32 mode.
 api.riscv_use64	api	riscv.use64	call.callee, "riscv.use64"	riscv.use64()	RISC-V xlen 64 mode.
+api.spv_use	api	spv.use	call.callee, "spv.use"	spv.use()	SPIR-V 1.6 module mode.
 api.emit_u8	api	emit.u8	call.callee, "emit.u8"	emit.u8(	Emit one byte.
 api.emit_u16	api	emit.u16	call.callee, "emit.u16"	emit.u16(	Emit little-endian u16.
 api.emit_u32	api	emit.u32	call.callee, "emit.u32"	emit.u32(	Emit little-endian u32.

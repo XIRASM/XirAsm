@@ -1980,6 +1980,7 @@ xirasm program.xir -o program.bin --target x86-64
 xirasm program.xir -o program.bin --target x86
 xirasm program.xir -o program.bin --target rv64
 xirasm program.xir -o program.bin --target rv32
+xirasm module.spvasm -o module.spv --target spv
 ```
 
 XIRASM defaults to 64-bit x86 when no other target is selected. Source code may
@@ -1998,7 +1999,7 @@ entry:
 The mode call affects instructions that appear after it. Each instruction
 remembers the target that was active when the instruction was created.
 
-### Selecting x86 and RISC-V Modes
+### Selecting x86, RISC-V, and SPIR-V
 
 The source-level mode APIs are:
 
@@ -2009,6 +2010,7 @@ The source-level mode APIs are:
 | `x86.use64()` | 64-bit x86 |
 | `riscv.use32()` | 32-bit RISC-V |
 | `riscv.use64()` | 64-bit RISC-V |
+| `spv.use()` | SPIR-V 1.6 module |
 
 A source file may switch modes:
 
@@ -2042,6 +2044,24 @@ addi x0, x0, 0
 Do not apply x86 mode concepts to RISC-V or SPIR-V. XIRASM keeps their target
 settings separate rather than treating every ISA as a generic `mode_bits`
 value.
+
+SPIR-V is encoded as one complete logical module rather than as independent
+machine instructions. Select it with `spv.use()` and write standard `Op*`
+instruction spelling with numeric result IDs:
+
+```asm
+spv.use();
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid
+```
+
+The command-line aliases are `--target spv` and `--target spirv`; both select
+SPIR-V 1.6. A SPIR-V output must contain only SPIR-V ISA lines in one section
+and at one module version. It cannot be mixed with x86 or RISC-V instructions,
+data emission, reservation, or alignment fragments. Use numeric `%id` spelling
+such as `%1`; symbolic SPIR-V IDs are not currently accepted.
 
 ### Querying the Target
 
@@ -2115,6 +2135,10 @@ natural ISA text.
 XIRASM stores the instruction text together with the active target, then asks
 the corresponding ISA backend to encode it. The frontend continues to own
 labels, layout, output regions, and fixups.
+
+SPIR-V is the exception to per-instruction encoding: its ISA lines are gathered
+in source order and encoded together so the module header, ID bound, type
+context, and extended-instruction sets are resolved consistently.
 
 ### Compile-Time Values in Instructions
 

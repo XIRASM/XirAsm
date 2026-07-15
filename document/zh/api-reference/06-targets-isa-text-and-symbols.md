@@ -8,6 +8,7 @@
 | 目标平台系列条件 | `target.isa == .name` | 在 `if` 中检查当前指令集系列。 |
 | x86 模式 | `x86.use16()`、`x86.use32()`、`x86.use64()` | 选择 x86 及其指令模式。 |
 | RISC-V 模式 | `riscv.use32()`、`riscv.use64()` | 选择 RISC-V 及其 XLEN。 |
+| SPIR-V 模块 | `spv.use()` | 选择 SPIR-V 1.6 完整模块输出。 |
 | 动态处理器指令 | `isa(text)` | 根据文本值追加一条指令。 |
 | 逻辑原点 | `origin(address)` | 设置当前输出区域的基地址。 |
 | 当前位置 | `here()` | 返回当前逻辑地址。 |
@@ -49,6 +50,7 @@ if target.isa == .spirv { ... }
 | `x86.use64()` | x86-64 模式 |
 | `riscv.use32()` | XLEN 为 32 的 RISC-V |
 | `riscv.use64()` | XLEN 为 64 的 RISC-V |
+| `spv.use()` | SPIR-V 1.6 模块文本 |
 
 ```asm
 // 依次记录使用 16 位、32 位和 64 位模式的 x86 指令。
@@ -70,6 +72,18 @@ isa("addi x2, x0, 2")
 ```
 
 这些过程是普通源码操作。它们不会改变早先指令的含义，也不是收尾处理操作。
+
+`spv.use()` 开始一个完整的 SPIR-V 模块。SPIR-V 指令使用标准 `Op*` 拼写和数字结果 ID：
+
+```asm
+spv.use()
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid
+```
+
+整个输出只能包含同一 section、同一版本的 SPIR-V 指令片段。混入其他 ISA、数据写出、预留或对齐操作都会被拒绝。SPIR-V 结果 ID 目前必须写成 `%1`、`%2` 等数字形式，暂不接受符号 ID。命令行的 `--target spv` 和 `--target spirv` 都选择 SPIR-V 1.6。
 
 ## 动态处理器指令
 

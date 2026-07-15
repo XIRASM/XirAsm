@@ -474,6 +474,9 @@ fn parseTarget(value: []const u8) ?xirasm.Target {
     if (std.mem.eql(u8, value, "rv32") or std.mem.eql(u8, value, "riscv32")) {
         return .{ .riscv = .{ .xlen = 32 } };
     }
+    if (std.mem.eql(u8, value, "spv") or std.mem.eql(u8, value, "spirv")) {
+        return xirasm.Target.spv();
+    }
     return null;
 }
 
@@ -691,10 +694,10 @@ fn runAssembleCommand(
     if (progress_enabled) std.Progress.setStatus(.success);
     try stdout.print(
         "assembled output ({d} bytes, {d} instruction fragments, target {s})\n",
-        .{ assembled.bytes.len, assembled.encoded_count, targetName(options.target) },
+        .{ assembled.bytes.len, assembled.encoded_count, targetName(assembled.module.target) },
     );
     if (options.timings.enabled()) {
-        try writeTimingReport(stdout, "assemble", options.target, &assembled, &timing_trace, timing_trace.totalNs(io), options.timings);
+        try writeTimingReport(stdout, "assemble", assembled.module.target, &assembled, &timing_trace, timing_trace.totalNs(io), options.timings);
     }
     try stdout.flush();
 }
@@ -787,10 +790,10 @@ fn runBuildCommand(
     if (progress_enabled) std.Progress.setStatus(.success);
     try stdout.print(
         "built output ({d} bytes, {d} instruction fragments, target {s})\n",
-        .{ assembled.bytes.len, assembled.encoded_count, targetName(resolved.target) },
+        .{ assembled.bytes.len, assembled.encoded_count, targetName(assembled.module.target) },
     );
     if (resolved.timings.enabled()) {
-        try writeTimingReport(stdout, "build", resolved.target, &assembled, &timing_trace, timing_trace.totalNs(io), resolved.timings);
+        try writeTimingReport(stdout, "build", assembled.module.target, &assembled, &timing_trace, timing_trace.totalNs(io), resolved.timings);
     }
     try stdout.flush();
 }
@@ -1646,7 +1649,7 @@ fn helpText() []const u8 {
     \\  -o <path>         Write assembled output bytes to the given file
     \\  --listing <path>  Write a source/bytes listing file
     \\  --lst <path>      Alias for --listing
-    \\  --target <target> Select x86-64, x86, rv64, or rv32
+    \\  --target <target> Select x86-64, x86, rv64, rv32, or spv
     \\  --timings         Print assembly timing summary
     \\  --trace-phases    Print timing summary plus per-phase timings
     \\  --isa, --arch     Set init template ISA without changing OS/ABI
@@ -1712,6 +1715,7 @@ fn targetsHelpText() []const u8 {
     \\  x86, x86-32          32-bit x86
     \\  rv64, riscv64        64-bit RISC-V
     \\  rv32, riscv32        32-bit RISC-V
+    \\  spv, spirv           SPIR-V 1.6 module
     \\
     \\Init template selection:
     \\  x86 + --os windows   PE32/PE64 executable through format/format.inc
@@ -1767,6 +1771,24 @@ test "parseCliArgs accepts assemble progress target output and timings" {
             else => return error.WrongCommand,
         },
         .err => return error.ParseFailed,
+    }
+}
+
+test "parseCliArgs accepts SPIR-V target aliases" {
+    const aliases = [_][]const u8{ "spv", "spirv" };
+    for (aliases) |target_arg| {
+        const args = [_][]const u8{ "xirasm", "module.asm", "--target", target_arg };
+        const result = parseCliArgs(&args);
+        switch (result) {
+            .ok => |command| switch (command) {
+                .assemble => |options| {
+                    try std.testing.expectEqual(xirasm.Isa.spirv, options.target.isa());
+                    try std.testing.expectEqual(@as(?u16, null), options.target.bits());
+                },
+                else => return error.WrongCommand,
+            },
+            .err => return error.ParseFailed,
+        }
     }
 }
 

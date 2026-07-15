@@ -13,6 +13,7 @@ xirasm program.xir -o program.bin --target x86-64
 xirasm program.xir -o program.bin --target x86
 xirasm program.xir -o program.bin --target rv64
 xirasm program.xir -o program.bin --target rv32
+xirasm module.spvasm -o module.spv --target spv
 ```
 
 默认使用 64 位 x86。源文件可以随时切换模式。文件头写明模式能帮助编辑器、语法高亮和特定宽度的代码片段正确配置：
@@ -29,7 +30,7 @@ entry:
 
 模式切换只影响之后的指令。每个指令都记住编码时的目标平台。
 
-## 选择 x86 和 RISC-V 模式
+## 选择 x86、RISC-V 和 SPIR-V
 
 源文件内用这些接口切换模式：
 
@@ -40,6 +41,7 @@ entry:
 | `x86.use64()`   | 64 位 x86    |
 | `riscv.use32()` | 32 位 RISC-V |
 | `riscv.use64()` | 64 位 RISC-V |
+| `spv.use()` | SPIR-V 1.6 模块 |
 
 同一源文件可以多次切换：
 
@@ -70,7 +72,19 @@ addi x1, x0, 1
 addi x0, x0, 0
 ```
 
-x86 和 RISC-V/SPIR-V 的配置互不影响。
+x86、RISC-V 与 SPIR-V 使用各自的目标配置，不能把 x86 指令模式套用到其他指令集。
+
+SPIR-V 不是逐条编码的机器指令流，而是一个完整的逻辑模块。用 `spv.use()` 选择 SPIR-V 1.6，然后直接书写标准 `Op*` 指令和数字结果 ID：
+
+```asm
+spv.use();
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid
+```
+
+命令行可用 `--target spv` 或 `--target spirv`，两者都选择 SPIR-V 1.6。同一个 SPIR-V 输出只能包含同一 section、同一版本的 SPIR-V 指令，不能混入 x86/RISC-V 指令，也不能混入数据写出、预留或对齐片段。结果 ID 目前必须写成 `%1` 这类数字形式，暂不接受符号 ID。
 
 ## 查询目标平台
 
@@ -140,6 +154,8 @@ nop
 `x86.use64();` 和 `emit.u8(0x90);` 是编译期调用，`nop` 是原生指令。
 
 XIRASM 把指令文本和当前目标平台一起保存，再交给指令集后端编码。标号、数字、表达式和地址计算在前端处理。
+
+SPIR-V 是逐指令编码规则的例外：汇编器会按源码顺序收集整个模块的指令，再一次性交给后端，使模块头、ID 上界、类型上下文和扩展指令集保持一致。
 
 ## 在指令中使用编译期值
 
