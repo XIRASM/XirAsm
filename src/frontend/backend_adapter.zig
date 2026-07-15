@@ -44,6 +44,20 @@ pub const FixupFact = struct {
     }
 };
 
+pub const RiscvResolution = struct {
+    target: []const u8,
+    value: u64,
+};
+
+pub const RiscvEncodedInstruction = struct {
+    bytes: [4]u8,
+    len: u8,
+
+    pub fn asSlice(self: *const RiscvEncodedInstruction) []const u8 {
+        return self.bytes[0..self.len];
+    }
+};
+
 pub const InstructionFacts = struct {
     bytes: []u8,
     min_size: u32,
@@ -62,17 +76,25 @@ pub const InstructionFacts = struct {
     }
 };
 
-const ResolverContext = struct {
-    isa: target.Isa,
-    mode_bits: u16,
-};
-
 const X86ResolverContext = struct {
     isa: target.Isa,
     mode_bits: u16,
     allocator: Allocator,
     span: source.SourceSpan,
     fixups: *std.ArrayList(FixupFact),
+};
+
+const RiscvUnresolvedContext = struct {
+    allocator: Allocator,
+    span: source.SourceSpan,
+    kind: fixup.FixupKind,
+    fixups: *std.ArrayList(FixupFact),
+};
+
+const RiscvResolvedContext = struct {
+    instruction_address: u64,
+    pc_relative: bool,
+    resolutions: []const RiscvResolution,
 };
 
 pub fn encodeInstruction(
@@ -241,30 +263,30 @@ fn encodeRiscvInstruction(
     options: target.Target,
 ) AdapterError!InstructionFacts {
     const xlen = try riscvXLen(instruction, options);
-    var parsed = isa_text.parseInstructionText(allocator, instruction.text) catch |err| return mapIsaTextError(err);
-    defer parsed.deinit(allocator);
-
-    const symbolic_operands = try collectRiscvSymbolicOperands(
-        allocator,
-        parsed.operands,
-        instruction.span,
-    );
-    errdefer deinitFixupFacts(symbolic_operands, allocator);
-    const has_symbolic_operand = symbolic_operands.len != 0;
-
-    var resolver_context: ResolverContext = .{
-        .isa = instruction.target.isa(),
-        .mode_bits = xlen,
+    var fixups: std.ArrayList(FixupFact) = .empty;
+    errdefer {
+        clearFixupFacts(&fixups, allocator);
+        fixups.deinit(allocator);
+    }
+    var resolver_context: RiscvUnresolvedContext = .{
+        .allocator = allocator,
+        .span = instruction.span,
+        .kind = if (riscvMnemonicIsPcRelative(instruction.text)) .pc_relative else .absolute,
+        .fixups = &fixups,
     };
-    const resolver: ?backend.riscv.source.ExpressionResolver = if (has_symbolic_operand) .{
+    const resolver: backend.riscv.source.ExpressionResolver = .{
         .context = &resolver_context,
-        .resolveFn = unknownRiscvExpressionResolver,
-    } else null;
+        .resolveFn = recordUnresolvedRiscvExpression,
+    };
 
     const encoded = backend.riscv.encodeInstructionText(instruction.text, xlen, resolver) catch |err| return mapRiscvSourceError(err);
+    const width_bits = std.math.mul(u16, encoded.len, 8) catch return error.InvalidBackendFixupWidth;
+    for (fixups.items) |*stored_fixup| stored_fixup.width_bits = width_bits;
     const encoded_bytes = encoded.asSlice();
     const bytes = try allocator.dupe(u8, encoded_bytes);
     errdefer allocator.free(bytes);
+    const symbolic_operands = try fixups.toOwnedSlice(allocator);
+    errdefer deinitFixupFacts(symbolic_operands, allocator);
 
     const current_size = sizeToU32(bytes.len) catch return error.InstructionTooLarge;
     return .{
@@ -273,41 +295,34 @@ fn encodeRiscvInstruction(
         .max_size = current_size,
         .current_size = current_size,
         .fixups = symbolic_operands,
-        .relaxable = has_symbolic_operand,
+        .relaxable = symbolic_operands.len != 0,
     };
+}
+
+pub fn encodeResolvedRiscvInstruction(
+    instruction: fragment.IsaInstructionFragment,
+    options: target.Target,
+    instruction_address: u64,
+    resolutions: []const RiscvResolution,
+) AdapterError!RiscvEncodedInstruction {
+    const xlen = try riscvXLen(instruction, options);
+    var resolver_context: RiscvResolvedContext = .{
+        .instruction_address = instruction_address,
+        .pc_relative = riscvMnemonicIsPcRelative(instruction.text),
+        .resolutions = resolutions,
+    };
+    const resolver: backend.riscv.source.ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = resolveRiscvExpression,
+    };
+    const encoded = backend.riscv.encodeInstructionText(instruction.text, xlen, resolver) catch |err| return mapRiscvSourceError(err);
+    return .{ .bytes = encoded.bytes, .len = encoded.len };
 }
 
 fn riscvXLen(instruction: fragment.IsaInstructionFragment, options: target.Target) AdapterError!u8 {
     const xlen = instruction.target.bits() orelse options.bits() orelse return error.InvalidModeBits;
     if (xlen != 32 and xlen != 64) return error.InvalidModeBits;
     return @intCast(xlen);
-}
-
-fn collectRiscvSymbolicOperands(
-    allocator: Allocator,
-    operands: []const []const u8,
-    span: source.SourceSpan,
-) AdapterError![]FixupFact {
-    var facts: std.ArrayList(FixupFact) = .empty;
-    errdefer {
-        for (facts.items) |*stored_fixup| stored_fixup.deinit(allocator);
-        facts.deinit(allocator);
-    }
-
-    for (operands) |operand| {
-        if (try riscvSymbolicTargetFromOperand(allocator, operand)) |target_text| {
-            errdefer allocator.free(target_text);
-            try facts.append(allocator, .{
-                .target = target_text,
-                .kind = .absolute,
-                .offset = 0,
-                .width_bits = 64,
-                .span = span,
-            });
-        }
-    }
-
-    return facts.toOwnedSlice(allocator);
 }
 
 fn applyX86BackendFixups(allocator: Allocator, facts: []FixupFact, units: []const backend.x86.EncodeUnit) AdapterError!void {
@@ -403,49 +418,23 @@ fn clearFixupFacts(facts: *std.ArrayList(FixupFact), allocator: Allocator) void 
     facts.clearRetainingCapacity();
 }
 
-fn riscvSymbolicTargetFromOperand(
-    allocator: Allocator,
-    operand: []const u8,
-) AdapterError!?[]u8 {
-    var found_symbol: ?[]const u8 = null;
-    var tokenizer = std.mem.tokenizeAny(u8, operand, " \t\r\n,[]()+-*/%&|^<>:");
-    while (tokenizer.next()) |token| {
-        if (!isa_text.looksLikeSymbolReference(token)) continue;
-        if (isa_text.isKnownRiscvWord(token)) continue;
-        if (parseRiscvIntegerProbe(token)) continue;
-        if (found_symbol != null) {
-            return try allocator.dupe(u8, std.mem.trim(u8, operand, " \t\r\n"));
-        }
-        found_symbol = token;
+fn riscvMnemonicIsPcRelative(text: []const u8) bool {
+    const trimmed = std.mem.trim(u8, text, " \t\r\n");
+    const end = std.mem.indexOfAny(u8, trimmed, " \t\r\n") orelse trimmed.len;
+    const mnemonic = trimmed[0..end];
+    var normalized_storage: [96]u8 = undefined;
+    if (mnemonic.len > normalized_storage.len) return false;
+    for (mnemonic, 0..) |byte, index| {
+        normalized_storage[index] = switch (byte) {
+            '.', '-' => '_',
+            else => std.ascii.toLower(byte),
+        };
     }
-
-    const symbol = found_symbol orelse return null;
-    if (riscvOperandUsesOnlyHintsAndOneSymbol(operand, symbol)) return try allocator.dupe(u8, symbol);
-    return try allocator.dupe(u8, std.mem.trim(u8, operand, " \t\r\n"));
-}
-
-fn riscvOperandUsesOnlyHintsAndOneSymbol(
-    operand: []const u8,
-    symbol: []const u8,
-) bool {
-    var found_symbol = false;
-    var tokenizer = std.mem.tokenizeAny(u8, operand, " \t\r\n,");
-    while (tokenizer.next()) |token| {
-        if (isa_text.isKnownRiscvWord(token)) continue;
-        if (parseRiscvIntegerProbe(token)) continue;
-        if (!std.mem.eql(u8, token, symbol)) return false;
-        if (found_symbol) return false;
-        found_symbol = true;
-    }
-    return found_symbol;
-}
-
-fn parseRiscvIntegerProbe(token: []const u8) bool {
-    if (std.fmt.parseInt(i64, token, 0)) |_| {
-        return true;
-    } else |_| {
-        return false;
-    }
+    const spec = (backend.riscv.api.instructionByMnemonicAnyXLen(normalized_storage[0..mnemonic.len]) catch return false) orelse return false;
+    return switch (spec.semantic) {
+        .rs1_rs2_offset, .rd_offset, .offset, .c_offset, .c_rs1_p_offset => true,
+        else => false,
+    };
 }
 
 fn mapIsaTextError(err: isa_text.ParseError) AdapterError {
@@ -517,16 +506,38 @@ fn unknownX86ExpressionResolver(context: *anyopaque, text: []const u8) backend.x
     };
 }
 
-fn unknownRiscvExpressionResolver(context: *anyopaque, text: []const u8) backend.riscv.source.SourceError!?i64 {
-    const resolver_context: *const ResolverContext = @ptrCast(@alignCast(context));
-    if (resolver_context.isa != .riscv64) {
-        return null;
-    }
-    if (resolver_context.mode_bits != 32 and resolver_context.mode_bits != 64) {
-        return null;
-    }
-    if (text.len == 0) return null;
+fn recordUnresolvedRiscvExpression(context: *anyopaque, text: []const u8) backend.riscv.source.SourceError!?i64 {
+    const resolver_context: *RiscvUnresolvedContext = @ptrCast(@alignCast(context));
+    const target_text = std.mem.trim(u8, text, " \t\r\n");
+    if (target_text.len == 0) return null;
+    const owned_target = try resolver_context.allocator.dupe(u8, target_text);
+    errdefer resolver_context.allocator.free(owned_target);
+    try resolver_context.fixups.append(resolver_context.allocator, .{
+        .target = owned_target,
+        .kind = resolver_context.kind,
+        .offset = 0,
+        .width_bits = 0,
+        .span = resolver_context.span,
+    });
     return 0;
+}
+
+fn resolveRiscvExpression(context: *anyopaque, text: []const u8) backend.riscv.source.SourceError!?i64 {
+    const resolver_context: *const RiscvResolvedContext = @ptrCast(@alignCast(context));
+    const target_text = std.mem.trim(u8, text, " \t\r\n");
+    for (resolver_context.resolutions) |resolution| {
+        if (!std.mem.eql(u8, resolution.target, target_text)) continue;
+        const raw_value: i128 = @intCast(resolution.value);
+        const adjusted = if (resolver_context.pc_relative)
+            raw_value - @as(i128, @intCast(resolver_context.instruction_address))
+        else
+            raw_value;
+        if (adjusted < std.math.minInt(i64) or adjusted > std.math.maxInt(i64)) {
+            return error.ImmediateOutOfRange;
+        }
+        return @intCast(adjusted);
+    }
+    return null;
 }
 
 fn sizeToU32(size: usize) error{InstructionTooLarge}!u32 {
@@ -696,4 +707,42 @@ test "backend adapter encodes fixed riscv instruction bytes" {
     try std.testing.expectEqual(@as(u32, 4), facts.current_size);
     try std.testing.expect(!facts.relaxable);
     try std.testing.expectEqual(@as(usize, 0), facts.fixups.len);
+}
+
+test "backend adapter leaves parsed riscv vector operands out of fixups" {
+    const riscv_target = try target.Target.initRiscv(64);
+    var facts = try testEncodeInstruction("vsetvli t0, a2, e8, m8, ta, ma", riscv_target, riscv_target);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualSlices(u8, &.{ 0xd7, 0x72, 0x36, 0x0c }, facts.bytes);
+    try std.testing.expectEqual(@as(usize, 0), facts.fixups.len);
+}
+
+test "backend adapter records and resolves riscv branch labels through re-encoding" {
+    const riscv_target = try target.Target.initRiscv(64);
+    var facts = try testEncodeInstruction("beq a0, a1, forward", riscv_target, riscv_target);
+    defer facts.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+    try std.testing.expectEqualStrings("forward", facts.fixups[0].target);
+    try std.testing.expectEqual(fixup.FixupKind.pc_relative, facts.fixups[0].kind);
+    try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+
+    const text = try std.testing.allocator.dupe(u8, "beq a0, a1, forward");
+    defer std.testing.allocator.free(text);
+    var encoded = try encodeResolvedRiscvInstruction(
+        .{
+            .section = .{ .index = 0 },
+            .target = riscv_target,
+            .text = text,
+            .min_size = 4,
+            .max_size = 4,
+            .current_size = 4,
+            .span = source.unknown_span,
+        },
+        riscv_target,
+        0x34,
+        &.{.{ .target = "forward", .value = 0x3c }},
+    );
+    try std.testing.expectEqualSlices(u8, &.{ 0x63, 0x04, 0xb5, 0x00 }, encoded.asSlice());
 }

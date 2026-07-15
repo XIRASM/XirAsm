@@ -194,6 +194,14 @@ const ProjectedOperand = union(enum) {
 
 fn parseOperand(token: []const u8, resolver: ?ExpressionResolver, context: OperandContext) SourceError!ProjectedOperand {
     if (context.semantic) |semantic| {
+        if (semantic == .amo or semantic == .lr or semantic == .sc) {
+            if (parseAtomicAddress(token)) |operand| {
+                return .{ .one = operand };
+            } else |err| switch (err) {
+                error.UnsupportedOperandSyntax => {},
+                else => return err,
+            }
+        }
         if (isVectorMemorySemantic(semantic)) {
             if (parseVectorMemoryBase(token)) |operand| {
                 return .{ .one = operand };
@@ -239,6 +247,17 @@ fn parseOperand(token: []const u8, resolver: ?ExpressionResolver, context: Opera
     } else |_| {}
 
     return .{ .one = .{ .imm = try parseImmediate(token, resolver) } };
+}
+
+fn parseAtomicAddress(token: []const u8) SourceError!types.Operand {
+    const trimmed = std.mem.trim(u8, token, " \t\r\n");
+    if (trimmed.len < 3 or trimmed[0] != '(' or trimmed[trimmed.len - 1] != ')') {
+        return error.UnsupportedOperandSyntax;
+    }
+    const base_text = std.mem.trim(u8, trimmed[1 .. trimmed.len - 1], " \t\r\n");
+    if (base_text.len == 0) return error.UnsupportedOperandSyntax;
+    const base = api.parseRegister(base_text) catch return error.UnsupportedOperandSyntax;
+    return .{ .reg = base };
 }
 
 fn isVectorMemorySemantic(semantic: types.Semantic) bool {
@@ -800,6 +819,17 @@ fn normalizeParsedOperandOrder(context: OperandContext, parsed: *ParsedInstructi
         },
         else => {},
     }
+}
+
+test "source parser encodes canonical atomic address forms" {
+    const amoadd = try encodeInstructionText("amoadd.w.aqrl a0, a1, (a2)", 64, null);
+    try std.testing.expectEqualSlices(u8, &.{ 0x2f, 0x25, 0xb6, 0x06 }, amoadd.asSlice());
+
+    const load_reserved = try encodeInstructionText("lr.d.aq a3, (a4)", 64, null);
+    try std.testing.expectEqualSlices(u8, &.{ 0xaf, 0x36, 0x07, 0x14 }, load_reserved.asSlice());
+
+    const store_conditional = try encodeInstructionText("sc.d.rl a5, a6, (a7)", 64, null);
+    try std.testing.expectEqualSlices(u8, &.{ 0xaf, 0xb7, 0x08, 0x1b }, store_conditional.asSlice());
 }
 
 fn normalizeMnemonicLocal(buffer: []u8, mnemonic: []const u8) SourceError![]const u8 {

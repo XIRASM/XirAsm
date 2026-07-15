@@ -352,7 +352,11 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addArg("--fixtures");
     run_api_matrix.addFileArg(b.path("tests/x86/basic.asm"));
     run_api_matrix.addFileArg(b.path("tests/x86/branch.asm"));
-    run_api_matrix.addFileArg(b.path("tests/riscv/basic.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv32-integer-control.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-integer-control.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-system-float-atomic.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-bit-vector-compressed.asm"));
+    run_api_matrix.addFileArg(b.path("tests/isa/riscv/rv64-compressed-control.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/data.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/data_aliases.asm"));
     run_api_matrix.addFileArg(b.path("tests/flat/emit_align_queries.asm"));
@@ -4043,10 +4047,68 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
-        "tests/riscv/basic.asm",
-        "riscv-basic.bin",
+        "tests/isa/riscv/rv32-integer-control.asm",
+        "riscv-rv32-integer-control.bin",
+        "rv32",
+        "9300100013a5f5ff13c6a6059312f30093537e403385c500b306f7403395c502b346f70233f88802032501ff2326b1006364b500e356d6fcef0080006780000013000000",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/riscv/rv64-integer-control.asm",
+        "riscv-rv64-integer-control.bin",
         "rv64",
-        "9300100013000000",
+        "9300100013850580b7523412176345233385c500b306f7409312f30193531e413385c502b356f70233e88802033501ff233cb1006304b500e314d6fcef0080006780000013000000",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/riscv/rv64-system-float-atomic.asm",
+        "riscv-rv64-system-float-atomic.bin",
+        "rv64",
+        "0f0030030f1000007300000073001000f312033073e341302f25b606af360714afb7081b07250101272ab1005385c500c316f782531505c0d39505e2",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/riscv/rv64-bit-vector-compressed.asm",
+        "riscv-rv64-bit-vector-compressed.bin",
+        "rv64",
+        "33f5c540b366f74033c888409312036093131e601395256033a6e620b317182933d42461d772360c0780050227000502d7802102574255000504aa8482800100",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/riscv/rv64-compressed-control.asm",
+        "riscv-rv64-compressed-control.bin",
+        "rv64",
+        "010011c0f5fc11a001008280",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/riscv/negative/rv32-rejects-rv64.asm",
+        "rv32",
+        &.{},
+        "unsupported RISC-V instruction form",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/riscv/negative/atomic-offset-address.asm",
+        "rv64",
+        &.{},
+        "unsupported RISC-V instruction form",
     );
     addAsmFixture(
         b,

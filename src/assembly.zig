@@ -485,11 +485,24 @@ fn patchResolvedFixups(
     image_regions: []const frontend.output.ImageRegion,
     fixup_result: frontend.FixupPassResult,
 ) (AssemblyError || anyerror)!void {
-    for (fixup_result.items) |state| {
+    for (fixup_result.items, 0..) |state, state_index| {
         switch (state) {
             .pending => {},
             .resolved => |resolved| {
                 const stored_fixup = try fixupAt(module, resolved.fixup);
+                if (isRiscvInstructionFixup(module, stored_fixup)) {
+                    if (!hasEarlierFixupForFragment(module, state_index, stored_fixup.fragment)) {
+                        try patchResolvedRiscvInstruction(
+                            bytes,
+                            module,
+                            module_layout,
+                            image_regions,
+                            fixup_result,
+                            stored_fixup.fragment,
+                        );
+                    }
+                    continue;
+                }
                 const section_id = try sectionForFragment(module, stored_fixup.fragment);
                 const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
                 const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
@@ -498,6 +511,94 @@ fn patchResolvedFixups(
             },
         }
     }
+}
+
+fn isRiscvInstructionFixup(module: *const frontend.Module, stored_fixup: frontend.Fixup) bool {
+    if (stored_fixup.fragment.index >= module.fragments.items.items.len) return false;
+    return switch (module.fragments.items.items[stored_fixup.fragment.index]) {
+        .isa_instruction => |instruction| instruction.target.isa() == .riscv64,
+        else => false,
+    };
+}
+
+fn hasEarlierFixupForFragment(
+    module: *const frontend.Module,
+    state_index: usize,
+    fragment_id: frontend.FragmentId,
+) bool {
+    var index: usize = 0;
+    while (index < state_index and index < module.fixups.items.items.len) : (index += 1) {
+        if (module.fixups.items.items[index].fragment.index == fragment_id.index) return true;
+    }
+    return false;
+}
+
+fn patchResolvedRiscvInstruction(
+    bytes: []u8,
+    module: *const frontend.Module,
+    module_layout: *const frontend.ModuleLayout,
+    image_regions: []const frontend.output.ImageRegion,
+    fixup_result: frontend.FixupPassResult,
+    fragment_id: frontend.FragmentId,
+) (AssemblyError || anyerror)!void {
+    if (fragment_id.index >= module.fragments.items.items.len) return error.InvalidFragment;
+    const instruction = switch (module.fragments.items.items[fragment_id.index]) {
+        .isa_instruction => |active| active,
+        else => return error.InvalidFragment,
+    };
+    if (instruction.target.isa() != .riscv64) return error.InvalidFixupTarget;
+    if (module.fixups.items.items.len != fixup_result.items.len) return error.InvalidFixupTarget;
+
+    // The backend source parser accepts at most 16 operands, so one instruction
+    // cannot produce more than 16 resolver-backed fixups.
+    var resolution_storage: [16]frontend.RiscvResolution = undefined;
+    var resolution_count: usize = 0;
+    for (module.fixups.items.items, fixup_result.items, 0..) |candidate, state, state_index| {
+        if (candidate.fragment.index != fragment_id.index) continue;
+        const resolved = switch (state) {
+            .pending => return,
+            .resolved => |active| active,
+        };
+        if (resolved.fixup.index != state_index) return error.InvalidFixupTarget;
+        if (resolution_count >= resolution_storage.len) return error.InvalidFixupTarget;
+        resolution_storage[resolution_count] = .{
+            .target = fixupTargetText(candidate),
+            .value = resolved.value,
+        };
+        resolution_count += 1;
+    }
+    if (resolution_count == 0) return error.InvalidFixupTarget;
+
+    const section_id = instruction.section;
+    const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
+    const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
+    const fragment_layout = fragmentLayout(section_layout, fragment_id) orelse return error.InvalidFragment;
+    const instruction_address = std.math.add(u64, section_layout.origin, fragment_layout.offset) catch return error.OffsetOverflow;
+    var encoded = try frontend.encodeResolvedRiscvInstruction(
+        instruction,
+        module.target,
+        instruction_address,
+        resolution_storage[0..resolution_count],
+    );
+    const encoded_bytes = encoded.asSlice();
+    if (encoded_bytes.len != fragment_layout.file_size or encoded_bytes.len != instruction.current_size) {
+        return error.InvalidFixupTarget;
+    }
+    const patch_end_relative = std.math.add(u64, fragment_layout.offset, encoded_bytes.len) catch return error.OffsetOverflow;
+    if (patch_end_relative > image_region.file_size) return error.InvalidFixupTarget;
+
+    const patch_offset = std.math.add(u64, image_region.file_offset, fragment_layout.offset) catch return error.OffsetOverflow;
+    const patch_start = try sizeToUsize(patch_offset);
+    const patch_end = std.math.add(usize, patch_start, encoded_bytes.len) catch return error.OffsetOverflow;
+    if (patch_end > bytes.len) return error.InvalidFixupTarget;
+    @memcpy(bytes[patch_start..patch_end], encoded_bytes);
+}
+
+fn fixupTargetText(stored_fixup: frontend.Fixup) []const u8 {
+    return switch (stored_fixup.target) {
+        .symbol => |symbol| symbol,
+        .expression_text => |text| text,
+    };
 }
 
 fn imageRegionForSection(
