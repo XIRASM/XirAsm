@@ -1,6 +1,6 @@
 # XIRASM
 
-[简体中文](README.zh-CN.md) | [Website](https://xirasm.github.io/XirAsm-site/) | [What's New](https://xirasm.github.io/XirAsm-site/#updates)
+[简体中文](README.zh-CN.md) | [Website](https://xirasm-site.pages.dev/) | [What's New](https://xirasm-site.pages.dev/#updates)
 
 **Assembly syntax for instructions. A real compile-time language for everything
 around them.**

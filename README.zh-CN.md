@@ -1,6 +1,6 @@
 # XIRASM
 
-[English](README.md) | [项目网站](https://xirasm.github.io/XirAsm-site/) | [版本更新](https://xirasm.github.io/XirAsm-site/#updates)
+[English](README.md) | [项目网站](https://xirasm-site.pages.dev/) | [版本更新](https://xirasm-site.pages.dev/#updates)
 
 **指令使用自然汇编语法，外围能力使用真正的编译期语言。**
 
