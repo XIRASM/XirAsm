@@ -21,6 +21,7 @@ pub const ExpressionResolveError = api.ExpressionResolveError;
 pub const ExpressionResolver = api.ExpressionResolver;
 pub const Fixup = api.Fixup;
 pub const FixupKind = api.FixupKind;
+pub const FixupValueRange = api.FixupValueRange;
 pub const MaterializeError = api.MaterializeError;
 pub const OperandSizePrefix = api.OperandSizePrefix;
 pub const RepPrefixKind = api.RepPrefixKind;
@@ -31,6 +32,7 @@ pub const encodeBuiltinUnits = api.encodeBuiltinUnits;
 pub const encodeBuiltinUnitsWithResolver = api.encodeBuiltinUnitsWithResolver;
 pub const materializeFixup = api.materializeFixup;
 pub const materializeOutput = api.materializeOutput;
+pub const fixupValueRange = api.fixupValueRange;
 pub const segmentPrefixValueByName = api.segmentPrefixValueByName;
 
 test {

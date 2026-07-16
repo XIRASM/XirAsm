@@ -12,6 +12,20 @@ pub const EncodeUnit = encode.EncodeUnit;
 pub const Fixup = encode.Fixup;
 pub const FixupKind = encode.FixupKind;
 
+pub const FixupValueRange = enum {
+    wrap,
+    signed,
+    unsigned,
+};
+
+pub fn fixupValueRange(fixup: Fixup) FixupValueRange {
+    return switch (fixup.flags & types.out_signmask) {
+        types.out_signed => .signed,
+        types.out_unsigned => .unsigned,
+        else => .wrap,
+    };
+}
+
 pub const RepPrefixKind = enum {
     none,
     rep,
@@ -1100,12 +1114,9 @@ fn setImmFlags(operand: *match.Operand, opt: u32) void {
 
     const strict = (operand.type_bits & types.strict) != 0 or (opt & types.optim_strict_oper) != 0;
     if ((operand.opflags & types.opflag_unknown) != 0) {
-        if (!strict or (operand.type_bits & match.size_mask) == 0) {
-            operand.type_bits |= match.unity | match.fourbits;
-        }
-        if (!strict) {
-            operand.type_bits |= match.sbytedword | match.sbyteword | match.udword | match.sdword_operand;
-        }
+        // Unknown values cannot safely select value-dependent short forms.
+        // The final target may not preserve the sign-extension semantics used
+        // by unity, four-bit, or sign-extended byte encodings.
         operand.type_bits |= match.imm_known;
         return;
     }
@@ -2217,6 +2228,41 @@ test "encodeBuiltinUnits uses branch relaxation hint only for unknown automatic 
     const known_short_bytes = try materializeOutput(testing.allocator, known_short.units());
     defer if (known_short_bytes.len > 0) testing.allocator.free(known_short_bytes);
     try testing.expectEqualSlices(u8, &.{ 0xEB, 0xFE }, known_short_bytes);
+}
+
+test "encodeBuiltinUnits keeps unknown immediates on conservative fixup widths" {
+    const testing = std.testing;
+    var resolver_context: u8 = 0;
+    const resolver: ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = testUnknownExpressionResolver,
+    };
+
+    var add = try encodeBuiltinUnitsWithResolver(
+        testing.allocator,
+        "add",
+        &.{ "r11", "target" },
+        EncodeContext.init(64),
+        false,
+        resolver,
+    );
+    defer add.deinit(testing.allocator);
+    const add_fixup = add.units()[add.units().len - 1].fixup orelse return error.UnexpectedTestResult;
+    try testing.expectEqual(@as(u8, 4), add_fixup.size);
+    try testing.expectEqual(FixupValueRange.signed, fixupValueRange(add_fixup));
+
+    var mov = try encodeBuiltinUnitsWithResolver(
+        testing.allocator,
+        "mov",
+        &.{ "rax", "target" },
+        EncodeContext.init(64),
+        false,
+        resolver,
+    );
+    defer mov.deinit(testing.allocator);
+    const mov_fixup = mov.units()[mov.units().len - 1].fixup orelse return error.UnexpectedTestResult;
+    try testing.expectEqual(@as(u8, 8), mov_fixup.size);
+    try testing.expectEqual(FixupValueRange.wrap, fixupValueRange(mov_fixup));
 }
 
 test "encodeBuiltinUnits preserves symbolic near Jcc fixup at nonzero origin" {

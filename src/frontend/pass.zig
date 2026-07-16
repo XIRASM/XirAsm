@@ -511,6 +511,7 @@ fn recordInstructionFixups(
         else
             try module.addExpressionFixup(fragment_id, fact.target, fact.kind, fact.offset, fact.width_bits, fact.span);
         if (fixup_id.index >= module.fixups.items.items.len) return error.InvalidFixupTarget;
+        try module.fixups.setValueRange(fixup_id, fact.value_range);
     }
 }
 
@@ -524,6 +525,7 @@ fn hasInstructionFixup(
         if (stored.kind != fact.kind) continue;
         if (stored.offset != fact.offset) continue;
         if (stored.width_bits != fact.width_bits) continue;
+        if (stored.value_range != fact.value_range) continue;
         switch (stored.target) {
             .symbol => |symbol| {
                 if (isSimpleSymbolFact(fact.target) and std.mem.eql(u8, symbol, fact.target)) return true;

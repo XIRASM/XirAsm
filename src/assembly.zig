@@ -651,7 +651,7 @@ fn patchOneFixup(
     if (patch_end > bytes.len) return error.InvalidFixupTarget;
 
     const value = switch (stored_fixup.kind) {
-        .absolute => try absolutePatchValue(target_value, stored_fixup.width_bits),
+        .absolute => try absolutePatchValue(target_value, stored_fixup.width_bits, stored_fixup.value_range),
         .pc_relative => value: {
             const next_ip_offset = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.OffsetOverflow;
             const next_ip = std.math.add(u64, section_layout.origin, next_ip_offset) catch return error.OffsetOverflow;
@@ -668,13 +668,32 @@ fn fixupWidthBytes(width_bits: u16) !usize {
     return @intCast(width_bytes);
 }
 
-fn absolutePatchValue(value: u64, width_bits: u16) !i64 {
-    if (width_bits < 64) {
-        const max_value = (@as(u64, 1) << @intCast(width_bits)) - 1;
-        if (value > max_value) return error.InvalidFixupTarget;
-    }
-    if (value > std.math.maxInt(i64)) return error.InvalidFixupTarget;
-    return @intCast(value);
+fn absolutePatchValue(value: u64, width_bits: u16, value_range: frontend.fixup.ValueRange) !i64 {
+    const signed_value: i64 = @bitCast(value);
+    const unsigned_fits = width_bits == 64 or value <= (@as(u64, 1) << @intCast(width_bits)) - 1;
+    const signed_fits = switch (width_bits) {
+        8 => signed_value >= std.math.minInt(i8) and signed_value <= std.math.maxInt(i8),
+        16 => signed_value >= std.math.minInt(i16) and signed_value <= std.math.maxInt(i16),
+        32 => signed_value >= std.math.minInt(i32) and signed_value <= std.math.maxInt(i32),
+        64 => true,
+        else => return error.InvalidFixupTarget,
+    };
+    const fits = switch (value_range) {
+        .wrap => unsigned_fits or signed_fits,
+        .signed => signed_fits,
+        .unsigned => unsigned_fits,
+    };
+    if (!fits) return error.InvalidFixupTarget;
+    return signed_value;
+}
+
+test "absolute fixup values honor backend signedness" {
+    try std.testing.expectEqual(@as(i64, 127), try absolutePatchValue(127, 8, .signed));
+    try std.testing.expectEqual(@as(i64, -128), try absolutePatchValue(@bitCast(@as(i64, -128)), 8, .signed));
+    try std.testing.expectError(error.InvalidFixupTarget, absolutePatchValue(128, 8, .signed));
+    try std.testing.expectError(error.InvalidFixupTarget, absolutePatchValue(0x80000000, 32, .signed));
+    try std.testing.expectEqual(@as(i64, -1), try absolutePatchValue(std.math.maxInt(u64), 64, .wrap));
+    try std.testing.expectEqual(@as(i64, 255), try absolutePatchValue(255, 8, .unsigned));
 }
 
 fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) !i64 {

@@ -224,6 +224,49 @@ pub fn parseOwned(allocator: Allocator, input: []const u8) ExpressionError!Node 
     return parser.parse();
 }
 
+pub fn evaluateConstantInteger(allocator: Allocator, input: []const u8) ExpressionError!?u64 {
+    var node = try parseOwned(allocator, input);
+    defer node.deinit(allocator);
+    return constantIntegerValue(&node);
+}
+
+fn constantIntegerValue(node: *const Node) ExpressionError!?u64 {
+    return switch (node.*) {
+        .integer => |value| value,
+        .unary => |unary| constantUnaryInteger(unary.op, unary.operand),
+        .binary => |binary| constantBinaryInteger(binary.op, binary.left, binary.right),
+        .float64, .boolean, .string_literal, .bytes_literal, .symbol, .field_access, .builtin_call => null,
+    };
+}
+
+fn constantUnaryInteger(op: UnaryOp, operand: *const Node) ExpressionError!?u64 {
+    const value = (try constantIntegerValue(operand)) orelse return null;
+    return switch (op) {
+        .plus => value,
+        .neg => 0 -% value,
+        .bit_not => ~value,
+        .logical_not, .lengthof => null,
+    };
+}
+
+fn constantBinaryInteger(op: BinaryOp, left: *const Node, right: *const Node) ExpressionError!?u64 {
+    const lhs = (try constantIntegerValue(left)) orelse return null;
+    const rhs = (try constantIntegerValue(right)) orelse return null;
+    return switch (op) {
+        .add => std.math.add(u64, lhs, rhs) catch return error.InvalidNumber,
+        .sub => std.math.sub(u64, lhs, rhs) catch return error.InvalidNumber,
+        .mul => std.math.mul(u64, lhs, rhs) catch return error.InvalidNumber,
+        .div => if (rhs == 0) error.DivisionByZero else @divTrunc(lhs, rhs),
+        .mod => if (rhs == 0) error.DivisionByZero else @mod(lhs, rhs),
+        .shl => if (rhs >= @bitSizeOf(u64)) 0 else lhs << @intCast(rhs),
+        .shr => if (rhs >= @bitSizeOf(u64)) 0 else lhs >> @intCast(rhs),
+        .bit_and => lhs & rhs,
+        .bit_or => lhs | rhs,
+        .bit_xor => lhs ^ rhs,
+        .logical_or, .logical_and, .equal, .not_equal, .less_than, .less_equal, .greater_than, .greater_equal => null,
+    };
+}
+
 pub fn evaluateInteger(node: *const Node, ctx: *EvalContext) ExpressionError!u64 {
     var value = try evaluateValue(ctx.module.allocator, node, ctx);
     defer value.deinit(ctx.module.allocator);
@@ -1695,6 +1738,14 @@ test "expression evaluates arithmetic precedence and bitwise operators" {
     defer expression.deinit(std.testing.allocator);
 
     try std.testing.expectEqual(@as(u64, 19), try evaluateInteger(&expression, &ctx));
+}
+
+test "constant integer evaluation distinguishes arithmetic from symbols" {
+    try std.testing.expectEqual(@as(?u64, 4095), try evaluateConstantInteger(std.testing.allocator, "4096 - 1"));
+    try std.testing.expectEqual(@as(?u64, 128), try evaluateConstantInteger(std.testing.allocator, "129 - 1"));
+    try std.testing.expectEqual(@as(?u64, @bitCast(@as(i64, -129))), try evaluateConstantInteger(std.testing.allocator, "-130 + 1"));
+    try std.testing.expectEqual(@as(?u64, null), try evaluateConstantInteger(std.testing.allocator, "target + 4"));
+    try std.testing.expectError(error.DivisionByZero, evaluateConstantInteger(std.testing.allocator, "4 / (2 - 2)"));
 }
 
 test "expression evaluates finite f32 and f64 values" {

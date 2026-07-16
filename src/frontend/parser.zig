@@ -69,7 +69,11 @@ pub const Parser = struct {
             var owned_token_text: ?[]u8 = null;
             defer if (owned_token_text) |text| self.allocator.free(text);
 
-            if (statementCanContinue(token)) {
+            if (try metaFunctionSignatureNeedsContinuation(token)) {
+                const continued_text = try self.collectMetaFunctionSignature(token);
+                owned_token_text = continued_text;
+                token.text = continued_text;
+            } else if (statementCanContinue(token)) {
                 if (try self.collectContinuedStatement(token)) |continued_text| {
                     owned_token_text = continued_text;
                     token.text = continued_text;
@@ -152,7 +156,39 @@ pub const Parser = struct {
 
         return try text.toOwnedSlice(self.allocator);
     }
+
+    fn collectMetaFunctionSignature(self: *Parser, token: lexer.Token) ParseError![]u8 {
+        var balance = try scanStatementBalance(token.text, .{});
+        var text: std.ArrayList(u8) = .empty;
+        errdefer text.deinit(self.allocator);
+        try text.appendSlice(self.allocator, token.text);
+
+        while (balance.paren_depth != 0 or balance.in_string != null) {
+            if (self.lexer.done()) {
+                self.last_error_span = token.span;
+                return error.UnexpectedEndOfStatement;
+            }
+            const next_token = try self.lexer.next();
+            if (next_token.kind == .blank or next_token.kind == .comment) continue;
+
+            try text.append(self.allocator, '\n');
+            try text.appendSlice(self.allocator, next_token.text);
+            balance = try scanStatementBalance(next_token.text, balance);
+            // Function bodies are parsed as statements after the signature.
+            balance.brace_depth = 0;
+        }
+
+        return try text.toOwnedSlice(self.allocator);
+    }
 };
+
+fn metaFunctionSignatureNeedsContinuation(token: lexer.Token) ParseError!bool {
+    if (token.kind != .meta_line) return false;
+    const trimmed = std.mem.trim(u8, token.text, " \t\r\n");
+    if (!std.mem.startsWith(u8, trimmed, "fn ")) return false;
+    const balance = try scanStatementBalance(token.text, .{});
+    return balance.paren_depth != 0 or balance.in_string != null;
+}
 
 fn statementCanContinue(token: lexer.Token) bool {
     return token.kind == .api_call or
@@ -800,27 +836,27 @@ fn parseMetaFunctionStart(
     text: []const u8,
     span: source.SourceSpan,
 ) ParseError!ast.MetaFunctionStatement {
-    var rest = std.mem.trim(u8, text, " \t");
+    var rest = std.mem.trim(u8, text, " \t\r\n");
     if (!std.mem.startsWith(u8, rest, "fn ")) return error.InvalidMetaFunction;
-    rest = std.mem.trim(u8, rest["fn".len..], " \t");
+    rest = std.mem.trim(u8, rest["fn".len..], " \t\r\n");
     if (rest.len == 0 or rest[rest.len - 1] != '{') return error.InvalidMetaFunction;
 
-    const signature = std.mem.trim(u8, rest[0 .. rest.len - 1], " \t");
+    const signature = std.mem.trim(u8, rest[0 .. rest.len - 1], " \t\r\n");
     const open_index = std.mem.indexOfScalar(u8, signature, '(') orelse return error.InvalidMetaFunction;
     const close_index = std.mem.lastIndexOfScalar(u8, signature, ')') orelse return error.InvalidMetaFunction;
     if (close_index < open_index) return error.InvalidMetaFunction;
 
-    const trailing = std.mem.trim(u8, signature[close_index + 1 ..], " \t");
+    const trailing = std.mem.trim(u8, signature[close_index + 1 ..], " \t\r\n");
     const return_type_name = if (trailing.len == 0)
         null
     else return_type: {
         if (!std.mem.startsWith(u8, trailing, "->")) return error.InvalidMetaFunction;
-        const parsed_type = std.mem.trim(u8, trailing["->".len..], " \t");
+        const parsed_type = std.mem.trim(u8, trailing["->".len..], " \t\r\n");
         if (!identifier.isName(parsed_type)) return error.InvalidMetaFunction;
         break :return_type parsed_type;
     };
 
-    const name = std.mem.trim(u8, signature[0..open_index], " \t");
+    const name = std.mem.trim(u8, signature[0..open_index], " \t\r\n");
     if (!identifier.isName(name)) return error.InvalidMetaFunction;
 
     const owned_name = try allocator.dupe(u8, name);
@@ -876,7 +912,7 @@ fn parseMetaFunctionParams(
     params_text: []const u8,
     span: source.SourceSpan,
 ) ParseError![]ast.MetaFunctionParam {
-    const trimmed = std.mem.trim(u8, params_text, " \t");
+    const trimmed = std.mem.trim(u8, params_text, " \t\r\n");
     if (trimmed.len == 0) return allocator.alloc(ast.MetaFunctionParam, 0);
 
     var params: std.ArrayList(ast.MetaFunctionParam) = .empty;
@@ -891,7 +927,7 @@ fn parseMetaFunctionParams(
     var index: usize = 0;
     while (index <= params_text.len) : (index += 1) {
         if (index == params_text.len or params_text[index] == ',') {
-            const raw_param = std.mem.trim(u8, params_text[start..index], " \t");
+            const raw_param = std.mem.trim(u8, params_text[start..index], " \t\r\n");
             if (raw_param.len == 0) return error.InvalidMetaFunction;
             var param = try parseMetaFunctionParam(allocator, raw_param, span);
             if (metaParamNameExists(params.items, param.name)) {
@@ -921,22 +957,22 @@ fn parseMetaFunctionParam(
     text: []const u8,
     span: source.SourceSpan,
 ) ParseError!ast.MetaFunctionParam {
-    var parameter_text = std.mem.trim(u8, text, " \t");
+    var parameter_text = std.mem.trim(u8, text, " \t\r\n");
     var mutability: value_mod.Mutability = .@"const";
     if (std.mem.startsWith(u8, parameter_text, "let ")) {
         mutability = .let;
-        parameter_text = std.mem.trim(u8, parameter_text["let".len..], " \t");
+        parameter_text = std.mem.trim(u8, parameter_text["let".len..], " \t\r\n");
     }
 
     const colon_index = std.mem.indexOfScalar(u8, parameter_text, ':');
     const name = if (colon_index) |index|
-        std.mem.trim(u8, parameter_text[0..index], " \t")
+        std.mem.trim(u8, parameter_text[0..index], " \t\r\n")
     else
         parameter_text;
     if (!identifier.isName(name)) return error.InvalidMetaFunction;
 
     const type_name = if (colon_index) |index| type_name: {
-        const parsed_type = std.mem.trim(u8, parameter_text[index + 1 ..], " \t");
+        const parsed_type = std.mem.trim(u8, parameter_text[index + 1 ..], " \t\r\n");
         if (!identifier.isName(parsed_type)) return error.InvalidMetaFunction;
         break :type_name parsed_type;
     } else null;
@@ -1934,6 +1970,40 @@ test "parser builds structured Meta functions and scoped blocks" {
         },
         else => return error.UnexpectedStatement,
     }
+}
+
+test "parser preserves multiline Meta function parameters" {
+    var statements = try parseSource(std.testing.allocator,
+        \\fn combine(
+        \\    first: string,
+        \\    second: string
+        \\) {
+        \\    assert(first == second, "parameters differ");
+        \\}
+        \\
+    );
+    defer statements.deinit(std.testing.allocator);
+
+    const function = switch (statements.items.items[0]) {
+        .meta_fn => |function| function,
+        else => return error.UnexpectedStatement,
+    };
+    try std.testing.expectEqual(@as(usize, 2), function.params.len);
+    try std.testing.expectEqualStrings("first", function.params[0].name);
+    try std.testing.expectEqualStrings("string", function.params[0].type_name.?);
+    try std.testing.expectEqualStrings("second", function.params[1].name);
+    try std.testing.expectEqual(@as(usize, 1), function.body.len);
+}
+
+test "parser reports an unterminated multiline function at its declaration" {
+    var parser = Parser.init(std.testing.allocator,
+        \\fn broken(
+        \\    value: u64
+        \\
+    );
+    try std.testing.expectError(error.UnexpectedEndOfStatement, parser.parse());
+    const span = parser.errorSpan() orelse return error.MissingErrorSpan;
+    try std.testing.expectEqual(@as(u32, 0), span.start);
 }
 
 test "parser preserves nested Meta if inside else body" {

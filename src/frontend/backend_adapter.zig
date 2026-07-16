@@ -3,6 +3,7 @@ const backend = @import("xirasm_backend");
 
 const fixup = @import("fixup.zig");
 const fragment = @import("fragment.zig");
+const expr = @import("expr.zig");
 const isa_text = @import("isa_text.zig");
 const source = @import("source.zig");
 const target = @import("target.zig");
@@ -42,6 +43,7 @@ pub const FixupFact = struct {
     kind: fixup.FixupKind,
     offset: u32,
     width_bits: u16,
+    value_range: fixup.ValueRange = .wrap,
     span: source.SourceSpan,
 
     pub fn deinit(self: *FixupFact, allocator: Allocator) void {
@@ -405,6 +407,11 @@ fn applyX86BackendFixups(allocator: Allocator, facts: []FixupFact, units: []cons
             try applyX86BackendFixupAddend(allocator, &facts[fixup_index], effective_addend);
             facts[fixup_index].offset = byte_offset;
             facts[fixup_index].width_bits = try fixupWidthBits(backend_fixup.size);
+            facts[fixup_index].value_range = switch (backend.x86.fixupValueRange(backend_fixup)) {
+                .wrap => .wrap,
+                .signed => .signed,
+                .unsigned => .unsigned,
+            };
             fixup_index += 1;
         } else if (fixup_index < facts.len and unit.note != null and std.mem.eql(u8, unit.note.?, "rip-relative displacement")) {
             facts[fixup_index].kind = .pc_relative;
@@ -552,6 +559,19 @@ fn unknownX86ExpressionResolver(context: *anyopaque, text: []const u8) backend.x
     }
     const target_text = std.mem.trim(u8, text, " \t\r\n");
     if (target_text.len == 0) return null;
+    const constant = expr.evaluateConstantInteger(resolver_context.allocator, target_text) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.ExpressionResolutionFailed,
+    };
+    if (constant) |value| {
+        return .{
+            .value = @bitCast(value),
+            .known = true,
+            .current_known = true,
+            .simple = true,
+            .symbolic = false,
+        };
+    }
     const owned_target = try resolver_context.allocator.dupe(u8, target_text);
     errdefer resolver_context.allocator.free(owned_target);
     try resolver_context.fixups.append(resolver_context.allocator, .{
@@ -724,6 +744,58 @@ test "backend adapter records symbolic expression fixup facts" {
     try std.testing.expect(facts.current_size > 0);
     try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
     try std.testing.expectEqualStrings("target + 4", facts.fixups[0].target);
+}
+
+test "backend adapter preserves symbolic immediate range semantics" {
+    const signed_cases = [_][]const u8{
+        "add r11, target",
+        "sub r11, target",
+        "cmp r11, target",
+        "push target",
+    };
+    for (signed_cases) |instruction| {
+        var facts = try testEncodeInstruction(instruction, target.Target.default, target.Target.default);
+        defer facts.deinit(std.testing.allocator);
+
+        try std.testing.expectEqual(@as(usize, 1), facts.fixups.len);
+        try std.testing.expectEqual(@as(u16, 32), facts.fixups[0].width_bits);
+        try std.testing.expectEqual(fixup.ValueRange.signed, facts.fixups[0].value_range);
+    }
+
+    var mov = try testEncodeInstruction("mov rax, target", target.Target.default, target.Target.default);
+    defer mov.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), mov.fixups.len);
+    try std.testing.expectEqual(@as(u16, 64), mov.fixups[0].width_bits);
+    try std.testing.expectEqual(fixup.ValueRange.wrap, mov.fixups[0].value_range);
+}
+
+test "backend adapter folds constant x86 expressions before immediate selection" {
+    const cases = [_]struct {
+        expression: []const u8,
+        literal: []const u8,
+    }{
+        .{ .expression = "add r11, -130 + 1", .literal = "add r11, -129" },
+        .{ .expression = "add r11, -129 + 1", .literal = "add r11, -128" },
+        .{ .expression = "add r11, 126 + 1", .literal = "add r11, 127" },
+        .{ .expression = "add r11, 127 + 1", .literal = "add r11, 128" },
+        .{ .expression = "add r11, 254 + 1", .literal = "add r11, 255" },
+        .{ .expression = "add r11, 255 + 1", .literal = "add r11, 256" },
+        .{ .expression = "add r11, 4096 - 1", .literal = "add r11, 4095" },
+        .{ .expression = "sub r11, 129 - 1", .literal = "sub r11, 128" },
+        .{ .expression = "cmp r11, 129 - 1", .literal = "cmp r11, 128" },
+        .{ .expression = "push 129 - 1", .literal = "push 128" },
+        .{ .expression = "shl r11, 2 - 1", .literal = "shl r11, 1" },
+    };
+
+    for (cases) |case| {
+        var expression = try testEncodeInstruction(case.expression, target.Target.default, target.Target.default);
+        defer expression.deinit(std.testing.allocator);
+        var literal = try testEncodeInstruction(case.literal, target.Target.default, target.Target.default);
+        defer literal.deinit(std.testing.allocator);
+
+        try std.testing.expectEqualSlices(u8, literal.bytes, expression.bytes);
+        try std.testing.expectEqual(@as(usize, 0), expression.fixups.len);
+    }
 }
 
 test "backend adapter maps x86 rip-relative memory fixups to displacement bytes" {

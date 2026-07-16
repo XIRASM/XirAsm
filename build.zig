@@ -440,6 +440,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/same_line_else.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/control_flow.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/multiline_function_args.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/multiline_function_params.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/return_functions.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/return_functions_finalizer.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/final_byte_fold.asm"));
@@ -3613,6 +3614,25 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
+        "tests/isa/x86/frontend_expression_immediate_matrix.asm",
+        "isa-x86-frontend-expression-immediate-matrix.bin",
+        "x64",
+        "4981c37fffffff4983c3804983c37f4981c3800000004981c3ff0000004981c3000100004981c3ff0f00004981eb800000004981fb80000000688000000049d1e3c3",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/negative/symbolic_signed_immediate_overflow.asm",
+        "x64",
+        &.{},
+        "InvalidFixupTarget",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
         "tests/isa/x86/absolute_moffs_matrix.asm",
         "isa-x86-absolute-moffs-matrix.bin",
         "x64",
@@ -3834,6 +3854,16 @@ pub fn build(b: *std.Build) void {
         "meta-multiline-function-args.bin",
         "x64",
         "220304",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/multiline_function_params.asm",
+        "meta-multiline-function-params.bin",
+        "x64",
+        "01020304050607",
     );
     addAsmFixture(
         b,

@@ -18,6 +18,12 @@ pub const FixupKind = enum {
     pc_relative,
 };
 
+pub const ValueRange = enum {
+    wrap,
+    signed,
+    unsigned,
+};
+
 pub const ResolveError = expr.ExpressionError || error{
     InvalidFixupTarget,
 };
@@ -52,6 +58,7 @@ pub const Fixup = struct {
     kind: FixupKind,
     offset: u32,
     width_bits: u16,
+    value_range: ValueRange = .wrap,
     span: source.SourceSpan,
 
     pub fn deinit(self: *Fixup, allocator: Allocator) void {
@@ -69,6 +76,11 @@ pub const FixupStore = struct {
         }
         self.items.deinit(allocator);
         self.* = undefined;
+    }
+
+    pub fn setValueRange(self: *FixupStore, id: FixupId, value_range: ValueRange) !void {
+        if (id.index >= self.items.items.len) return error.InvalidFixupTarget;
+        self.items.items[id.index].value_range = value_range;
     }
 
     pub fn add(
