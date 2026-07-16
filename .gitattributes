@@ -1,0 +1,14 @@
+.gitattributes text eol=lf
+*.zig text eol=lf
+*.zon text eol=lf
+*.asm text eol=lf
+*.inc text eol=lf
+*.tsv text eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+
+# XIRASM include libraries are assembly sources, not C/C++ headers.
+include/**/*.inc linguist-language=Assembly
+
+# Generated Win32 SDK catalogs must not dominate repository language statistics.
+include/os/win32/** linguist-generated=true

@@ -4,7 +4,7 @@
 Linux 和 Windows x64 程序，用一组接近同名的接口封装控制台、文件、
 缓冲流、路径、目录枚举和整文件映射。
 
-本库当前定位为**实验性扩展库**，不是最终标准库形态，也不是性能优化版。
+本库当前定位为**实验性扩展库**，不是最终标准库形态，也不是最终性能优化版。
 它已经可以用于日常小工具、示例程序、测试程序和简单文件处理，但后续仍可能
 随着 `std/`、`os/` 等库分层调整而扩展或整理接口。
 
@@ -58,6 +58,16 @@ const imports5: map = io_windows64_dir_imports(imports4)
 只需要导入实际用到的模块。例如只写控制台时通常只需要
 `io_windows64_imports`；只做文件和路径时通常需要
 `io_windows64_file_imports` 与 `io_windows64_path_imports`。
+
+## 调用约定
+
+运行时指令序列遵守目标平台的 x86-64 调用约定。Windows API 调用由库内部
+保留 shadow space 并保持调用前栈对齐；Linux 直接系统调用使用 Linux
+x86-64 syscall 参数寄存器。与 Win64 和 System V AMD64 ABI 一致，调用点
+进入 IO 指令序列时必须保证方向标志 DF 为 0，库返回时保持 DF 为 0。
+
+每个接口的输入、返回值、错误、所有权以及保留或破坏的寄存器，以对应
+`.inc` 文件中接口前的中文注释为准。
 
 ## 返回值约定
 
@@ -220,6 +230,10 @@ io_stream_close_label(state_label)
 
 写流关闭时会尝试刷新，然后关闭句柄。刷新失败时仍会消费句柄所有权。
 读流到达 EOF 时，`io_stream_read_byte()` 返回 `rax = -1, rdx = 0`。
+
+`io_stream_write()` 和 `io_stream_read()` 面向批量数据，内部使用前向字节串
+复制。单字节读写应优先使用 `io_stream_write_byte()` 和
+`io_stream_read_byte()`，避免批量接口的固定开销。
 
 ## 路径操作
 

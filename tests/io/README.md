@@ -38,6 +38,7 @@ tests/io/
 ├─ stream/         # sequential/buffered IO fixtures
 ├─ path/           # path and encoding fixtures
 ├─ map/            # file-mapping fixtures
+├─ optimization/   # ABI sentinels and native x86-64 measurement fixtures
 └─ data/           # deterministic input and expected-output data
 ```
 
@@ -60,6 +61,8 @@ tests/io/file/windows64-core.asm
 - Reuse the same contract scenario on both platforms when semantics are meant
   to match.
 - Review every generated binary with static tools before runtime execution.
+- Keep optimization fixtures deterministic for correctness and ABI checks;
+  collect timing on native hardware instead of enforcing noisy cycle thresholds.
 - Keep raw OS API tests out of this directory.
 - Register deterministic compile-time or byte-level checks in the repository
   build when they can run on every supported development host. Keep native

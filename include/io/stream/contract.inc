@@ -16,6 +16,8 @@
 //
 // 所有原生错误继续使用 file/ 层契约：rdx 保存正数 errno 或 Win32 错误码。
 // 在尚未进入操作系统时发现的状态错误使用本模块定义的 io_stream_error_*。
+// 与 Win64/System V x86-64 ABI 一致，调用点进入时必须保证 DF=0；本模块不
+// 设置 DF，批量复制使用前向 rep movsb，并在返回时保持 DF=0。
 
 const io_stream_state_handle_offset: u64 = 0
 const io_stream_state_buffer_offset: u64 = 8
@@ -280,7 +282,6 @@ fn io_stream_flush() {
     const error_label: string = sym.unique("__io_stream_flush_error_")
     const no_progress_label: string = sym.unique("__io_stream_flush_no_progress_")
     const compact_label: string = sym.unique("__io_stream_flush_compact_")
-    const compact_copy_label: string = sym.unique("__io_stream_flush_compact_copy_")
     const error_result_label: string = sym.unique("__io_stream_flush_error_result_")
     const wrong_mode_label: string = sym.unique("__io_stream_flush_wrong_mode_")
     const restore_label: string = sym.unique("__io_stream_flush_restore_")
@@ -337,14 +338,8 @@ fn io_stream_flush() {
     mov rsi, r12
     mov rdi, [rbx + 8]
     mov rcx, r13
-    // 当前 x86 后端尚不接受 REP MOVSB，因此使用等价的显式字节循环。
-    label.define(compact_copy_label);
-    mov al, [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    dec rcx
-    isa(sym.join("jnz ", compact_copy_label));
+    // 前向压回尚未写出的尾部；rsi/rdi 已保存，rcx 是易失寄存器。
+    rep movsb
     mov [rbx + 24], r13
 
     label.define(error_result_label);
@@ -434,7 +429,6 @@ fn io_stream_write_byte() {
 fn io_stream_write() {
     const loop_label: string = sym.unique("__io_stream_write_loop_")
     const copy_label: string = sym.unique("__io_stream_write_copy_")
-    const copy_loop_label: string = sym.unique("__io_stream_write_copy_loop_")
     const chunk_ready_label: string = sym.unique("__io_stream_write_chunk_ready_")
     const success_label: string = sym.unique("__io_stream_write_success_")
     const flush_error_label: string = sym.unique("__io_stream_write_flush_error_")
@@ -485,14 +479,8 @@ fn io_stream_write() {
     add rdi, rcx
     mov rsi, r12
     mov rcx, r15
-    // 当前 x86 后端尚不接受 REP MOVSB，因此使用等价的显式字节循环。
-    label.define(copy_loop_label);
-    mov al, [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    dec rcx
-    isa(sym.join("jnz ", copy_loop_label));
+    // 源与流缓冲区按前向复制语义处理；rsi/rdi 已保存，rcx 是易失寄存器。
+    rep movsb
 
     add [rbx + 24], r15
     add [rbx + 48], r15
@@ -538,7 +526,6 @@ fn io_stream_write() {
 fn io_stream_read() {
     const loop_label: string = sym.unique("__ios_read_loop_")
     const copy_label: string = sym.unique("__ios_read_copy_")
-    const copy_loop_label: string = sym.unique("__ios_read_copy_loop_")
     const chunk_ready_label: string = sym.unique("__ios_read_chunk_ready_")
     const mark_eof_label: string = sym.unique("__ios_read_mark_eof_")
     const native_error_label: string = sym.unique("__ios_read_native_error_")
@@ -600,14 +587,8 @@ fn io_stream_read() {
     add rsi, rcx
     mov rdi, r12
     mov rcx, r15
-    // 当前 x86 后端尚不接受 REP MOVSB，使用等价的显式字节循环。
-    label.define(copy_loop_label);
-    mov al, [rsi]
-    mov [rdi], al
-    inc rsi
-    inc rdi
-    dec rcx
-    isa(sym.join("jnz ", copy_loop_label));
+    // 内部缓冲区按前向复制语义交付；rsi/rdi 已保存，rcx 是易失寄存器。
+    rep movsb
 
     add [rbx + 24], r15
     add [rbx + 48], r15
