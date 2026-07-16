@@ -11,16 +11,16 @@ fn test_exit(status: u64) {
     syscall
 }
 
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_exec,
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
         format_segment(".data", format_load | format_readable | format_writeable)
     )
 )
-format_begin(image0);
+format_begin(image);
 
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     lea rdi, [rel stream_state]
     mov al, 0x41
@@ -32,9 +32,9 @@ start:
     test_exit(0);
 failed:
     test_exit(1);
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
-format_segment_begin(image0, ".data");
+format_segment_begin(image, ".data");
 stream_state:
     dq(-1);
     dq(0);
@@ -44,7 +44,7 @@ stream_state:
     dq(io_stream_mode_read);
     dq(0);
     dq(0);
-format_segment_end(image0, ".data");
+format_segment_end(image, ".data");
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);

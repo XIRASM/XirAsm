@@ -24,11 +24,17 @@ const io_path_windows64_error_already_exists: u64 = 183
 // 所有权：原 map 不被隐藏修改；返回 map 由调用方继续传给格式构造函数。
 // ABI：不生成运行时调用，不影响运行时寄存器或栈。
 fn io_windows64_path_imports(imports: map) -> map {
-    const imports1: map = pe_import_use64(imports, "KERNEL32.DLL", "GetFileAttributesW");
-    const imports2: map = pe_import_use64(imports1, "KERNEL32.DLL", "CreateDirectoryW");
-    const imports3: map = pe_import_use64(imports2, "KERNEL32.DLL", "DeleteFileW");
-    const imports4: map = pe_import_use64(imports3, "KERNEL32.DLL", "MoveFileExW");
-    return pe_import_use64(imports4, "KERNEL32.DLL", "GetLastError");
+    return pe_import_use64_many(
+        imports,
+        "KERNEL32.DLL",
+        list.of(
+            "GetFileAttributesW",
+            "CreateDirectoryW",
+            "DeleteFileW",
+            "MoveFileExW",
+            "GetLastError"
+        )
+    );
 }
 
 // 调用 UTF-16 路径、BOOL 返回值的 WinAPI。

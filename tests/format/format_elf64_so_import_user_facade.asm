@@ -1,6 +1,13 @@
+// api-matrix-fixture: format_elfso_export_new(
+// api-matrix-fixture: format_elfso_export_many_mut(
+// api-matrix-fixture: format_elfso_export_pairs_mut(
+// api-matrix-fixture: format_elfso_import_new(
+// api-matrix-fixture: format_elfso_import_many_mut(
+// api-matrix-fixture: format_elfso_import_pairs_mut(
+
 import("format/format.inc");
 
-const image0: map = format_elf64_so(
+let image: map = format_elf64_so(
     "libxirasm_import_user.so",
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
@@ -8,13 +15,11 @@ const image0: map = format_elf64_so(
         format_segment(".data", format_load | format_readable | format_writeable)
     )
 )
-const exports: list = list.of(
-    format_elfso_export("exported_call_puts", "exported_call_puts", ".text", 13)
-)
-const imports: list = list.of(
-    format_elfso_import_plt("libc.so.6", "puts", "puts_gotplt", "puts_plt")
-)
-const image: map = format_elfso_tables(image0, exports, imports)
+let exports: list = format_elfso_export_new()
+format_elfso_export_pairs_mut(exports, list.of("exported_call_puts", "exported_call_puts"), ".text", 13)
+let imports: list = format_elfso_import_new()
+format_elfso_import_pairs_mut(imports, "libc.so.6", list.of("puts", "puts"))
+format_elfso_tables_mut(image, exports, imports)
 format_begin(image);
 
 format_segment_begin(image, ".text");

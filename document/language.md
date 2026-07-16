@@ -9,7 +9,7 @@ This guide teaches XIRASM in the order that a new user is likely to need it.
 It begins with small flat binaries, develops the compile-time language, then
 introduces labels, binary layouts, output regions, finalizers, and executable
 formats. The separate API Reference provides complete signatures and lookup
-tables. The [Executable Formats Guide](formats.md) provides focused PE, COFF,
+tables. The [Format Tutorial](format-tutorial.md) provides focused PE, COFF,
 and ELF tutorials.
 
 ## Guide Map
@@ -70,12 +70,12 @@ and ELF tutorials.
 14. **Executable and Object Formats**
     - Understand what a format facade provides.
     - Build one minimal executable without manual header arithmetic.
-    - Continue with the separate Executable Formats Guide for PE, COFF, ELF,
+    - Continue with the separate Format Tutorial for PE, COFF, ELF,
       imports, exports, BSS, and relocations.
 15. **Diagnostics and Practical Conventions**
     - Report invalid input and assert layout assumptions.
     - Organize reusable assembly projects.
-    - Move from the guide to the API Reference and Executable Formats Guide.
+    - Move from the guide to the API Reference and Format Tutorial.
 
 ## Part I: Language Fundamentals
 
@@ -140,7 +140,7 @@ Direct assembly writes a flat binary by default. A flat binary is exactly the
 byte sequence produced by the source. It has no operating-system header. Later
 chapters introduce the format facade with one small example. Complete PE,
 COFF, and ELF programs belong in the
-[Executable Formats Guide](formats.md).
+[Format Tutorial](format-tutorial.md).
 
 ### Compile-Time Code Generates Output
 
@@ -347,6 +347,10 @@ Common value types used in ordinary source include:
 | `u16` | Unsigned 16-bit value | `0x5a4d` |
 | `u32` | Unsigned 32-bit value | `0x401000` |
 | `u64` | Unsigned 64-bit value | `0x140000000` |
+| `i8` | Signed 8-bit value | `-1` |
+| `i16` | Signed 16-bit value | `-200` |
+| `i32` | Signed 32-bit value | `-4096` |
+| `i64` | Signed 64-bit value | `-0x100000000` |
 | `f32` | IEEE-754 binary32 value | `f32(1.5)` |
 | `f64` | IEEE-754 binary64 value | `1.5` |
 | `bool` | Compile-time condition | `true` |
@@ -360,6 +364,10 @@ Width-specific integer types are useful for binary fields and function
 contracts. The general `integer` type is useful when a helper accepts an
 integer without requiring a particular encoded width. The API that eventually
 emits the value still decides how many bytes are written.
+
+Signed fixed-width values use two's-complement representation. Their declared
+range is checked when a binding or aggregate field is created, and packing a
+signed aggregate field writes the low 8, 16, 32, or 64 bits for that field.
 
 Decimal literals with a fractional part or exponent have type `f64`. Use
 `f32(value)` for an explicit finite narrowing conversion and `f64(value)` to
@@ -510,7 +518,7 @@ file-format flags:
 | Operator | Meaning |
 | --- | --- |
 | `&` | Bitwise AND |
-| `|` | Bitwise OR |
+| `\|` | Bitwise OR |
 | `^` | Bitwise XOR |
 | `~` | Bitwise NOT |
 | `<<` | Shift left |
@@ -580,7 +588,7 @@ Boolean expressions use:
 | --- | --- |
 | `!` | Logical NOT |
 | `&&` | Logical AND |
-| `||` | Logical OR |
+| `\|\|` | Logical OR |
 
 `&&` and `||` short-circuit:
 
@@ -651,11 +659,11 @@ more tightly:
 | Additive | `+`, `-` |
 | Bitwise AND | `&` |
 | Bitwise XOR | `^` |
-| Bitwise OR | `|` |
+| Bitwise OR | `\|` |
 | Ordering | `<`, `<=`, `>`, `>=` |
 | Equality | `==`, `!=` |
 | Logical AND | `&&` |
-| Lowest | `||` |
+| Lowest | `\|\|` |
 
 Operators at the same precedence are evaluated from left to right.
 
@@ -1044,6 +1052,24 @@ parameter, in declaration order. Functions do not have default arguments.
 Parameter names must be unique within a function declaration. Each call gets
 its own parameter bindings, so one invocation does not overwrite the values
 of another invocation.
+
+Procedure parameters are read-only by default. Prefix a parameter with `let`
+when the procedure must update the caller's binding:
+
+```asm
+fn set_entry(let plan: map, address: u64) {
+    map.set_mut(plan, "entry", address);
+}
+
+let image: map = map.new()
+set_entry(image, 0x401000);
+assert(map.get(image, "entry") == 0x401000);
+```
+
+The corresponding argument must be a direct `let` binding. A `const`, literal,
+temporary expression, or the same binding passed to two `let` parameters is
+rejected. Value-returning functions do not accept `let` parameters because an
+expression call cannot write back caller state.
 
 ### Value-Returning Functions
 
@@ -2313,7 +2339,7 @@ than freezing an early value. Chapter 12 explains stable-layout queries and
 
 Executable and object formats may also require a relocation record rather than
 a raw absolute integer. Use the format facade's relocation and import/export
-APIs for those cases. The Executable Formats Guide covers that distinction.
+APIs for those cases. The Format Tutorial covers that distinction.
 
 ### Practical Rules
 
@@ -2711,8 +2737,9 @@ directly, for example `[rsp + offset_of(NestedFrame, point.y)]`. When this code
 calls a Windows x64 function, satisfy the ABI's stack-alignment and shadow-space
 requirements separately; `sizeof(StackFrame)` describes only the record.
 
-The complete encoding and runnable PE64 fixtures are in
-`tests/format/pe64_stack_struct_member_access/`.
+When this pattern is used in a PE64 program, the source must still satisfy the
+Windows x64 calling convention. The structure size describes the local record
+layout only; it does not automatically provide call-boundary stack space.
 
 ### Packing and Emitting Struct Values
 
@@ -4368,8 +4395,8 @@ headers, tables, permissions, imports, exports, relocations, and loader rules.
 
 XIRASM provides user-facing format facades for those tasks. The Language Guide
 introduces only their role; the separate
-[Executable Formats Guide](formats.md) explains the ordinary facade and the
-advanced low-level helpers.
+[Format Tutorial](format-tutorial.md) explains the ordinary facade. Direct
+construction belongs in the [Advanced Format Construction Guide](advanced-formats.md).
 
 The next chapter gives a short language-level introduction to selecting and
 using a format facade without duplicating the complete executable-format
@@ -4394,7 +4421,7 @@ fields.
 
 This chapter explains the common language pattern. Complete format options,
 imports, exports, relocations, shared libraries, object files, and advanced
-helpers belong in the [Executable Formats Guide](formats.md).
+helpers belong in the [Format Tutorial](format-tutorial.md).
 
 ### Declaring the Image Before Writing It
 
@@ -4421,7 +4448,7 @@ readable, executable segment:
 import("format/format.inc");
 x86.use64();
 
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_exec,
     list.of(
         format_segment(
@@ -4430,16 +4457,16 @@ const image0: map = format_elf64(
         )
     )
 )
-format_begin(image0);
+format_begin(image);
 
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 ```
 
@@ -4452,7 +4479,7 @@ Read the source in five steps:
 3. `format_begin` emits the structures determined by the plan.
 4. `format_segment_begin` and `format_segment_end` surround the segment's
    actual instructions and data.
-5. `format_entry` binds the entry label, and `format_finish` completes the
+5. `format_entry_mut` binds the entry label, and `format_finish` completes the
    image.
 
 The source never supplies a program-header count, table row, file offset, load
@@ -4508,13 +4535,13 @@ Executables bind an entry label after its source has defined the intended
 starting code:
 
 ```text
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 ```
 
-`format_entry` returns the updated image plan. Keeping the returned value
-explicit makes the state change visible and lets `format_finish` validate that
-the executable has the required entry information.
+`format_entry_mut` updates the direct `let` binding passed as its first
+argument. `format_finish` then validates that the executable has the required
+entry information.
 
 Object files and some library forms do not use an executable entry point.
 Follow the lifecycle of the selected format rather than adding an artificial
@@ -4561,7 +4588,7 @@ facade normally owns.
 
 ### Where to Continue
 
-Use the [Executable Formats Guide](formats.md) for complete, runnable examples
+Use the [Format Tutorial](format-tutorial.md) for complete, runnable examples
 covering:
 
 - PE32 and PE64 executables and DLLs;
@@ -4872,7 +4899,7 @@ Use the API Reference for:
 - constants and option flags;
 - concise behavior and error constraints.
 
-Use the Executable Formats Guide for:
+Use the Format Tutorial for:
 
 - complete PE, COFF, and ELF programs;
 - executable, DLL, object, PIE, and shared-object workflows;

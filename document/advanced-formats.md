@@ -24,7 +24,7 @@ This guide explains that direct layer. It assumes that you already understand:
 - the difference between logical addresses and physical file offsets.
 
 Read the [Language Guide](language.md) for the language itself and the
-[Executable Formats Guide](formats.md) for ordinary PE, COFF, and ELF
+[Format Tutorial](format-tutorial.md) for ordinary PE, COFF, and ELF
 workflows.
 
 Direct control is not a more correct version of the ordinary facade. It is a
@@ -124,7 +124,7 @@ Use this layer for standard executables, DLLs, shared objects, and relocatable
 objects. If the file can be described through the ordinary facade, direct
 helpers usually add work without adding useful control.
 
-The [Executable Formats Guide](formats.md) documents this layer completely
+The [Format Tutorial](format-tutorial.md) documents this layer completely
 enough for ordinary construction. This guide does not repeat those workflows.
 
 ### Layer 2: Width-Specific Compatibility Wrappers
@@ -1976,21 +1976,33 @@ normal RVA formula to that slot.
 
 ### Direct Import Declarations
 
-An import set is an immutable map grouped by DLL name:
+An import set is a map grouped by DLL name. Prefer the grouped declarations for
+ordinary batches:
 
-```text
-const imports0: map = pe_import_new()
-const imports1: map = pe_import_use64(
-    imports0,
+```asm
+let imports: map = pe_import_new()
+imports = pe_import_use64_many(
+    imports,
     "KERNEL32.DLL",
-    "ExitProcess"
+    list.of("ExitProcess", "VirtualAlloc")
+)
+imports = pe_import_use64_pairs(
+    imports,
+    "ADVAPI32.DLL",
+    list.of("close_key", "RegCloseKey")
 )
 ```
+
+`*_many` uses matching local slot and imported-name labels. `*_pairs` accepts
+alternating slot/name strings. Each call returns the updated map, so keep the
+assignment when adding another group.
 
 The declaration functions are:
 
 | Form | Meaning |
 |---|---|
+| `pe_import_use32_many` / `pe_import_use64_many` | Add matching-name batches |
+| `pe_import_use32_pairs` / `pe_import_use64_pairs` | Add explicit slot/name batches |
 | `pe_import_use32` | Named PE32 import; slot label equals function name |
 | `pe_import_use64` | Named PE32+ import; slot label equals function name |
 | `pe_import_use32_as` | Named PE32 import with an explicit slot label |
@@ -2002,8 +2014,8 @@ The `_as` forms are useful when the imported name is inconvenient as a source
 label:
 
 ```text
-const imports: map = pe_import_use64_as(
-    imports0,
+imports = pe_import_use64_as(
+    imports,
     "KERNEL32.DLL",
     "GetCurrentProcessId",
     "get_current_process_id_iat"
@@ -2096,9 +2108,9 @@ the resolved IAT entry:
 ```asm
 import("format/pe_import.inc");
 
-const imports0: map = pe_import_new()
-const imports: map = pe_import_use64_as(
-    imports0,
+let imports: map = pe_import_new()
+imports = pe_import_use64_as(
+    imports,
     "KERNEL32.DLL",
     "ExitProcess",
     "exit_process_iat"
@@ -2195,16 +2207,24 @@ RIP-relative displacement.
 
 ### Direct Export Declarations
 
-An export set is an immutable list:
+An export set can be declared as a group. Use `many` when each target label is
+also the public name, or `pairs` when the names differ:
 
-```text
-const exports0: list = pe_export_new()
-const exports1: list = pe_export_use64(
-    exports0,
-    "xir_add7",
-    "xir_add7"
+```asm
+let exports: list = pe_export_new()
+exports = pe_export_use64_pairs(
+    exports,
+    list.of(
+        "xir_add7", "xir_add7",
+        "xir_sub3", "xir_sub3"
+    )
 )
 ```
+
+The grouped forms are `pe_export_use32_many`, `pe_export_use32_pairs`,
+`pe_export_use64_many`, and `pe_export_use64_pairs`. The existing single-item
+forms remain useful when a declaration must be interleaved with other layout
+logic.
 
 Each declaration pairs:
 
@@ -2290,27 +2310,27 @@ calls the imported API through the IAT:
 import("format/pe_import.inc");
 import("format/pe_export.inc");
 
-const imports0: map = pe_import_new()
-const imports: map = pe_import_use64_as(
-    imports0,
+let imports: map = pe_import_new()
+imports = pe_import_use64_as(
+    imports,
     "KERNEL32.DLL",
     "GetCurrentProcessId",
     "get_current_process_id_iat"
 )
 
-const exports0: list = pe_export_new()
-const exports1: list = pe_export_use64(
-    exports0,
+let exports: list = pe_export_new()
+exports = pe_export_use64(
+    exports,
     "xir_add7",
     "xir_add7"
 )
-const exports2: list = pe_export_use64(
-    exports1,
+exports = pe_export_use64(
+    exports,
     "xir_sub3",
     "xir_sub3"
 )
-const exports: list = pe_export_use64(
-    exports2,
+exports = pe_export_use64(
+    exports,
     "xir_process_id",
     "xir_process_id"
 )
@@ -2864,21 +2884,21 @@ pointer2:
 data_end:
 pe_align_section_file(data_row);
 
-const relocs0: list = pe_reloc_new()
-const relocs1: list = pe_reloc_add_dir64_at(
-    relocs0,
+let relocs: list = pe_reloc_new()
+relocs = pe_reloc_add_dir64_at(
+    relocs,
     data_rva,
     pointer0,
     data_start
 )
-const relocs2: list = pe_reloc_add_dir64_at(
-    relocs1,
+relocs = pe_reloc_add_dir64_at(
+    relocs,
     data_rva,
     pointer1,
     data_start
 )
-const relocs3: list = pe_reloc_add_dir64_at(
-    relocs2,
+relocs = pe_reloc_add_dir64_at(
+    relocs,
     data_rva,
     pointer2,
     data_start
@@ -2914,8 +2934,8 @@ pe_begin_section_at(
     reloc_raw
 );
 reloc_start:
-pe_reloc_assert_sorted(relocs3);
-pe_reloc_emit_grouped_sorted(relocs3);
+pe_reloc_assert_sorted(relocs);
+pe_reloc_emit_grouped_sorted(relocs);
 reloc_end:
 pe_align_section_file(reloc_row);
 
@@ -4622,8 +4642,8 @@ The common flags are:
 
 | Purpose | Flags |
 |---|---|
-| executable code | `elf_pf_r | elf_pf_x` |
-| writable data and BSS | `elf_pf_r | elf_pf_w` |
+| executable code | `elf_pf_r \| elf_pf_x` |
+| writable data and BSS | `elf_pf_r \| elf_pf_w` |
 | read-only data | `elf_pf_r` |
 
 Avoid a LOAD that combines write and execute permissions unless the runtime
@@ -5867,10 +5887,10 @@ Use separate rows instead:
 
 | Content | Flags |
 |---|---|
-| ELF header, PHDR table, code | `PF_R | PF_X` |
-| PLT | `PF_R | PF_X` |
-| GOT, dynamic tables, relocations | `PF_R | PF_W` |
-| `PT_DYNAMIC` view | `PF_R | PF_W` |
+| ELF header, PHDR table, code | `PF_R \| PF_X` |
+| PLT | `PF_R \| PF_X` |
+| GOT, dynamic tables, relocations | `PF_R \| PF_W` |
+| `PT_DYNAMIC` view | `PF_R \| PF_W` |
 
 An export-only object does not require a PLT row.
 
@@ -5937,6 +5957,8 @@ elfso_finalize_load64
 ```text
 elf_export_new
 elf_export_use64
+elf_export_use64_many
+elf_export_use64_pairs
 elf_export_emit_dynsym64
 elf_export_emit_dynstr64
 elf_export_emit_dynamic64
@@ -5948,6 +5970,9 @@ relocations, and dynamic entries:
 
 ```text
 elfso_import_new
+elfso_import_use64_many
+elfso_import_use64_pairs
+elfso_import_use64_plt_many
 elfso_import_use64_plt_as
 elfso_import_emit_plt64
 elfso_import_emit_gotplt64
@@ -6030,16 +6055,16 @@ const text_foa: u64 = elfso_align_up(
 const export_size: u64 = 4
 const text_size: u64 = export_size * 2
 
-const exports0: list = elf_export_new()
-const exports1: list = elf_export_use64(
-    exports0,
+let exports: list = elf_export_new()
+exports = elf_export_use64(
+    exports,
     "x_add7",
     "x_add7",
     text_index,
     export_size
 )
-const exports: list = elf_export_use64(
-    exports1,
+exports = elf_export_use64(
+    exports,
     "x_sub3",
     "x_sub3",
     text_index,
@@ -6412,12 +6437,10 @@ It uses four program-header rows:
 ```asm
 import("format/elfso_import.inc");
 
-const imports: list = elfso_import_use64_plt_as(
+const imports: list = elfso_import_use64_plt_many(
     elfso_import_new(),
     "libc.so.6",
-    "puts",
-    "puts_gotplt",
-    "puts_plt"
+    list.of("puts")
 )
 
 const soname: string = "libdirect_import.so"

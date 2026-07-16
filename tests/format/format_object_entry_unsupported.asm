@@ -1,6 +1,6 @@
 import("format/format.inc");
 
-const object0: map = format_coff64(
+let object: map = format_coff64(
     list.of(
         format_section(
             ".text",
@@ -8,4 +8,4 @@ const object0: map = format_coff64(
         )
     )
 )
-const object: map = format_entry(object0, 1)
+format_entry_mut(object, 1)

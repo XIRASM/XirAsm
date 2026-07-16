@@ -20,14 +20,20 @@ const io_windows64_file_attribute_normal: u64 = 0x00000080
 // 所有权：返回新 map，不修改原 map；调用方继续持有导入 map 值。
 // ABI：不生成运行时代码，不影响寄存器、shadow space 或 rsp。
 fn io_windows64_file_imports(imports: map) -> map {
-    const imports1: map = pe_import_use64(imports, "KERNEL32.DLL", "CreateFileW");
-    const imports2: map = pe_import_use64(imports1, "KERNEL32.DLL", "CloseHandle");
-    const imports3: map = pe_import_use64(imports2, "KERNEL32.DLL", "ReadFile");
-    const imports4: map = pe_import_use64(imports3, "KERNEL32.DLL", "WriteFile");
-    const imports5: map = pe_import_use64(imports4, "KERNEL32.DLL", "FlushFileBuffers");
-    const imports6: map = pe_import_use64(imports5, "KERNEL32.DLL", "SetFilePointerEx");
-    const imports7: map = pe_import_use64(imports6, "KERNEL32.DLL", "GetFileSizeEx");
-    return pe_import_use64(imports7, "KERNEL32.DLL", "GetLastError");
+    return pe_import_use64_many(
+        imports,
+        "KERNEL32.DLL",
+        list.of(
+            "CreateFileW",
+            "CloseHandle",
+            "ReadFile",
+            "WriteFile",
+            "FlushFileBuffers",
+            "SetFilePointerEx",
+            "GetFileSizeEx",
+            "GetLastError"
+        )
+    );
 }
 
 // 内部 CreateFileW 包装。

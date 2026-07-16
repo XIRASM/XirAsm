@@ -3,6 +3,8 @@
 // api-matrix-fixture: elfexe_import_new(
 // api-matrix-fixture: elfexe_import_use64(
 // api-matrix-fixture: elfexe_import_use64_as(
+// api-matrix-fixture: elfexe_import_use64_many(
+// api-matrix-fixture: elfexe_import_use64_pairs(
 // api-matrix-fixture: elfexe_import_r_info64(
 // api-matrix-fixture: elfexe_import_rela64(
 // api-matrix-fixture: elfexe_import_dyn64(
@@ -21,13 +23,13 @@
 
 import("../../include/format/elfexe_import.inc");
 
-const imports0: list = elfexe_import_new()
-const imports_unused: list = elfexe_import_use64(imports0, "libc.so.6", "exit")
-const imports1: list = elfexe_import_use64_as(imports0, "libc.so.6", "getpid", "getpid_slot")
+const base_imports: list = elfexe_import_new()
+const imports_unused: list = elfexe_import_use64_many(base_imports, "libc.so.6", list.of("exit"))
+const imports: list = elfexe_import_use64_pairs(base_imports, "libc.so.6", list.of("getpid_slot", "getpid"))
 
 const ph_count: u16 = 4
 const first_import_symbol: u64 = 1
-const import_count: u64 = len(imports1)
+const import_count: u64 = len(imports)
 
 const text_foa: u64 = 0x1000
 const text_vaddr: u64 = elf_segment_vaddr(elf_default_base64, text_foa)
@@ -40,21 +42,21 @@ const dynsym_vaddr: u64 = elf_segment_vaddr(elf_default_base64, dynsym_foa)
 const dynsym_size: u64 = (1 + import_count) * elfexe_import_sym64_size
 const dynstr_foa: u64 = dynsym_foa + dynsym_size
 const dynstr_vaddr: u64 = elf_segment_vaddr(elf_default_base64, dynstr_foa)
-const dynstr_size: u64 = elfexe_import_dynstr_size(imports1)
+const dynstr_size: u64 = elfexe_import_dynstr_size(imports)
 const hash_foa: u64 = elfexe_align_up(dynstr_foa + dynstr_size, 4)
 const hash_vaddr: u64 = elf_segment_vaddr(elf_default_base64, hash_foa)
-const hash_size: u64 = elfexe_import_hash_size(imports1)
+const hash_size: u64 = elfexe_import_hash_size(imports)
 const rela_foa: u64 = elfexe_align_up(hash_foa + hash_size, 8)
 const rela_vaddr: u64 = elf_segment_vaddr(elf_default_base64, rela_foa)
 const rela_size: u64 = import_count * elfexe_import_rela64_size
 const dynamic_foa: u64 = elfexe_align_up(rela_foa + rela_size, 8)
 const dynamic_vaddr: u64 = elf_segment_vaddr(elf_default_base64, dynamic_foa)
-const dynamic_size: u64 = (8 + len(elfexe_import_libraries(imports1)) + 1) * elfexe_import_dyn64_size
+const dynamic_size: u64 = (8 + len(elfexe_import_libraries(imports)) + 1) * elfexe_import_dyn64_size
 const ro_end_foa: u64 = dynamic_foa + dynamic_size
 const data_size: u64 = elfexe_align_up(ro_end_foa - data_foa, 0x100)
 
 const dynstr_name_start: u64 = 1
-const dynstr_needed_start: u64 = dynstr_name_start + elfexe_import_names_size(imports1)
+const dynstr_needed_start: u64 = dynstr_name_start + elfexe_import_names_size(imports)
 
 elfexe_begin64(ph_count);
 
@@ -70,7 +72,7 @@ elfexe_end_segment(0x100);
 
 elfexe_begin_segment64(".data", data_foa);
 data_start:
-elfexe_import_emit_slots64(imports1);
+elfexe_import_emit_slots64(imports);
 
 pad_to(interp_foa - data_foa, 0);
 interp_start:
@@ -79,23 +81,23 @@ interp_end:
 
 pad_to(dynsym_foa - data_foa, 0);
 dynsym_start:
-elfexe_import_emit_dynsym64(imports1, dynstr_name_start);
+elfexe_import_emit_dynsym64(imports, dynstr_name_start);
 
 pad_to(dynstr_foa - data_foa, 0);
 dynstr_start:
-elfexe_import_emit_dynstr64(imports1);
+elfexe_import_emit_dynstr64(imports);
 
 pad_to(hash_foa - data_foa, 0);
 hash_start:
-elfexe_import_hash(imports1);
+elfexe_import_hash(imports);
 
 pad_to(rela_foa - data_foa, 0);
 rela_start:
-elfexe_import_emit_rela64(imports1, first_import_symbol);
+elfexe_import_emit_rela64(imports, first_import_symbol);
 
 pad_to(dynamic_foa - data_foa, 0);
 dynamic_start:
-elfexe_import_emit_dynamic64(imports1, dynstr_vaddr, dynstr_size, dynsym_vaddr, hash_vaddr, rela_vaddr, rela_size, dynstr_needed_start);
+elfexe_import_emit_dynamic64(imports, dynstr_vaddr, dynstr_size, dynsym_vaddr, hash_vaddr, rela_vaddr, rela_size, dynstr_needed_start);
 
 data_end:
 elfexe_end_segment(data_size);

@@ -1,3 +1,9 @@
+// api-matrix-fixture: fn update(let
+
+fn update(let cfg: map) {
+    map.set_mut(cfg, "ready", true);
+}
+
 fn produce() -> integer {
     let scratch: list = list.of(1)
     list.push_mut(scratch, 2);
@@ -23,11 +29,13 @@ list.set_mut(items, 0, 3);
 let cfg: map = map.new()
 map.set_mut(cfg, "items", items);
 list.set_mut(items, 0, 4);
+update(cfg);
 
 const result: list = build()
 assert(list.eq(snapshot, list.of(1)));
 assert(list.eq(items, list.of(4, list.of(2))));
 assert(list.eq(map.get(cfg, "items"), list.of(3, list.of(2))));
+assert(map.get(cfg, "ready"));
 assert(list.eq(result, list.of(7, 2)));
 
 emit.u8(list.get(items, 0));

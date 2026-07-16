@@ -1,6 +1,6 @@
 import("format/format.inc");
 
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_pie,
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
@@ -8,9 +8,9 @@ const image0: map = format_elf64(
         format_segment(".rodata", format_load | format_readable)
     )
 )
-format_begin(image0);
+format_begin(image);
 
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     lea rbx, [rel scratch]
     mov dword [rbx], 0x5a
@@ -32,20 +32,20 @@ failed:
 finish:
     mov eax, 60
     syscall
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
-format_segment_begin(image0, ".bss");
+format_segment_begin(image, ".bss");
 scratch:
     rb(64);
-format_segment_end(image0, ".bss");
+format_segment_end(image, ".bss");
 
-format_segment_begin(image0, ".rodata");
+format_segment_begin(image, ".rodata");
 message:
     db("XIRASM PIE", 10);
 message_end:
-format_segment_end(image0, ".rodata");
+format_segment_end(image, ".rodata");
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 
 defer {

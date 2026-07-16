@@ -7,7 +7,7 @@ examples.
 
 Executable and object format APIs are documented separately:
 
-- [Executable Formats Guide](formats.md) for ordinary PE, COFF, and ELF
+- [Format Tutorial](format-tutorial.md) for ordinary PE, COFF, and ELF
   workflows.
 - [Advanced Formats Guide](advanced-formats.md) for direct header, table,
   region, and relocation control.
@@ -129,6 +129,24 @@ nearest visible mutable binding with the given name.
 Assignment does not declare a new name. The target must already exist and must
 be mutable.
 
+#### Fixed-Width Integer Types
+
+| Type family | Types | Accepted values |
+| --- | --- | --- |
+| Unsigned | `u8`, `u16`, `u32`, `u64` | `0` through `2^width - 1` |
+| Signed | `i8`, `i16`, `i32`, `i64` | `-2^(width - 1)` through `2^(width - 1) - 1` |
+
+These types may annotate `const` and `let` bindings, function parameters and
+results, and integer fields in structs and unions. Signed values use
+two's-complement representation when an aggregate is packed or emitted.
+
+```asm
+const displacement: i32 = -4
+let retry_count: u16 = 3
+```
+
+An initializer outside the declared range is rejected.
+
 #### Blocks and Shadowing
 
 ```asm
@@ -232,6 +250,7 @@ the corresponding ISA instructions.
 | Form | Syntax | Purpose |
 | --- | --- | --- |
 | Procedure | `fn name(parameters) { statements }` | Packages compile-time actions. |
+| Mutable procedure parameter | `let name: type` | Writes the final parameter value back to a direct caller `let` binding. |
 | Procedure call | `name(arguments)` | Executes a procedure. |
 | Value function | `fn name(parameters) -> type { statements }` | Calculates an expression value. |
 | Return | `return expression` | Completes a value function with a result. |
@@ -263,6 +282,12 @@ Parameters are positional. Their type annotations are optional, but an
 annotation validates the corresponding argument at the call boundary. Every
 call must supply exactly one argument for each parameter.
 
+Procedure parameters are read-only unless prefixed with `let`. A `let`
+parameter writes its final value back to the caller, so its argument must be a
+direct mutable binding. Mutable parameters cannot receive constants,
+temporaries, or duplicate aliases. Value-returning functions cannot declare
+`let` parameters.
+
 Procedure calls are statements. A trailing semicolon is accepted but is not
 required.
 
@@ -293,6 +318,8 @@ layout-changing actions.
 - Functions must be declared at top level.
 - A declaration must appear before its first call.
 - Parameter names must be unique within the declaration.
+- `let` parameters are valid only in procedures and require direct caller `let`
+  bindings.
 - Parameters and local bindings belong to one invocation.
 - Procedure calls cannot be used as expression values.
 - `return` is valid only in a value-returning function.

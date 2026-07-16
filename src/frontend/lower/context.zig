@@ -133,6 +133,21 @@ pub fn setLocalValue(
     return true;
 }
 
+pub fn setCallerLocalValue(
+    context: *LowerContext,
+    allocator: Allocator,
+    name: []const u8,
+    new_value: value_mod.Value,
+) contracts.LowerError!bool {
+    if (context.scopes.items.len <= 1) return false;
+    const position = findCallerLocalPosition(context, name) orelse return false;
+    const local = &context.scopes.items[position.scope_index].locals.items[position.local_index];
+    if (local.mutability != .let) return error.InvalidValueDeclaration;
+    local.value.deinit(allocator);
+    local.value = new_value;
+    return true;
+}
+
 pub fn lookupLocalValue(context: *const LowerContext, name: []const u8) ?*const value_mod.Value {
     const position = findLocalPosition(context, name) orelse return null;
     return &context.scopes.items[position.scope_index].locals.items[position.local_index].value;
@@ -147,6 +162,25 @@ pub fn lookupMutableLocalValue(context: *LowerContext, name: []const u8) value_m
 
 fn findLocalPosition(context: *const LowerContext, name: []const u8) ?LocalPosition {
     var scope_index = context.scopes.items.len;
+    while (scope_index != 0) {
+        scope_index -= 1;
+        const scope = &context.scopes.items[scope_index];
+        var local_index = scope.locals.items.len;
+        while (local_index != 0) {
+            local_index -= 1;
+            if (std.mem.eql(u8, scope.locals.items[local_index].name, name)) {
+                return .{
+                    .scope_index = scope_index,
+                    .local_index = local_index,
+                };
+            }
+        }
+    }
+    return null;
+}
+
+fn findCallerLocalPosition(context: *const LowerContext, name: []const u8) ?LocalPosition {
+    var scope_index = context.scopes.items.len - 1;
     while (scope_index != 0) {
         scope_index -= 1;
         const scope = &context.scopes.items[scope_index];

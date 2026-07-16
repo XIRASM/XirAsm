@@ -6,6 +6,10 @@
 // api-matrix-fixture: pe_import_use64(
 // api-matrix-fixture: pe_import_use32_as(
 // api-matrix-fixture: pe_import_use64_as(
+// api-matrix-fixture: pe_import_use32_many(
+// api-matrix-fixture: pe_import_use64_many(
+// api-matrix-fixture: pe_import_use32_pairs(
+// api-matrix-fixture: pe_import_use64_pairs(
 // api-matrix-fixture: pe_import_use32_ordinal_as(
 // api-matrix-fixture: pe_import_use64_ordinal_as(
 // api-matrix-fixture: pe_import_descriptor(
@@ -25,8 +29,12 @@ import("../../include/format/pe_import.inc");
 
 x86.use32();
 
-const imports0: map = pe_import_new()
-const imports1: map = pe_import_use32_as(imports0, "KERNEL32.DLL", "ExitProcess", "exit_process_iat")
+let imports: map = pe_import_new()
+imports = pe_import_use32_pairs(
+    imports,
+    "KERNEL32.DLL",
+    list.of("exit_process_iat", "ExitProcess", "get_process_id_iat", "GetCurrentProcessId")
+)
 
 const text_rva: u64 = pe_section_rva(0, pe_default_section_align)
 const text_raw: u64 = pe_section_raw_ptr(0, pe_default_file_align)
@@ -47,7 +55,7 @@ pe32_end_section(0);
 
 pe32_section(".idata", 1);
 idata_start:
-pe_import_emit32(imports1, idata_rva, idata_start);
+pe_import_emit32(imports, idata_rva, idata_start);
 idata_payload_end:
 idata_end:
 pe32_end_section(1);

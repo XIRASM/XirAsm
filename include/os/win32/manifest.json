@@ -1,0 +1,21 @@
+{
+  "aggregate_types": 21717,
+  "com_interfaces": 7579,
+  "com_methods": 200460,
+  "com_partitions": 180,
+  "constants": 93534,
+  "definition_partitions": 301,
+  "dlls": 339,
+  "enum_values": 59563,
+  "functions": 17105,
+  "import_names": 17105,
+  "layouts": 11054,
+  "namespaces": 304,
+  "schema": 1,
+  "source_sha256": "69ab5d021d32d5d61243c16ac1d257c608dbc03a09bbd4a899ee4783927cbbf5",
+  "source_version": "25.0.28-preview",
+  "types": 31921,
+  "unresolved_aggregate_types": 0,
+  "unresolved_layouts": 1804,
+  "unsupported_constants": 2
+}

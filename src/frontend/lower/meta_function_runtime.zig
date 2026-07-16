@@ -44,6 +44,8 @@ pub fn lowerStatementFunction(
     context.in_meta_loop = false;
     defer context.in_meta_loop = caller_in_meta_loop;
 
+    try validateMutableArguments(module, context, call, function.params);
+
     try context.scopes.append(allocator, .{});
     defer context_mod.discardLastScope(context, allocator);
 
@@ -53,10 +55,76 @@ pub fn lowerStatementFunction(
         var value = try callbacks.value_arg_at_context(allocator, module, context, active.*, call, index);
         errdefer value.deinit(allocator);
         try typecheck.coerceValueToAnnotation(module, &value, annotation);
-        try context_mod.defineLocalValue(context, allocator, param.name, value, .@"const");
+        try context_mod.defineLocalValue(context, allocator, param.name, value, param.mutability);
     }
 
     try callbacks.lower_statement_slice(allocator, module, active, output_stack, function.body, context);
+    try writeBackMutableArguments(allocator, module, context, call, function.params);
+}
+
+fn validateMutableArguments(
+    module: *module_mod.Module,
+    context: *LowerContext,
+    call: ast.ApiCallStatement,
+    params: []const ast.MetaFunctionParam,
+) LowerError!void {
+    for (params, 0..) |param, index| {
+        if (param.mutability != .let) continue;
+        const name = directSymbolArgument(call, index) orelse
+            return fail(module, call, "mutable function argument must be a direct let binding");
+
+        for (params[0..index], 0..) |previous, previous_index| {
+            if (previous.mutability != .let) continue;
+            const previous_name = directSymbolArgument(call, previous_index) orelse continue;
+            if (std.mem.eql(u8, previous_name, name)) {
+                return fail(module, call, "mutable function arguments cannot alias the same binding");
+            }
+        }
+
+        switch (context_mod.lookupMutableLocalValue(context, name)) {
+            .value => {},
+            .immutable => return fail(module, call, "mutable function argument must resolve to a let binding"),
+            .missing => switch (module.symbols.lookupMutableValue(name)) {
+                .value => {},
+                .immutable => return fail(module, call, "mutable function argument must resolve to a let binding"),
+                .missing => return fail(module, call, "mutable function argument must resolve to a let binding"),
+            },
+        }
+    }
+}
+
+fn writeBackMutableArguments(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    context: *LowerContext,
+    call: ast.ApiCallStatement,
+    params: []const ast.MetaFunctionParam,
+) LowerError!void {
+    for (params, 0..) |param, index| {
+        if (param.mutability != .let) continue;
+        const name = directSymbolArgument(call, index) orelse return error.InvalidMetaFunction;
+        const local = context_mod.lookupLocalValue(context, param.name) orelse return error.InvalidMetaFunction;
+        var updated = try local.clone(allocator);
+        errdefer updated.deinit(allocator);
+        if (try context_mod.setCallerLocalValue(context, allocator, name, updated)) continue;
+        try module.setValue(name, updated);
+    }
+}
+
+fn directSymbolArgument(call: ast.ApiCallStatement, index: usize) ?[]const u8 {
+    if (index >= call.args.len) return null;
+    return switch (call.args[index]) {
+        .expression => |node| switch (node) {
+            .symbol => |name| name,
+            else => null,
+        },
+        .string, .struct_literal => null,
+    };
+}
+
+fn fail(module: *module_mod.Module, call: ast.ApiCallStatement, message: []const u8) LowerError {
+    module.diagnostics.add(module.allocator, .err, call.span, message) catch return error.OutOfMemory;
+    return error.FrontendDiagnostics;
 }
 
 pub fn evalValueFunctionAt(

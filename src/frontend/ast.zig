@@ -107,6 +107,7 @@ pub const MetaForRangeStatement = struct {
 pub const MetaFunctionParam = struct {
     name: []u8,
     type_name: ?[]u8 = null,
+    mutability: value_mod.Mutability = .@"const",
     span: source.SourceSpan,
 
     pub fn deinit(self: *MetaFunctionParam, allocator: Allocator) void {

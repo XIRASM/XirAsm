@@ -28,6 +28,30 @@ fn elf_export_use64(exports: list, target_label: string, export_name: string, se
     return next_exports;
 }
 
+fn elf_export_use64_many(exports: list, names: list, section_index: u64, symbol_size: u64) -> list {
+    let next_exports: list = exports
+    for name in names {
+        next_exports = elf_export_use64(next_exports, name, name, section_index, symbol_size)
+    }
+    return next_exports;
+}
+
+fn elf_export_use64_pairs(exports: list, pairs: list, section_index: u64, symbol_size: u64) -> list {
+    assert(len(pairs) % 2 == 0, "ELF export pairs require target/name entries");
+    assert(len(pairs) <= 128, "ELF export pairs exceed the batch limit");
+    return elf_export_use64_pairs_from(exports, pairs, section_index, symbol_size, 0);
+}
+
+fn elf_export_use64_pairs_from(exports: list, pairs: list, section_index: u64, symbol_size: u64, index: u64) -> list {
+    if index == len(pairs) {
+        return exports;
+    }
+    const target_label: string = list.get(pairs, index)
+    const export_name: string = list.get(pairs, index + 1)
+    const next_exports: list = elf_export_use64(exports, target_label, export_name, section_index, symbol_size)
+    return elf_export_use64_pairs_from(next_exports, pairs, section_index, symbol_size, index + 2);
+}
+
 fn elf_export_entry(target_label: string, export_name: string, section_index: u64, symbol_size: u64) -> map {
     let entry: map = map.new()
     map.set_mut(entry, "target", target_label);

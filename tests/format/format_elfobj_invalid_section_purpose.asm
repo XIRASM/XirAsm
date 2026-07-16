@@ -1,6 +1,6 @@
 import("format/format.inc");
 
-const object: map = format_elfobj64(
+let object: map = format_elfobj64(
     list.of(
         format_section(
             ".imports",

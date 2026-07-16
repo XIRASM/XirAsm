@@ -2,7 +2,7 @@ import("format/format.inc");
 
 x86.use32();
 
-const image0: map = format_elf32(
+let image: map = format_elf32(
     format_elf_exec,
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
@@ -10,26 +10,26 @@ const image0: map = format_elf32(
         format_segment(".extra", format_load | format_readable)
     )
 )
-format_begin(image0);
+format_begin(image);
 
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     mov eax, 1
     xor ebx, ebx
     int 0x80
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
-format_segment_begin(image0, ".bss");
+format_segment_begin(image, ".bss");
 bss_start:
     rb(64);
-format_segment_end(image0, ".bss");
+format_segment_end(image, ".bss");
 
-format_segment_begin(image0, ".extra");
+format_segment_begin(image, ".extra");
 extra_start:
     dd(0x11223344);
-format_segment_end(image0, ".extra");
+format_segment_end(image, ".extra");
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 
 defer {

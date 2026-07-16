@@ -298,6 +298,6 @@ defer {
 
 有 flat 输出能力，不等于应该手拼那些标准可执行或目标文件格式。PE、COFF、ELF 还需要文件头、表、权限、导入导出、重定位和加载规则。
 
-XIRASM 提供了 `format/format.inc` 库处理这些。下一章从语言层面介绍用法。完整说明见《可执行文件格式指南》。
+XIRASM 提供了 `format/format.inc` 库处理这些。下一章从语言层面介绍基本用法；完整模板、参数和 API 摘要见[《格式教程》](../format-tutorial.md)。
 
 [返回目录](../language.md)

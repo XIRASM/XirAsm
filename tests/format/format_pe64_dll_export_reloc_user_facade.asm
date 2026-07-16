@@ -1,12 +1,13 @@
+// api-matrix-fixture: format_pe_import_new(
+// api-matrix-fixture: format_pe_import_many_mut(
+// api-matrix-fixture: format_pe_import_pairs_mut(
+// api-matrix-fixture: format_pe_export_new(
+// api-matrix-fixture: format_pe_export_many_mut(
+// api-matrix-fixture: format_pe_export_pairs_mut(
+
 import("format/format.inc");
 
-const imports0: map = pe_import_new()
-const imports: map = pe_import_use64(imports0, "KERNEL32.DLL", "GetCurrentProcessId")
-const exports0: list = pe_export_new()
-const exports1: list = pe_export_use64(exports0, "dll_main", "xir_answer")
-const exports: list = pe_export_use64(exports1, "absolute_slot", "xir_absolute_slot")
-
-const image0: map = format_pe64(
+let image: map = format_pe64(
     format_pe_dll | format_pe_console | format_pe_nx | format_pe_aslr_auto,
     list.of(
         format_section(".text", format_code | format_readable | format_executable),
@@ -17,32 +18,40 @@ const image0: map = format_pe64(
         format_section(".reloc", format_fixups | format_readable | format_discardable)
     )
 )
-format_begin(image0);
+let imports: map = format_pe_import_new()
+format_pe_import_many_mut(image, imports, "KERNEL32.DLL", list.of("GetCurrentProcessId"))
+let exports: list = format_pe_export_new()
+format_pe_export_pairs_mut(
+    image,
+    exports,
+    list.of("dll_main", "xir_answer", "absolute_slot", "xir_absolute_slot")
+)
+format_begin(image);
 
-format_section_begin(image0, ".text");
+format_section_begin(image, ".text");
 dll_main:
     mov eax, 42
     ret
 absolute_slot:
     dq(0);
-format_section_end(image0, ".text");
+format_section_end(image, ".text");
 
-format_section_begin(image0, ".bss");
+format_section_begin(image, ".bss");
     rb(64);
-format_section_end(image0, ".bss");
+format_section_end(image, ".bss");
 
-format_pe_import_section(image0, ".idata", imports);
-format_pe_export_section(image0, ".edata", exports, "xirasm_facade64.dll");
+format_pe_import_section(image, ".idata", imports);
+format_pe_export_section(image, ".edata", exports, "xirasm_facade64.dll");
 
-format_section_begin(image0, ".rsrc");
+format_section_begin(image, ".rsrc");
     emit.u32(0);
-format_section_end(image0, ".rsrc");
+format_section_end(image, ".rsrc");
 
-const relocs0: list = pe_reloc_new()
-const relocs: list = format_pe_reloc_add(image0, relocs0, absolute_slot)
-format_pe_reloc_section(image0, ".reloc", relocs);
+let relocs: list = pe_reloc_new()
+format_pe_reloc_add_mut(image, relocs, absolute_slot)
+format_pe_reloc_section(image, ".reloc", relocs);
 
-const image: map = format_entry(image0, dll_main)
+format_entry_mut(image, dll_main)
 format_finish(image);
 
 defer {

@@ -353,9 +353,10 @@ mov word [rsp + offset_of(StackFrame, tail)], 0x6655
 add rsp, sizeof(StackFrame)
 ```
 
-紧凑布局与嵌套布局使用相同写法。嵌套字段可以直接写成 `[rsp + offset_of(NestedFrame, point.y)]`。如果这段代码还要调用 Windows x64 函数，必须另外满足 ABI 的栈对齐与 shadow space（影子空间）要求；`sizeof(StackFrame)` 只描述结构体记录本身。
+紧凑布局与嵌套布局使用相同写法。嵌套字段可以直接写成 `[rsp + offset_of(NestedFrame, point.y)]`。如果这段代码还要调用 Windows x64 函数，必须另外满足调用约定的栈对齐与影子空间要求；`sizeof(StackFrame)` 只描述结构体记录本身。
 
-完整的编码测试与可运行 PE64 测试位于 `tests/format/pe64_stack_struct_member_access/`。
+在 PE64 程序中使用结构体栈帧时，同样要同时满足 Windows x64 调用约定；结构体大小
+只负责描述局部记录的布局，不会自动补齐调用边界需要的栈空间。
 
 ## 打包并写出结构体值
 

@@ -4,8 +4,11 @@ syntax.isa_line	syntax	ISA instruction	.isa_instruction	mov rax, 1	Plain ISA tex
 syntax.const	syntax	const	parseValueDeclaration	const value = 1	Compile-time immutable Meta value declaration.
 syntax.let	syntax	let	parseValueDeclaration	let value = 2	Scoped compile-time mutable Meta value declaration.
 syntax.assignment	syntax	let assignment	parseAssignment	value = value + 1	Updates an existing mutable Meta value in the nearest scope.
+syntax.signed_integer_type	syntax	i8/i16/i32/i64	acceptsValue	dword: i32	Signed fixed-width values accept their full two's-complement range.
+format.win32_guid	format	win32_guid	fn win32_guid	win32_guid(	Build the 16-byte Windows memory representation of a GUID.
 syntax.block	syntax	block	appendMetaBlockStatement	let value = 2	Scoped Meta block lifetime.
 syntax.fn	syntax	fn	parseMetaFunctionStart	fn emit_pair	User Meta function declaration.
+syntax.fn_let_param	syntax	let procedure parameter	parseMetaFunctionParam	fn update(let	Writes a procedure parameter back to a direct caller let binding.
 syntax.user_fn_call	syntax	user function call	lowerMetaFunctionCall	emit_pair(2)	User Meta function invocation.
 syntax.fn_return	syntax	fn return type	return_type_name	fn align_up(value: u64, align: u64) -> u64	Return-value Meta function declaration.
 syntax.return	syntax	return	MetaReturnStatement	return value	Returns from a return-value Meta function.
@@ -93,7 +96,7 @@ api.align	api	align	call.callee, "align"	align(	Emit fill bytes up to alignment.
 format.format_pe32	format	format_pe32	fn format_pe32	format_pe32(	Create a declarative PE32 plan without caller-supplied section counts or rows.
 format.format_pe64	format	format_pe64	fn format_pe64	format_pe64(	Create a declarative PE64 plan without caller-supplied section counts or rows.
 format.format_section	format	format_section	fn format_section	format_section(	Declare a named section with one purpose and explicit permission flags.
-format.format_entry	format	format_entry	fn format_entry	format_entry(	Bind an executable entry address after the label has been defined.
+format.format_entry_mut	format	format_entry_mut	fn format_entry_mut	format_entry_mut(	Bind an executable entry address after the label has been defined.
 format.format_begin	format	format_begin	fn format_begin	format_begin(	Emit headers and exact table-row counts derived from a declarative plan.
 format.format_section_begin	format	format_section_begin	fn format_section_begin	format_section_begin(	Open a declared PE, COFF, or ELF object section by name.
 format.format_section_end	format	format_section_end	fn format_section_end	format_section_end(	Close a declared PE, COFF, or ELF object section by name.
@@ -117,10 +120,16 @@ format.format_readable	format	format_readable	const format_readable	format_reada
 format.format_writeable	format	format_writeable	const format_writeable	format_writeable	Mark a declared section writeable.
 format.format_executable	format	format_executable	const format_executable	format_executable	Mark a declared section executable.
 format.format_discardable	format	format_discardable	const format_discardable	format_discardable	Mark a declared section discardable.
+format.format_pe_import_new	format	format_pe_import_new	fn format_pe_import_new	format_pe_import_new(	Create an empty ordinary PE import set.
+format.format_pe_import_many_mut	format	format_pe_import_many_mut	fn format_pe_import_many_mut	format_pe_import_many_mut(	Add matching-name imports and select PE32 or PE64 from the plan.
+format.format_pe_import_pairs_mut	format	format_pe_import_pairs_mut	fn format_pe_import_pairs_mut	format_pe_import_pairs_mut(	Add local-slot and imported-name pairs and select PE32 or PE64 from the plan.
+format.format_pe_export_new	format	format_pe_export_new	fn format_pe_export_new	format_pe_export_new(	Create an empty ordinary PE export list.
+format.format_pe_export_many_mut	format	format_pe_export_many_mut	fn format_pe_export_many_mut	format_pe_export_many_mut(	Add matching-name exports and select PE32 or PE64 from the plan.
+format.format_pe_export_pairs_mut	format	format_pe_export_pairs_mut	fn format_pe_export_pairs_mut	format_pe_export_pairs_mut(	Add target-label and public-name export pairs and select PE32 or PE64 from the plan.
 format.format_pe_import_section	format	format_pe_import_section	fn format_pe_import_section	format_pe_import_section(	Emit a declared PE import section and register directory backfill.
 format.format_pe_export_section	format	format_pe_export_section	fn format_pe_export_section	format_pe_export_section(	Emit a declared PE export section and register directory backfill.
 format.format_pe_resource_section	format	format_pe_resource_section	fn format_pe_resource_section	format_pe_resource_section(	Build a declared PE resource section from a compiled resource file.
-format.format_pe_reloc_add	format	format_pe_reloc_add	fn format_pe_reloc_add	format_pe_reloc_add(	Add a PE32 HIGHLOW or PE64 DIR64 relocation from the plan bitness.
+format.format_pe_reloc_add_mut	format	format_pe_reloc_add_mut	fn format_pe_reloc_add_mut	format_pe_reloc_add_mut(	Add a PE32 HIGHLOW or PE64 DIR64 relocation from the plan bitness.
 format.format_pe_reloc_section	format	format_pe_reloc_section	fn format_pe_reloc_section	format_pe_reloc_section(	Emit grouped PE base relocations in the declared fixups section.
 format.format_pe_checksum	format	format_pe_checksum	fn format_pe_checksum	format_pe_checksum(	Register a final checksum over the complete PE file image.
 format.format_coff32	format	format_coff32	fn format_coff32	format_coff32(	Create an i386 COFF object plan with automatic section rows.
@@ -128,7 +137,7 @@ format.format_coff64	format	format_coff64	fn format_coff64	format_coff64(	Create
 format.format_coff_public	format	format_coff_public	fn format_coff_public	format_coff_public(	Declare a public COFF symbol without caller-supplied symbol indexes.
 format.format_coff_extern	format	format_coff_extern	fn format_coff_extern	format_coff_extern(	Declare an external COFF symbol without caller-supplied symbol indexes.
 format.format_coff_reloc	format	format_coff_reloc	fn format_coff_reloc	format_coff_reloc(	Declare a named COFF relocation without caller-supplied section or symbol indexes.
-format.format_coff_tables	format	format_coff_tables	fn format_coff_tables	format_coff_tables(	Attach COFF symbols and relocations to an object plan.
+format.format_coff_tables_mut	format	format_coff_tables_mut	fn format_coff_tables_mut	format_coff_tables_mut(	Attach COFF symbols and relocations to an object plan.
 format.format_elf32	format	format_elf32	fn format_elf32	format_elf32(	Create an ELF32 executable plan with automatic program-header count.
 format.format_elf64	format	format_elf64	fn format_elf64	format_elf64(	Create an ELF64 executable or PIE plan with automatic program-header count.
 format.format_segment	format	format_segment	fn format_segment	format_segment(	Declare a named ELF LOAD segment and permissions.
@@ -137,18 +146,24 @@ format.format_segment_end	format	format_segment_end	fn format_segment_end	format
 format.format_elf_exec	format	format_elf_exec	const format_elf_exec	format_elf_exec	Select fixed-address ELF executable output.
 format.format_elf_pie	format	format_elf_pie	const format_elf_pie	format_elf_pie	Select ELF64 position-independent executable output.
 format.format_load	format	format_load	const format_load	format_load	Declare an ELF PT_LOAD segment purpose.
-format.format_elfexe_import_plt	format	format_elfexe_import_plt	fn format_elfexe_import_plt	format_elfexe_import_plt(	Declare an ELF64 executable PLT/GOT import by library and symbol name.
-format.format_elfexe_tables	format	format_elfexe_tables	fn format_elfexe_tables	format_elfexe_tables(	Attach ELF64 executable imports and generate dynamic metadata at finish.
+format.format_elfexe_import_new	format	format_elfexe_import_new	fn format_elfexe_import_new	format_elfexe_import_new(	Create an empty ordinary ELF64 executable import list.
+format.format_elfexe_import_many_mut	format	format_elfexe_import_many_mut	fn format_elfexe_import_many_mut	format_elfexe_import_many_mut(	Add matching-name ELF64 executable PLT/GOT imports from one library.
+format.format_elfexe_import_pairs_mut	format	format_elfexe_import_pairs_mut	fn format_elfexe_import_pairs_mut	format_elfexe_import_pairs_mut(	Add local-name and imported-name ELF64 executable PLT/GOT pairs.
+format.format_elfexe_tables_mut	format	format_elfexe_tables_mut	fn format_elfexe_tables_mut	format_elfexe_tables_mut(	Attach ELF64 executable imports and generate dynamic metadata at finish.
 format.format_elfobj32	format	format_elfobj32	fn format_elfobj32	format_elfobj32(	Create an ELF32 relocatable-object plan with automatic section indexes.
 format.format_elfobj64	format	format_elfobj64	fn format_elfobj64	format_elfobj64(	Create an ELF64 relocatable-object plan with automatic section indexes.
 format.format_elfobj_public	format	format_elfobj_public	fn format_elfobj_public	format_elfobj_public(	Declare a public ELF object symbol without caller-supplied symbol indexes.
 format.format_elfobj_extern	format	format_elfobj_extern	fn format_elfobj_extern	format_elfobj_extern(	Declare an undefined ELF object symbol without caller-supplied symbol indexes.
 format.format_elfobj_reloc	format	format_elfobj_reloc	fn format_elfobj_reloc	format_elfobj_reloc(	Declare an ELF object relocation by section and symbol name.
-format.format_elfobj_tables	format	format_elfobj_tables	fn format_elfobj_tables	format_elfobj_tables(	Attach ELF object symbols and relocations to a plan.
+format.format_elfobj_tables_mut	format	format_elfobj_tables_mut	fn format_elfobj_tables_mut	format_elfobj_tables_mut(	Attach ELF object symbols and relocations to a plan.
 format.format_elf64_so	format	format_elf64_so	fn format_elf64_so	format_elf64_so(	Create an ELF64 shared-object plan with automatic program and section tables.
-format.format_elfso_export	format	format_elfso_export	fn format_elfso_export	format_elfso_export(	Declare an exported ELF64 shared-object function symbol.
-format.format_elfso_import_plt	format	format_elfso_import_plt	fn format_elfso_import_plt	format_elfso_import_plt(	Declare an ELF64 shared-object PLT/GOT import.
-format.format_elfso_tables	format	format_elfso_tables	fn format_elfso_tables	format_elfso_tables(	Attach ELF64 shared-object exports and imports to a plan.
+format.format_elfso_export_new	format	format_elfso_export_new	fn format_elfso_export_new	format_elfso_export_new(	Create an empty ordinary ELF64 shared-object export list.
+format.format_elfso_export_many_mut	format	format_elfso_export_many_mut	fn format_elfso_export_many_mut	format_elfso_export_many_mut(	Add matching-name ELF64 shared-object exports from one segment.
+format.format_elfso_export_pairs_mut	format	format_elfso_export_pairs_mut	fn format_elfso_export_pairs_mut	format_elfso_export_pairs_mut(	Add target-label and public-name ELF64 shared-object export pairs.
+format.format_elfso_import_new	format	format_elfso_import_new	fn format_elfso_import_new	format_elfso_import_new(	Create an empty ordinary ELF64 shared-object import list.
+format.format_elfso_import_many_mut	format	format_elfso_import_many_mut	fn format_elfso_import_many_mut	format_elfso_import_many_mut(	Add matching-name ELF64 shared-object PLT/GOT imports from one library.
+format.format_elfso_import_pairs_mut	format	format_elfso_import_pairs_mut	fn format_elfso_import_pairs_mut	format_elfso_import_pairs_mut(	Add local-name and imported-name ELF64 shared-object PLT/GOT pairs.
+format.format_elfso_tables_mut	format	format_elfso_tables_mut	fn format_elfso_tables_mut	format_elfso_tables_mut(	Attach ELF64 shared-object exports and imports to a plan.
 format.pe_begin32	format	pe_begin32	fn pe_begin32	pe_begin32(	Emit PE32 DOS stub and NT signature with 32-bit image base.
 format.pe32_exe	format	pe32_exe	fn pe32_exe	pe32_exe(	Advanced PE32 helper with a caller-supplied section count.
 format.pe32_section	format	pe32_section	fn pe32_section	pe32_section(	Advanced PE32 section opener with a caller-supplied row and standard layout math.
@@ -214,11 +229,15 @@ format.pe_resource_data_entry	format	pe_resource_data_entry	fn pe_resource_data_
 format.pe_resource_emit_single_numeric	format	pe_resource_emit_single_numeric	fn pe_resource_emit_single_numeric	pe_resource_emit_single_numeric(	Emit a minimal numeric type/id/language PE resource tree.
 format.pe_resource_emit_from_res	format	pe_resource_emit_from_res	fn pe_resource_emit_from_res	pe_resource_emit_from_res(	Parse one compiled .res file and emit a deterministic PE type/name/language resource tree.
 format.pe_resource_finish_single_numeric	format	pe_resource_finish_single_numeric	fn pe_resource_finish_single_numeric	pe_resource_finish_single_numeric(	Finalize the minimal PE resource data entry for an explicit numeric resource tree.
-format.pe_import_new	format	pe_import_new	fn pe_import_new	pe_import_new(	Create an immutable PE import set.
+format.pe_import_new	format	pe_import_new	fn pe_import_new	pe_import_new(	Create an empty PE import set for grouped or single-item declarations.
 format.pe_import_use32	format	pe_import_use32	fn pe_import_use32	pe_import_use32(	Add a named PE32 import using the function name as the IAT slot label.
 format.pe_import_use64	format	pe_import_use64	fn pe_import_use64	pe_import_use64(	Add a named PE64 import using the function name as the IAT slot label.
 format.pe_import_use32_as	format	pe_import_use32_as	fn pe_import_use32_as	pe_import_use32_as(	Add a named PE32 import with an explicit IAT slot label.
 format.pe_import_use64_as	format	pe_import_use64_as	fn pe_import_use64_as	pe_import_use64_as(	Add a named PE64 import with an explicit IAT slot label.
+format.pe_import_use32_many	format	pe_import_use32_many	fn pe_import_use32_many	pe_import_use32_many(	Add multiple named PE32 imports from one DLL using matching slot names.
+format.pe_import_use64_many	format	pe_import_use64_many	fn pe_import_use64_many	pe_import_use64_many(	Add multiple named PE64 imports from one DLL using matching slot names.
+format.pe_import_use32_pairs	format	pe_import_use32_pairs	fn pe_import_use32_pairs	pe_import_use32_pairs(	Add multiple PE32 slot and imported-name pairs from one DLL.
+format.pe_import_use64_pairs	format	pe_import_use64_pairs	fn pe_import_use64_pairs	pe_import_use64_pairs(	Add multiple PE64 slot and imported-name pairs from one DLL.
 format.pe_import_use32_ordinal_as	format	pe_import_use32_ordinal_as	fn pe_import_use32_ordinal_as	pe_import_use32_ordinal_as(	Add a PE32 ordinal import with an explicit IAT slot label.
 format.pe_import_use64_ordinal_as	format	pe_import_use64_ordinal_as	fn pe_import_use64_ordinal_as	pe_import_use64_ordinal_as(	Add a PE64 ordinal import with an explicit IAT slot label.
 format.pe_import_descriptor	format	pe_import_descriptor	fn pe_import_descriptor	pe_import_descriptor(	Emit one PE import descriptor row.
@@ -233,9 +252,13 @@ format.pe_import_hint_name	format	pe_import_hint_name	fn pe_import_hint_name	pe_
 format.pe_import_emit32	format	pe_import_emit32	fn pe_import_emit32	pe_import_emit32(	Emit PE32 import lookup, address, name, DLL, and descriptor data for an import set.
 format.pe_import_emit64	format	pe_import_emit64	fn pe_import_emit64	pe_import_emit64(	Emit PE64 import lookup, address, name, DLL, and descriptor data for an import set.
 format.pe_import_descriptors	format	pe_import_descriptors	label.define("pe_import_descriptors")	pe_import_descriptors	Generated label for the start of the PE import descriptor table.
-format.pe_export_new	format	pe_export_new	fn pe_export_new	pe_export_new(	Create an immutable PE export list.
+format.pe_export_new	format	pe_export_new	fn pe_export_new	pe_export_new(	Create an empty PE export list for grouped or single-item declarations.
 format.pe_export_use32	format	pe_export_use32	fn pe_export_use32	pe_export_use32(	Add a PE32 export mapping from target label name to public export name.
 format.pe_export_use64	format	pe_export_use64	fn pe_export_use64	pe_export_use64(	Add a PE64 export mapping from target label name to public export name.
+format.pe_export_use32_many	format	pe_export_use32_many	fn pe_export_use32_many	pe_export_use32_many(	Add multiple PE32 exports whose target and public names match.
+format.pe_export_use64_many	format	pe_export_use64_many	fn pe_export_use64_many	pe_export_use64_many(	Add multiple PE64 exports whose target and public names match.
+format.pe_export_use32_pairs	format	pe_export_use32_pairs	fn pe_export_use32_pairs	pe_export_use32_pairs(	Add multiple PE32 target and public export-name pairs.
+format.pe_export_use64_pairs	format	pe_export_use64_pairs	fn pe_export_use64_pairs	pe_export_use64_pairs(	Add multiple PE64 target and public export-name pairs.
 format.pe_export_emit32	format	pe_export_emit32	fn pe_export_emit32	pe_export_emit32(	Emit PE32 export directory, address table, name table, ordinal table, and names.
 format.pe_export_emit64	format	pe_export_emit64	fn pe_export_emit64	pe_export_emit64(	Emit PE64 export directory, address table, name table, ordinal table, and names.
 format.pe_export_directory	format	pe_export_directory	fn pe_export_directory	pe_export_directory(	Emit one PE IMAGE_EXPORT_DIRECTORY row.
@@ -247,11 +270,15 @@ format.elfexe_begin64	format	elfexe_begin64	fn elfexe_begin64	elfexe_begin64(	Em
 format.elfexe_begin_segment32	format	elfexe_begin_segment32	fn elfexe_begin_segment32	elfexe_begin_segment32(	Start an ELF32 PT_LOAD logical region at explicit FOA-backed VA.
 format.elfexe_begin_segment64	format	elfexe_begin_segment64	fn elfexe_begin_segment64	elfexe_begin_segment64(	Start an ELF64 PT_LOAD logical region at explicit FOA-backed VA.
 format.elfexe_end_segment	format	elfexe_end_segment	fn elfexe_end_segment	elfexe_end_segment(	Pad active ELF segment region to explicit raw size.
-format.elfexe_import_new	format	elfexe_import_new	fn elfexe_import_new	elfexe_import_new(	Create an immutable ELF executable import list.
+format.elfexe_import_new	format	elfexe_import_new	fn elfexe_import_new	elfexe_import_new(	Create an empty ELF executable import list for grouped or single-item declarations.
 format.elfexe_import_use64	format	elfexe_import_use64	fn elfexe_import_use64	elfexe_import_use64(	Add an ELF64 executable import using the symbol name as the slot label.
 format.elfexe_import_use64_as	format	elfexe_import_use64_as	fn elfexe_import_use64_as	elfexe_import_use64_as(	Add an ELF64 executable import with an explicit slot label.
+format.elfexe_import_use64_many	format	elfexe_import_use64_many	fn elfexe_import_use64_many	elfexe_import_use64_many(	Add multiple ELF64 executable imports from one library using matching slot names.
+format.elfexe_import_use64_pairs	format	elfexe_import_use64_pairs	fn elfexe_import_use64_pairs	elfexe_import_use64_pairs(	Add multiple ELF64 executable slot and imported-name pairs from one library.
 format.elfexe_import_use64_plt	format	elfexe_import_use64_plt	fn elfexe_import_use64_plt	elfexe_import_use64_plt(	Add an ELF64 executable lazy import using derived GOTPLT and PLT labels.
 format.elfexe_import_use64_plt_as	format	elfexe_import_use64_plt_as	fn elfexe_import_use64_plt_as	elfexe_import_use64_plt_as(	Add an ELF64 executable lazy import with explicit GOTPLT and PLT labels.
+format.elfexe_import_use64_plt_many	format	elfexe_import_use64_plt_many	fn elfexe_import_use64_plt_many	elfexe_import_use64_plt_many(	Add multiple ELF64 executable lazy imports with derived GOTPLT and PLT labels.
+format.elfexe_import_use64_plt_pairs	format	elfexe_import_use64_plt_pairs	fn elfexe_import_use64_plt_pairs	elfexe_import_use64_plt_pairs(	Add local-name and imported-name ELF64 executable lazy import pairs.
 format.elfexe_import_rel32	format	elfexe_import_rel32	fn elfexe_import_rel32	elfexe_import_rel32(	Return an x86-64 rel32 displacement for ELF executable PLT stubs.
 format.elfexe_import_plt_size	format	elfexe_import_plt_size	fn elfexe_import_plt_size	elfexe_import_plt_size(	Compute ELF64 executable PLT table size for lazy imports.
 format.elfexe_import_gotplt_size	format	elfexe_import_gotplt_size	fn elfexe_import_gotplt_size	elfexe_import_gotplt_size(	Compute ELF64 executable GOTPLT table size for lazy imports.
@@ -364,8 +391,10 @@ format.elfso_st_info	format	elfso_st_info	fn elfso_st_info	elfso_st_info(	Pack E
 format.elfso_finalize_phdr64	format	elfso_finalize_phdr64	fn elfso_finalize_phdr64	elfso_finalize_phdr64(	Register deferred ELF64 shared-object program-header row backfill.
 format.elfso_finalize_load64	format	elfso_finalize_load64	fn elfso_finalize_load64	elfso_finalize_load64(	Register deferred ELF64 shared-object load segment backfill.
 format.elfso_finalize_dynamic64	format	elfso_finalize_dynamic64	fn elfso_finalize_dynamic64	elfso_finalize_dynamic64(	Register deferred ELF64 shared-object PT_DYNAMIC row backfill.
-format.elf_export_new	format	elf_export_new	fn elf_export_new	elf_export_new(	Create an immutable ELF64 SO export list.
+format.elf_export_new	format	elf_export_new	fn elf_export_new	elf_export_new(	Create an empty ELF64 SO export list for grouped or single-item declarations.
 format.elf_export_use64	format	elf_export_use64	fn elf_export_use64	elf_export_use64(	Add an ELF64 SO exported function symbol.
+format.elf_export_use64_many	format	elf_export_use64_many	fn elf_export_use64_many	elf_export_use64_many(	Add multiple same-name ELF64 SO exports with shared section and symbol size.
+format.elf_export_use64_pairs	format	elf_export_use64_pairs	fn elf_export_use64_pairs	elf_export_use64_pairs(	Add multiple ELF64 SO target and public-name pairs with shared section and symbol size.
 format.elf_export_emit_dynsym64	format	elf_export_emit_dynsym64	fn elf_export_emit_dynsym64	elf_export_emit_dynsym64(	Emit ELF64 SO dynamic symbol entries for exports.
 format.elf_export_emit_dynstr64	format	elf_export_emit_dynstr64	fn elf_export_emit_dynstr64	elf_export_emit_dynstr64(	Emit ELF64 SO dynamic string table contents for exports and SONAME.
 format.elf_export_emit_dynamic64	format	elf_export_emit_dynamic64	fn elf_export_emit_dynamic64	elf_export_emit_dynamic64(	Emit ELF64 SO export-only dynamic table entries.
@@ -373,11 +402,15 @@ format.elf_export_hash	format	elf_export_hash	fn elf_export_hash	elf_export_hash
 format.elf_export_hash_size	format	elf_export_hash_size	fn elf_export_hash_size	elf_export_hash_size(	Compute ELF64 SO export SYSV hash table size.
 format.elf_export_dynstr_size	format	elf_export_dynstr_size	fn elf_export_dynstr_size	elf_export_dynstr_size(	Compute ELF64 SO export dynamic string table size.
 format.elf_export_names_size	format	elf_export_names_size	fn elf_export_names_size	elf_export_names_size(	Compute combined ELF64 SO export symbol-name string size.
-format.elfso_import_new	format	elfso_import_new	fn elfso_import_new	elfso_import_new(	Create an immutable ELF SO import list.
+format.elfso_import_new	format	elfso_import_new	fn elfso_import_new	elfso_import_new(	Create an empty ELF SO import list for grouped or single-item declarations.
 format.elfso_import_use64	format	elfso_import_use64	fn elfso_import_use64	elfso_import_use64(	Add an ELF64 SO import using the symbol name as the slot label.
 format.elfso_import_use64_as	format	elfso_import_use64_as	fn elfso_import_use64_as	elfso_import_use64_as(	Add an ELF64 SO import with an explicit slot label.
+format.elfso_import_use64_many	format	elfso_import_use64_many	fn elfso_import_use64_many	elfso_import_use64_many(	Add multiple ELF64 SO imports from one library using matching slot names.
+format.elfso_import_use64_pairs	format	elfso_import_use64_pairs	fn elfso_import_use64_pairs	elfso_import_use64_pairs(	Add multiple ELF64 SO slot and imported-name pairs from one library.
 format.elfso_import_use64_plt	format	elfso_import_use64_plt	fn elfso_import_use64_plt	elfso_import_use64_plt(	Add an ELF64 SO lazy import using derived GOTPLT and PLT labels.
 format.elfso_import_use64_plt_as	format	elfso_import_use64_plt_as	fn elfso_import_use64_plt_as	elfso_import_use64_plt_as(	Add an ELF64 SO lazy import with explicit GOTPLT and PLT labels.
+format.elfso_import_use64_plt_many	format	elfso_import_use64_plt_many	fn elfso_import_use64_plt_many	elfso_import_use64_plt_many(	Add multiple ELF64 SO lazy imports with derived GOTPLT and PLT labels.
+format.elfso_import_use64_plt_pairs	format	elfso_import_use64_plt_pairs	fn elfso_import_use64_plt_pairs	elfso_import_use64_plt_pairs(	Add local-name and imported-name ELF64 SO lazy import pairs.
 format.elfso_import_rel32	format	elfso_import_rel32	fn elfso_import_rel32	elfso_import_rel32(	Return an x86-64 rel32 displacement for ELF SO PLT stubs.
 format.elfso_import_plt_size	format	elfso_import_plt_size	fn elfso_import_plt_size	elfso_import_plt_size(	Compute ELF64 SO PLT table size for lazy imports.
 format.elfso_import_gotplt_size	format	elfso_import_gotplt_size	fn elfso_import_gotplt_size	elfso_import_gotplt_size(	Compute ELF64 SO GOTPLT table size for lazy imports.

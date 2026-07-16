@@ -1,6 +1,6 @@
 # XIRASM
 
-[简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) | [Website](https://xirasm.github.io/XirAsm-site/) | [What's New](https://xirasm.github.io/XirAsm-site/#updates)
 
 **Assembly syntax for instructions. A real compile-time language for everything
 around them.**
@@ -13,7 +13,7 @@ reuse, or transformation, use typed values, functions, control flow,
 collections, modules, file data, and token matching.
 
 The result is one assembler language for handwritten instructions, generated
-code, binary layouts, and native output formats across x86 and RISC-V.
+code, binary layouts, and native output formats across x86, RISC-V, and SPIR-V.
 
 ## The Difference
 
@@ -28,8 +28,8 @@ code, binary layouts, and native output formats across x86 and RISC-V.
 - **The frontend owns assembly semantics.** Source spans, symbols, fragments,
   fixups, layout, relaxation, diagnostics, and output remain explicit; ISA
   encoders are narrow leaf backends.
-- **One project model covers x86 and RISC-V.** The same compile-time language
-  drives x86, x86-64, RV32, and RV64 sources.
+- **One project model covers multiple instruction sets.** The same compile-time
+  language drives x86, x86-64, RV32, RV64, and SPIR-V sources.
 
 ## See It
 
@@ -117,6 +117,7 @@ CLI subcommands come before their options. For example, use
 | `x86`, `x86-32` | 32-bit x86 |
 | `rv64`, `riscv64` | 64-bit RISC-V |
 | `rv32`, `riscv32` | 32-bit RISC-V |
+| `spv`, `spirv` | SPIR-V 1.6 module |
 
 The compile-time language and project structure stay consistent across targets.
 
@@ -139,8 +140,8 @@ import("format/format.inc");
 ```
 
 The CLI can also create ready-to-build Windows and Linux starter projects.
-Detailed PE, COFF, and ELF examples belong in the
-[Executable Formats Guide](document/formats.md).
+The [Format Tutorial](document/format-tutorial.md) covers complete PE, COFF,
+and ELF workflows.
 
 ## Editor Support
 
@@ -151,8 +152,8 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 - [Language Guide](document/language.md) - learn the compile-time language and
   assembler model.
-- [Executable Formats Guide](document/formats.md) - build PE, COFF, and ELF
-  programs with the ordinary format API.
+- [Format Tutorial](document/format-tutorial.md) - choose PE, COFF, and ELF
+  templates and build files with the user-facing facade APIs.
 - [Advanced Format Construction Guide](document/advanced-formats.md) - use
   direct format helpers when manual control is required.
 - [Language API Reference](document/api-reference.md) - look up syntax and
@@ -160,13 +161,11 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.14**
+Current version: **0.2.15**
 
 XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
 and editor integration are usable now, while public contracts may still be
-refined before 1.0. Repository gates exercise the documented API surface,
-positive and negative source fixtures, allocation-failure paths, release-safe
-builds, and the clean public-package boundary.
+refined before 1.0.
 
 ## License
 

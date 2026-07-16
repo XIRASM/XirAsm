@@ -2,6 +2,10 @@
 // api-matrix-fixture: pe64_finish_export_section(
 // api-matrix-fixture: pe_export_new(
 // api-matrix-fixture: pe_export_use64(
+// api-matrix-fixture: pe_export_use32_many(
+// api-matrix-fixture: pe_export_use64_many(
+// api-matrix-fixture: pe_export_use32_pairs(
+// api-matrix-fixture: pe_export_use64_pairs(
 // api-matrix-fixture: pe_export_emit64(
 // api-matrix-fixture: pe_export_directory(
 // api-matrix-fixture: pe_export_label_rva(
@@ -10,9 +14,8 @@
 import("../../include/format/pe64.inc");
 import("../../include/format/pe_export.inc");
 
-const exports0: list = pe_export_new()
-const exports1: list = pe_export_use64(exports0, "dll_main", "xir_add7")
-const exports2: list = pe_export_use64(exports1, "dll_sub3", "xir_sub3")
+let exports: list = pe_export_new()
+exports = pe_export_use64_pairs(exports, list.of("dll_main", "xir_add7", "dll_sub3", "xir_sub3"))
 
 const text_rva: u64 = pe_section_rva(0, pe_default_section_align)
 const text_raw: u64 = pe_section_raw_ptr(0, pe_default_file_align)
@@ -34,7 +37,7 @@ pe64_end_section(0);
 
 pe64_section(".edata", 1);
 edata_start:
-pe_export_emit64(exports2, "xirasm_export64.dll", edata_rva, edata_start);
+pe_export_emit64(exports, "xirasm_export64.dll", edata_rva, edata_start);
 edata_end:
 pe64_end_section(1);
 

@@ -33,8 +33,8 @@ assert(offset_of(PackedFrame, tail) == 5);
 assert(sizeof(NestedFrame) == 8);
 assert(offset_of(NestedFrame, point.y) == 3);
 
-const imports0: map = pe_import_new()
-const imports: map = pe_import_use64(imports0, "KERNEL32.DLL", "ExitProcess")
+let imports: map = pe_import_new()
+imports = pe_import_use64(imports, "KERNEL32.DLL", "ExitProcess")
 
 const text_rva: u64 = pe_section_rva(0, pe_default_section_align)
 const text_raw: u64 = pe_section_raw_ptr(0, pe_default_file_align)

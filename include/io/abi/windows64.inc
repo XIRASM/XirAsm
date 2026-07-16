@@ -18,10 +18,11 @@ const io_windows64_error_broken_pipe: u64 = 109
 // 所有权：返回新 map，不修改原 map；无运行时寄存器或栈副作用。
 // ABI：不生成运行时代码，不影响寄存器、shadow space 或 rsp。
 fn io_windows64_imports(imports: map) -> map {
-    const imports1: map = pe_import_use64(imports, "KERNEL32.DLL", "GetStdHandle");
-    const imports2: map = pe_import_use64(imports1, "KERNEL32.DLL", "ReadFile");
-    const imports3: map = pe_import_use64(imports2, "KERNEL32.DLL", "WriteFile");
-    return pe_import_use64(imports3, "KERNEL32.DLL", "GetLastError");
+    return pe_import_use64_many(
+        imports,
+        "KERNEL32.DLL",
+        list.of("GetStdHandle", "ReadFile", "WriteFile", "GetLastError")
+    );
 }
 
 // 调用 ReadFile 从一个运行时 HANDLE 读取数据。

@@ -1,6 +1,8 @@
 // api-matrix-fixture: elfso_finalize_phdr64(
 // api-matrix-fixture: elf_export_new(
 // api-matrix-fixture: elf_export_use64(
+// api-matrix-fixture: elf_export_use64_many(
+// api-matrix-fixture: elf_export_use64_pairs(
 // api-matrix-fixture: elf_export_emit_dynsym64(
 // api-matrix-fixture: elf_export_emit_dynstr64(
 // api-matrix-fixture: elf_export_emit_dynamic64(
@@ -33,23 +35,22 @@ const sh_name_shstrtab: u64 = 38
 const text_foa: u64 = elfso_align_up(elfso_header64_size + ph_count * elfso_phdr64_size, 16)
 const export_size: u64 = 4
 const text_size: u64 = export_size * 2
-const exports0: list = elf_export_new()
-const exports1: list = elf_export_use64(exports0, "x_add7", "x_add7", text_index, export_size)
-const exports2: list = elf_export_use64(exports1, "x_sub3", "x_sub3", text_index, export_size)
+let exports: list = elf_export_new()
+exports = elf_export_use64_many(exports, list.of("x_add7", "x_sub3"), text_index, export_size)
 
 const soname: string = "libxirasm_so.so"
 const dynstr_first_export: u64 = 1
-const dynstr_soname: u64 = dynstr_first_export + elf_export_names_size(exports2)
-const dynstr_size: u64 = elf_export_dynstr_size(exports2, soname)
+const dynstr_soname: u64 = dynstr_first_export + elf_export_names_size(exports)
+const dynstr_size: u64 = elf_export_dynstr_size(exports, soname)
 const shstrtab_size: u64 = 48
 
 const dynsym_foa: u64 = elfso_align_up(text_foa + text_size, 8)
 const metadata_foa: u64 = dynsym_foa
 const metadata_vaddr: u64 = elfso_align_up(text_foa + text_size, elf_default_page_align) + metadata_foa % elf_default_page_align
-const dynsym_size: u64 = (len(exports2) + 1) * elfso_sym64_size
+const dynsym_size: u64 = (len(exports) + 1) * elfso_sym64_size
 const dynstr_foa: u64 = dynsym_foa + dynsym_size
 const hash_foa: u64 = elfso_align_up(dynstr_foa + dynstr_size, 4)
-const hash_size: u64 = elf_export_hash_size(exports2)
+const hash_size: u64 = elf_export_hash_size(exports)
 const dynamic_foa: u64 = elfso_align_up(hash_foa + hash_size, 8)
 const dynamic_size: u64 = 7 * elfso_dyn64_size
 const shstrtab_foa: u64 = dynamic_foa + dynamic_size
@@ -78,14 +79,14 @@ elfso_end_region(text_size);
 
 region.begin(".metadata", metadata_vaddr, metadata_foa);
 assert(file_cursor_real() == dynsym_foa);
-elf_export_emit_dynsym64(exports2, dynstr_first_export);
+elf_export_emit_dynsym64(exports, dynstr_first_export);
 
 assert(file_cursor_real() == dynstr_foa);
-elf_export_emit_dynstr64(exports2, soname);
+elf_export_emit_dynstr64(exports, soname);
 
 align(4);
 assert(file_cursor_real() == hash_foa);
-elf_export_hash(exports2);
+elf_export_hash(exports);
 
 align(8);
 assert(file_cursor_real() == dynamic_foa);

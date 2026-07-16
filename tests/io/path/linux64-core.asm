@@ -14,7 +14,7 @@ fn test_exit(status: u64) {
     syscall
 }
 
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_exec,
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
@@ -22,9 +22,9 @@ const image0: map = format_elf64(
         format_segment(".data", format_load | format_readable | format_writeable)
     )
 )
-format_begin(image0);
+format_begin(image);
 
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     io_path_query_label("dir_path");
     cmp rax, 0
@@ -136,9 +136,9 @@ start:
     test_exit(0);
 failed:
     test_exit(1);
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
-format_segment_begin(image0, ".rodata");
+format_segment_begin(image, ".rodata");
 dir_path:
     db("xio-path-l64", 0);
 source_path:
@@ -147,12 +147,12 @@ destination_path:
     db("xio-path-l64/dst.tmp", 0);
 source_data:
     db(payload);
-format_segment_end(image0, ".rodata");
+format_segment_end(image, ".rodata");
 
-format_segment_begin(image0, ".data");
+format_segment_begin(image, ".data");
 read_buffer:
     dq(0);
-format_segment_end(image0, ".data");
+format_segment_end(image, ".data");
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);

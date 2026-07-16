@@ -157,7 +157,9 @@ pub const Parser = struct {
 fn statementCanContinue(token: lexer.Token) bool {
     return token.kind == .api_call or
         (token.kind == .meta_line and
-            (looksLikeValueDeclaration(token.text) or looksLikeMetaReturn(token.text)));
+            (looksLikeValueDeclaration(token.text) or
+                identifier.looksLikeAssignment(token.text) or
+                looksLikeMetaReturn(token.text)));
 }
 
 const StatementBalance = struct {
@@ -832,6 +834,11 @@ fn parseMetaFunctionStart(
 
     const params = try parseMetaFunctionParams(allocator, signature[open_index + 1 .. close_index], span);
     errdefer deinitMetaFunctionParams(allocator, params);
+    if (return_type_name != null) {
+        for (params) |param| {
+            if (param.mutability == .let) return error.InvalidMetaFunction;
+        }
+    }
 
     return .{
         .name = owned_name,
@@ -914,15 +921,22 @@ fn parseMetaFunctionParam(
     text: []const u8,
     span: source.SourceSpan,
 ) ParseError!ast.MetaFunctionParam {
-    const colon_index = std.mem.indexOfScalar(u8, text, ':');
+    var parameter_text = std.mem.trim(u8, text, " \t");
+    var mutability: value_mod.Mutability = .@"const";
+    if (std.mem.startsWith(u8, parameter_text, "let ")) {
+        mutability = .let;
+        parameter_text = std.mem.trim(u8, parameter_text["let".len..], " \t");
+    }
+
+    const colon_index = std.mem.indexOfScalar(u8, parameter_text, ':');
     const name = if (colon_index) |index|
-        std.mem.trim(u8, text[0..index], " \t")
+        std.mem.trim(u8, parameter_text[0..index], " \t")
     else
-        text;
+        parameter_text;
     if (!identifier.isName(name)) return error.InvalidMetaFunction;
 
     const type_name = if (colon_index) |index| type_name: {
-        const parsed_type = std.mem.trim(u8, text[index + 1 ..], " \t");
+        const parsed_type = std.mem.trim(u8, parameter_text[index + 1 ..], " \t");
         if (!identifier.isName(parsed_type)) return error.InvalidMetaFunction;
         break :type_name parsed_type;
     } else null;
@@ -939,6 +953,7 @@ fn parseMetaFunctionParam(
     return .{
         .name = owned_name,
         .type_name = owned_type_name,
+        .mutability = mutability,
         .span = span,
     };
 }
@@ -1168,10 +1183,10 @@ fn parseAssignment(
     text: []const u8,
     span: source.SourceSpan,
 ) ParseError!ast.AssignmentStatement {
-    const trimmed = std.mem.trim(u8, text, " \t;");
+    const trimmed = std.mem.trim(u8, text, " \t\r\n;");
     const equals_index = std.mem.indexOfScalar(u8, trimmed, '=') orelse return error.InvalidValueDeclaration;
-    const name = std.mem.trim(u8, trimmed[0..equals_index], " \t");
-    const value_text = std.mem.trim(u8, trimmed[equals_index + 1 ..], " \t");
+    const name = std.mem.trim(u8, trimmed[0..equals_index], " \t\r\n");
+    const value_text = std.mem.trim(u8, trimmed[equals_index + 1 ..], " \t\r\n");
     if (!identifier.isName(name) or value_text.len == 0) return error.InvalidValueDeclaration;
 
     const owned_name = try allocator.dupe(u8, name);
@@ -1833,6 +1848,37 @@ test "parser accepts multiline value return and API expression arguments" {
     }
 }
 
+test "parser accepts multiline assignment expressions" {
+    var statements = try parseSource(std.testing.allocator,
+        \\let imports: map = map.new()
+        \\imports = map.set(
+        \\    imports,
+        \\    "KERNEL32.DLL",
+        \\    list.of("ExitProcess", "GetCurrentProcessId")
+        \\)
+        \\
+    );
+    defer statements.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), statements.items.items.len);
+    switch (statements.items.items[1]) {
+        .assignment => |statement| {
+            try std.testing.expectEqualStrings("imports", statement.name);
+            switch (statement.value) {
+                .expression => |node| switch (node) {
+                    .builtin_call => |call| {
+                        try std.testing.expectEqualStrings("map.set", call.name);
+                        try std.testing.expectEqual(@as(usize, 3), call.args.len);
+                    },
+                    else => return error.UnexpectedValueExpression,
+                },
+                .struct_literal => return error.UnexpectedValueExpression,
+            }
+        },
+        else => return error.UnexpectedStatement,
+    }
+}
+
 test "parser builds structured Meta functions and scoped blocks" {
     var statements = try parseSource(std.testing.allocator,
         \\fn emit_pair(value: u64) {
@@ -1994,4 +2040,30 @@ test "parser builds structured Meta loops" {
         },
         else => return error.UnexpectedStatement,
     }
+}
+
+test "Meta function parameters may declare caller-visible let bindings" {
+    var function = try parseMetaFunctionStart(
+        std.testing.allocator,
+        "fn update(let plan: map, value: u64) {",
+        source.unknown_span,
+    );
+    defer function.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), function.params.len);
+    try std.testing.expectEqual(value_mod.Mutability.let, function.params[0].mutability);
+    try std.testing.expectEqual(value_mod.Mutability.@"const", function.params[1].mutability);
+    try std.testing.expectEqualStrings("plan", function.params[0].name);
+    try std.testing.expectEqualStrings("map", function.params[0].type_name.?);
+}
+
+test "value functions reject caller-visible let parameters" {
+    try std.testing.expectError(
+        error.InvalidMetaFunction,
+        parseMetaFunctionStart(
+            std.testing.allocator,
+            "fn update(let plan: map) -> map {",
+            source.unknown_span,
+        ),
+    );
 }

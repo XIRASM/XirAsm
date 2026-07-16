@@ -25,18 +25,18 @@ pe32_end_section(0);
 const pointer0_rva: u64 = pe_reloc_rva(text_rva, abs_ptr0, text_start)
 const pointer1_rva: u64 = pe_reloc_rva(text_rva, abs_ptr1, text_start)
 const pointer2_rva: u64 = pe_reloc_rva(text_rva, abs_ptr2, text_start)
-const relocs0: list = pe_reloc_new()
-const relocs1: list = pe_reloc_add_highlow_at(relocs0, text_rva, abs_ptr0, text_start)
-const relocs2: list = pe_reloc_add_highlow_at(relocs1, text_rva, abs_ptr1, text_start)
-const relocs3: list = pe_reloc_add_highlow_at(relocs2, text_rva, abs_ptr2, text_start)
+let relocs: list = pe_reloc_new()
+relocs = pe_reloc_add_highlow_at(relocs, text_rva, abs_ptr0, text_start)
+relocs = pe_reloc_add_highlow_at(relocs, text_rva, abs_ptr1, text_start)
+relocs = pe_reloc_add_highlow_at(relocs, text_rva, abs_ptr2, text_start)
 
 pe32_section(".reloc", 1);
 reloc_start:
 const reloc_rva: u64 = reloc_start - pe_default_image_base32
-assert(pe_reloc_page_entry_count_sorted_from(relocs3, 0, pe_reloc_page_rva(pointer0_rva), 0) == 2);
-assert(pe_reloc_page_entry_count_sorted_from(relocs3, 2, pe_reloc_page_rva(pointer2_rva), 0) == 1);
-pe_reloc_assert_sorted(relocs3);
-pe_reloc_emit_grouped_sorted(relocs3);
+assert(pe_reloc_page_entry_count_sorted_from(relocs, 0, pe_reloc_page_rva(pointer0_rva), 0) == 2);
+assert(pe_reloc_page_entry_count_sorted_from(relocs, 2, pe_reloc_page_rva(pointer2_rva), 0) == 1);
+pe_reloc_assert_sorted(relocs);
+pe_reloc_emit_grouped_sorted(relocs);
 reloc_end:
 pe32_end_section(1);
 

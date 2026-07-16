@@ -349,6 +349,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("include/format/elf_export.inc"));
     run_api_matrix.addFileArg(b.path("include/format/elfso_import.inc"));
     run_api_matrix.addFileArg(b.path("include/format/elf_const.inc"));
+    run_api_matrix.addFileArg(b.path("include/os/win32/guid.inc"));
     run_api_matrix.addArg("--fixtures");
     run_api_matrix.addFileArg(b.path("tests/x86/basic.asm"));
     run_api_matrix.addFileArg(b.path("tests/x86/branch.asm"));
@@ -480,6 +481,8 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/struct/aggregate_builtin_arg.asm"));
     run_api_matrix.addFileArg(b.path("tests/struct/nested_union.inc"));
     run_api_matrix.addFileArg(b.path("tests/struct/nested_union.asm"));
+    run_api_matrix.addFileArg(b.path("tests/api/reference/03-aggregates.asm"));
+    run_api_matrix.addFileArg(b.path("tests/win32/generated-guid.asm"));
     api_matrix_step.dependOn(&run_api_matrix.step);
 
     const release_boundary_step = b.step("test-release-boundary", "Validate release candidate path, docs, and brand boundary");
@@ -491,7 +494,12 @@ pub fn build(b: *std.Build) void {
     run_release_boundary.addFileArg(b.path("README.zh-CN.md"));
     run_release_boundary.addFileArg(b.path("document/advanced-formats.md"));
     run_release_boundary.addFileArg(b.path("document/api-reference.md"));
-    run_release_boundary.addFileArg(b.path("document/formats.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial/01-choose-a-template.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial/02-windows-pe.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial/03-linux-elf.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial/04-object-files.md"));
+    run_release_boundary.addFileArg(b.path("document/format-tutorial/05-common-rules.md"));
     run_release_boundary.addFileArg(b.path("document/language.md"));
     run_release_boundary.addFileArg(b.path("tests/integration/check_release_boundary.zig"));
     run_release_boundary.addFileArg(b.path("tests/api/user-api-matrix.tsv"));
@@ -604,7 +612,16 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/03-aggregates.asm",
         "api-reference-03-aggregates.bin",
         "x64",
-        "41000000443322110804443322114243440122114433556677040301",
+        "41000000443322110804443322114243440122114433556677040301fffefffdfffffffcffffffffffffff",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        api_reference_step,
+        exe,
+        "tests/api/reference/negative/03-signed-underflow.asm",
+        "x64",
+        &.{},
+        "InvalidValueDeclaration",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -1559,6 +1576,52 @@ pub fn build(b: *std.Build) void {
         &.{},
         "InvalidExpression",
     );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/format/batch_idempotence.asm",
+        "format-batch-idempotence.bin",
+        "x64",
+        "02",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/format/negative/pe64_import_odd_pairs.asm",
+        "x64",
+        &.{},
+        "PE64 import pairs require slot/name entries",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/format/negative/pe64_import_conflict.asm",
+        "x64",
+        &.{},
+        "PE import slot already maps to a different name",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/format/negative/pe64_export_empty.asm",
+        "x64",
+        &.{},
+        "PE export target label is empty",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/format/negative/elfso_import_odd_pairs.asm",
+        "x64",
+        &.{},
+        "ELF SO import pairs require slot/name entries",
+    );
     const init_build_step = b.step("test-init-build", "Validate init-generated project builds with the CLI");
     addInitBuildFixture(
         b,
@@ -1568,6 +1631,116 @@ pub fn build(b: *std.Build) void {
         "xirasm-init-build-demo",
         "rv64",
         "4",
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/win32/generated-import.asm",
+        "win32-generated-import.exe",
+        "x64",
+        "1536",
+        &.{
+            "include/format/format.inc",
+            "include/os/win32/imports/kernel32.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/win32/runtime-multi-dll.asm",
+        "win32-runtime-multi-dll.exe",
+        "x64",
+        "1536",
+        &.{
+            "include/format/format.inc",
+            "include/os/win32/imports/kernel32.inc",
+            "include/os/win32/imports/user32.inc",
+        },
+    );
+    addAsmFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/win32/generated-defs.asm",
+        "win32-generated-defs.bin",
+        "x64",
+        "010000000200000057",
+        &.{"include/os/win32/defs/foundation.inc"},
+    );
+    addAsmFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/win32/generated-nested-aggregate.asm",
+        "win32-generated-nested-aggregate.bin",
+        "x64",
+        "0000000000000000",
+        &.{"include/os/win32/defs/networkmanagement_dhcp.inc"},
+    );
+    addAsmFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/win32/generated-guid.asm",
+        "win32-generated-guid.bin",
+        "x64",
+        "42f3fd566dfdd011958a006097c9a09044f3fd566dfdd011958a006097c9a090",
+        &.{
+            "include/os/win32/guid.inc",
+            "include/os/win32/comdefs/ui_shell.inc",
+        },
+    );
+    addAsmFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/win32/generated-com.asm",
+        "win32-generated-com64.bin",
+        "x64",
+        "31c9488b01ff5008c3",
+        &.{
+            "include/format/com64.inc",
+            "include/os/win32/comdefs/system_com.inc",
+        },
+    );
+    addAsmFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/win32/generated-com32.asm",
+        "win32-generated-com32.bin",
+        "x86",
+        "6a026a0131c0508b00ff10c3",
+        &.{
+            "include/format/com32.inc",
+            "include/os/win32/comdefs/system_com.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/win32/runtime-com64.asm",
+        "win32-runtime-com64.exe",
+        "x64",
+        "3072",
+        &.{
+            "include/format/format.inc",
+            "include/format/com64.inc",
+            "include/os/win32/imports/kernel32.inc",
+            "include/os/win32/imports/ole32.inc",
+            "include/os/win32/comdefs/ui_shell.inc",
+        },
     );
     addAsmSizeFixtureInstalled(
         b,
@@ -4448,6 +4621,35 @@ fn addAsmFixture(
         expected_hex,
         &.{},
     );
+}
+
+fn addAsmFixtureInstalled(
+    b: *std.Build,
+    parent: *std.Build.Step,
+    exe: *std.Build.Step.Compile,
+    checker: *std.Build.Step.Compile,
+    source_path: []const u8,
+    output_name: []const u8,
+    target_name: []const u8,
+    expected_hex: []const u8,
+    extra_inputs: []const []const u8,
+) void {
+    const run_asm = b.addRunArtifact(exe);
+    run_asm.step.dependOn(b.getInstallStep());
+    run_asm.addFileArg(b.path(source_path));
+    for (extra_inputs) |input_path| {
+        run_asm.addFileInput(b.path(input_path));
+    }
+    run_asm.addArg("-o");
+    const output = run_asm.addOutputFileArg(output_name);
+    run_asm.addArg("--target");
+    run_asm.addArg(target_name);
+
+    const check_bytes = b.addRunArtifact(checker);
+    check_bytes.addFileArg(output);
+    check_bytes.addArg(expected_hex);
+    check_bytes.step.dependOn(&run_asm.step);
+    parent.dependOn(&check_bytes.step);
 }
 
 fn addInitBuildFixture(

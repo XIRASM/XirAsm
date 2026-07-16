@@ -604,15 +604,15 @@ fn writeIntegerField(
     switch (int_type.bits) {
         8 => {
             if (offset >= bytes.len) return error.FragmentTooLarge;
-            bytes[offset] = @intCast(value);
+            bytes[offset] = @truncate(value);
         },
         16 => {
             if (offset > bytes.len or 2 > bytes.len - offset) return error.FragmentTooLarge;
-            std.mem.writeInt(u16, bytes[offset .. offset + 2][0..2], @intCast(value), .little);
+            std.mem.writeInt(u16, bytes[offset .. offset + 2][0..2], @truncate(value), .little);
         },
         32 => {
             if (offset > bytes.len or 4 > bytes.len - offset) return error.FragmentTooLarge;
-            std.mem.writeInt(u32, bytes[offset .. offset + 4][0..4], @intCast(value), .little);
+            std.mem.writeInt(u32, bytes[offset .. offset + 4][0..4], @truncate(value), .little);
         },
         64 => {
             if (offset > bytes.len or 8 > bytes.len - offset) return error.FragmentTooLarge;
@@ -623,21 +623,8 @@ fn writeIntegerField(
 }
 
 pub fn validateIntegerForIntType(value: u64, int_type: types.IntType) PackError!void {
-    const bits = int_type.bits;
-    if (bits == 0) return error.InvalidIntegerBits;
-    if (bits > @bitSizeOf(u64)) return error.InvalidIntegerBits;
-
-    const max_value = if (int_type.signedness == .signed)
-        if (bits == @bitSizeOf(u64))
-            @as(u64, @intCast(std.math.maxInt(i64)))
-        else
-            (@as(u64, 1) << @intCast(bits - 1)) - 1
-    else if (bits == @bitSizeOf(u64))
-        std.math.maxInt(u64)
-    else
-        (@as(u64, 1) << @intCast(bits)) - 1;
-
-    if (value > max_value) return error.InvalidApiInteger;
+    if (int_type.bits == 0 or int_type.bits > @bitSizeOf(u64)) return error.InvalidIntegerBits;
+    if (!int_type.acceptsValue(value)) return error.InvalidApiInteger;
 }
 
 test "value stores integer bindings" {

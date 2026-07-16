@@ -1,17 +1,15 @@
 import("format/format.inc");
 
-const image0: map = format_elf64_so(
+let image: map = format_elf64_so(
     "libxirasm_user.so",
     list.of(
         format_segment(".text", format_load | format_readable | format_executable),
         format_segment(".data", format_load | format_readable | format_writeable)
     )
 )
-const exports: list = list.of(
-    format_elfso_export("x_add7", "x_add7", ".text", 4),
-    format_elfso_export("x_sub3", "x_sub3", ".text", 4)
-)
-const image: map = format_elfso_tables(image0, exports, list.new())
+let exports: list = format_elfso_export_new()
+format_elfso_export_many_mut(exports, list.of("x_add7", "x_sub3"), ".text", 4)
+format_elfso_tables_mut(image, exports, list.new())
 format_begin(image);
 
 format_segment_begin(image, ".text");

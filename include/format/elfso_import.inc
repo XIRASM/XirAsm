@@ -37,6 +37,30 @@ fn elfso_import_use64(imports: list, library: string, name: string) -> list {
     return elfso_import_use64_as(imports, library, name, name);
 }
 
+fn elfso_import_use64_many(imports: list, library: string, names: list) -> list {
+    let next_imports: list = imports
+    for name in names {
+        next_imports = elfso_import_use64(next_imports, library, name)
+    }
+    return next_imports;
+}
+
+fn elfso_import_use64_pairs(imports: list, library: string, pairs: list) -> list {
+    assert(len(pairs) % 2 == 0, "ELF SO import pairs require slot/name entries");
+    assert(len(pairs) <= 128, "ELF SO import pairs exceed the batch limit");
+    return elfso_import_use64_pairs_from(imports, library, pairs, 0);
+}
+
+fn elfso_import_use64_pairs_from(imports: list, library: string, pairs: list, index: u64) -> list {
+    if index == len(pairs) {
+        return imports;
+    }
+    const slot: string = list.get(pairs, index)
+    const name: string = list.get(pairs, index + 1)
+    const next_imports: list = elfso_import_use64_as(imports, library, name, slot)
+    return elfso_import_use64_pairs_from(next_imports, library, pairs, index + 2);
+}
+
 fn elfso_import_use64_as(imports: list, library: string, name: string, slot: string) -> list {
     assert(len(library) > 0, "ELF SO import library name is empty");
     assert(len(name) > 0, "ELF SO import symbol name is empty");
@@ -57,6 +81,34 @@ fn elfso_import_use64_as(imports: list, library: string, name: string, slot: str
 
 fn elfso_import_use64_plt(imports: list, library: string, name: string) -> list {
     return elfso_import_use64_plt_as(imports, library, name, sym.join(name, "_gotplt"), sym.join(name, "_plt"));
+}
+
+fn elfso_import_use64_plt_many(imports: list, library: string, names: list) -> list {
+    let next_imports: list = imports
+    for name in names {
+        next_imports = elfso_import_use64_plt(next_imports, library, name)
+    }
+    return next_imports;
+}
+
+fn elfso_import_use64_plt_pairs(imports: list, library: string, pairs: list) -> list {
+    assert(len(pairs) % 2 == 0, "ELF SO PLT import pairs require local/name entries");
+    assert(len(pairs) <= 128, "ELF SO PLT import pairs exceed the batch limit");
+    let next_imports: list = imports
+    let index: u64 = 0
+    while index < len(pairs) {
+        const local_name: string = list.get(pairs, index)
+        const import_name: string = list.get(pairs, index + 1)
+        next_imports = elfso_import_use64_plt_as(
+            next_imports,
+            library,
+            import_name,
+            sym.join(local_name, "_gotplt"),
+            sym.join(local_name, "_plt")
+        )
+        index = index + 2
+    }
+    return next_imports;
 }
 
 fn elfso_import_use64_plt_as(imports: list, library: string, name: string, slot: string, plt: string) -> list {

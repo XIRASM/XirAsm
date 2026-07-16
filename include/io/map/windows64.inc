@@ -24,15 +24,21 @@ const io_map_windows64_file_map_read: u64 = 0x04
 // 所有权：原 map 不被隐藏修改；返回 map 由调用方继续传给格式构造函数。
 // ABI：不生成运行时调用，不影响运行时寄存器或栈。
 fn io_windows64_map_imports(imports: map) -> map {
-    const imports1: map = pe_import_use64(imports, "KERNEL32.DLL", "CreateFileW");
-    const imports2: map = pe_import_use64(imports1, "KERNEL32.DLL", "CloseHandle");
-    const imports3: map = pe_import_use64(imports2, "KERNEL32.DLL", "GetFileSizeEx");
-    const imports4: map = pe_import_use64(imports3, "KERNEL32.DLL", "CreateFileMappingW");
-    const imports5: map = pe_import_use64(imports4, "KERNEL32.DLL", "MapViewOfFile");
-    const imports6: map = pe_import_use64(imports5, "KERNEL32.DLL", "FlushViewOfFile");
-    const imports7: map = pe_import_use64(imports6, "KERNEL32.DLL", "FlushFileBuffers");
-    const imports8: map = pe_import_use64(imports7, "KERNEL32.DLL", "UnmapViewOfFile");
-    return pe_import_use64(imports8, "KERNEL32.DLL", "GetLastError");
+    return pe_import_use64_many(
+        imports,
+        "KERNEL32.DLL",
+        list.of(
+            "CreateFileW",
+            "CloseHandle",
+            "GetFileSizeEx",
+            "CreateFileMappingW",
+            "MapViewOfFile",
+            "FlushViewOfFile",
+            "FlushFileBuffers",
+            "UnmapViewOfFile",
+            "GetLastError"
+        )
+    );
 }
 
 // 把状态块恢复成关闭状态。

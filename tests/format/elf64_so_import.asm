@@ -5,6 +5,10 @@
 // api-matrix-fixture: elfso_import_use64_as(
 // api-matrix-fixture: elfso_import_use64_plt(
 // api-matrix-fixture: elfso_import_use64_plt_as(
+// api-matrix-fixture: elfso_import_use64_many(
+// api-matrix-fixture: elfso_import_use64_pairs(
+// api-matrix-fixture: elfso_import_use64_plt_many(
+// api-matrix-fixture: elfso_import_use64_plt_pairs(
 // api-matrix-fixture: elfso_import_r_info64(
 // api-matrix-fixture: elfso_import_rela64(
 // api-matrix-fixture: elfso_import_rel32(
@@ -29,9 +33,9 @@
 
 import("../../include/format/elfso_import.inc");
 
-const imports0: list = elfso_import_new()
-const imports_unused: list = elfso_import_use64(imports0, "libc.so.6", "exit")
-const imports1: list = elfso_import_use64_plt_as(imports0, "libc.so.6", "puts", "puts_gotplt", "puts_plt")
+const base_imports: list = elfso_import_new()
+const imports_unused: list = elfso_import_use64_many(base_imports, "libc.so.6", list.of("exit"))
+const imports: list = elfso_import_use64_plt_many(base_imports, "libc.so.6", list.of("puts"))
 
 const soname: string = "libxirasm_import.so"
 
@@ -58,7 +62,7 @@ const sh_name_rela_plt: u64 = 43
 const sh_name_dynamic: u64 = 53
 const sh_name_shstrtab: u64 = 62
 
-const import_count: u64 = len(imports1)
+const import_count: u64 = len(imports)
 const first_import_symbol: u64 = 1
 const exported_call_puts_symbol: u64 = first_import_symbol + import_count
 const exported_call_puts_name: string = "exported_call_puts"
@@ -66,19 +70,19 @@ const exported_call_puts_name: string = "exported_call_puts"
 const text_foa: u64 = elfso_align_up(elfso_header64_size + ph_count * elfso_phdr64_size, 16)
 const text_size: u64 = 32
 const plt_foa: u64 = elfso_align_up(text_foa + text_size, 16)
-const plt_size: u64 = elfso_import_plt_size(imports1)
+const plt_size: u64 = elfso_import_plt_size(imports)
 const gotplt_foa: u64 = elfso_align_up(plt_foa + plt_size, 8)
-const gotplt_size: u64 = elfso_import_gotplt_size(imports1)
+const gotplt_size: u64 = elfso_import_gotplt_size(imports)
 const dynsym_foa: u64 = elfso_align_up(gotplt_foa + gotplt_size, 8)
 const dynsym_size: u64 = (1 + import_count + 1) * elfso_sym64_size
 const dynstr_foa: u64 = dynsym_foa + dynsym_size
-const dynstr_size: u64 = elfso_import_dynstr_size(imports1, soname) + len(exported_call_puts_name) + 1
+const dynstr_size: u64 = elfso_import_dynstr_size(imports, soname) + len(exported_call_puts_name) + 1
 const hash_foa: u64 = elfso_align_up(dynstr_foa + dynstr_size, 4)
 const hash_size: u64 = 24
 const rela_plt_foa: u64 = elfso_align_up(hash_foa + hash_size, 8)
-const rela_plt_size: u64 = elfso_import_rela_plt_size(imports1)
+const rela_plt_size: u64 = elfso_import_rela_plt_size(imports)
 const dynamic_foa: u64 = elfso_align_up(rela_plt_foa + rela_plt_size, 8)
-const dynamic_size: u64 = elfso_import_dynamic_plt_size(imports1)
+const dynamic_size: u64 = elfso_import_dynamic_plt_size(imports)
 const shstrtab_foa: u64 = dynamic_foa + dynamic_size
 const shstrtab_size: u64 = 72
 const section_table_foa: u64 = elfso_align_up(shstrtab_foa + shstrtab_size, 8)
@@ -95,7 +99,7 @@ const dynamic_vaddr: u64 = metadata_vaddr + dynamic_foa - metadata_foa
 const metadata_size: u64 = dynamic_foa + dynamic_size - metadata_foa
 
 const dynstr_name_start: u64 = 1
-const dynstr_exported_call_puts: u64 = dynstr_name_start + elfso_import_names_size(imports1)
+const dynstr_exported_call_puts: u64 = dynstr_name_start + elfso_import_names_size(imports)
 const dynstr_soname: u64 = dynstr_exported_call_puts + len(exported_call_puts_name) + 1
 const dynstr_needed_start: u64 = dynstr_soname + len(soname) + 1
 
@@ -115,15 +119,15 @@ message_text:
 elfso_end_region(text_size);
 
 region.begin(".plt", plt_vaddr, plt_foa);
-elfso_import_emit_plt64(imports1, plt_vaddr, gotplt_vaddr);
+elfso_import_emit_plt64(imports, plt_vaddr, gotplt_vaddr);
 region.file_align(1);
 
 region.begin(".metadata", metadata_vaddr, metadata_foa);
-elfso_import_emit_gotplt64(imports1, dynamic_vaddr, plt_vaddr);
+elfso_import_emit_gotplt64(imports, dynamic_vaddr, plt_vaddr);
 
 align(8);
 assert(file_cursor_real() == dynsym_foa);
-elfso_import_emit_dynsym64(imports1, dynstr_name_start);
+elfso_import_emit_dynsym64(imports, dynstr_name_start);
 elfso_sym64(dynstr_exported_call_puts, elfso_st_info(elf_stb_global, elf_stt_func), text_index, exported_call_puts, text_size);
 
 assert(file_cursor_real() == dynstr_foa);
@@ -140,10 +144,10 @@ dd(0);
 
 align(8);
 assert(file_cursor_real() == rela_plt_foa);
-elfso_import_emit_rela_plt64(imports1, first_import_symbol);
+elfso_import_emit_rela_plt64(imports, first_import_symbol);
 
 assert(file_cursor_real() == dynamic_foa);
-elfso_import_emit_dynamic64_plt(imports1, dynstr_vaddr, dynstr_size, dynsym_vaddr, hash_vaddr, gotplt_vaddr, rela_plt_vaddr, rela_plt_size, dynstr_needed_start);
+elfso_import_emit_dynamic64_plt(imports, dynstr_vaddr, dynstr_size, dynsym_vaddr, hash_vaddr, gotplt_vaddr, rela_plt_vaddr, rela_plt_size, dynstr_needed_start);
 
 assert(file_cursor_real() == shstrtab_foa);
 db(0, ".text", 0, ".plt", 0, ".got.plt", 0, ".dynsym", 0, ".dynstr", 0, ".hash", 0, ".rela.plt", 0, ".dynamic", 0, ".shstrtab", 0);

@@ -83,21 +83,7 @@ fn lowerLayoutTypeName(module: *module_mod.Module, name: []const u8) TypeCheckEr
 }
 
 fn validateIntegerFitsType(value: u64, int_type: types.IntType) TypeCheckError!void {
-    const bits = int_type.bits;
-    if (bits == 0) return error.InvalidValueDeclaration;
-    if (int_type.signedness == .unsigned) {
-        if (bits >= @bitSizeOf(u64)) return;
-        const max_unsigned = (@as(u64, 1) << @intCast(bits)) - 1;
-        if (value > max_unsigned) return error.InvalidValueDeclaration;
-        return;
-    }
-
-    if (bits > @bitSizeOf(u64)) return;
-    const max_signed = if (bits == @bitSizeOf(u64))
-        @as(u64, @intCast(std.math.maxInt(i64)))
-    else
-        (@as(u64, 1) << @intCast(bits - 1)) - 1;
-    if (value > max_signed) return error.InvalidValueDeclaration;
+    if (!int_type.acceptsValue(value)) return error.InvalidValueDeclaration;
 }
 
 test "typecheck parses Meta value annotations" {
@@ -164,11 +150,17 @@ test "typecheck validates signed layout integer ranges" {
     var max_value = value_mod.Value.int(127);
     try coerceValueToAnnotation(&module, &max_value, annotation);
 
+    var min_value = value_mod.Value.int(0 -% @as(u64, 128));
+    try coerceValueToAnnotation(&module, &min_value, annotation);
+
     var overflow_value = value_mod.Value.int(128);
     try std.testing.expectError(error.InvalidValueDeclaration, coerceValueToAnnotation(&module, &overflow_value, annotation));
+
+    var underflow_value = value_mod.Value.int(0 -% @as(u64, 129));
+    try std.testing.expectError(error.InvalidValueDeclaration, coerceValueToAnnotation(&module, &underflow_value, annotation));
 }
 
-test "typecheck validates signed i64 upper range" {
+test "typecheck validates signed i64 range" {
     var module = try module_mod.Module.init(std.testing.allocator, @import("target.zig").Target.default);
     defer module.deinit();
 
@@ -176,8 +168,8 @@ test "typecheck validates signed i64 upper range" {
     var max_value = value_mod.Value.int(@as(u64, @intCast(std.math.maxInt(i64))));
     try coerceValueToAnnotation(&module, &max_value, annotation);
 
-    var overflow_value = value_mod.Value.int(@as(u64, @intCast(std.math.maxInt(i64))) + 1);
-    try std.testing.expectError(error.InvalidValueDeclaration, coerceValueToAnnotation(&module, &overflow_value, annotation));
+    var min_value = value_mod.Value.int(@as(u64, 1) << 63);
+    try coerceValueToAnnotation(&module, &min_value, annotation);
 }
 
 test "typecheck rejects non-integer values for layout integer annotations" {

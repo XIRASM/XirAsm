@@ -1,9 +1,6 @@
 import("format/format.inc");
 
-const imports0: map = pe_import_new()
-const imports: map = pe_import_use64(imports0, "KERNEL32.DLL", "ExitProcess")
-
-const image0: map = format_pe64(
+let image: map = format_pe64(
     format_pe_exe | format_pe_gui | format_pe_nx | format_pe_aslr_auto,
     list.of(
         format_section(".text", format_code | format_readable | format_executable),
@@ -13,33 +10,40 @@ const image0: map = format_pe64(
         format_section(".reloc", format_fixups | format_readable | format_discardable)
     )
 )
-format_begin(image0);
+let imports: map = format_pe_import_new()
+format_pe_import_pairs_mut(
+    image,
+    imports,
+    "KERNEL32.DLL",
+    list.of("exit_process", "ExitProcess", "get_process_id", "GetCurrentProcessId")
+)
+format_begin(image);
 
-format_section_begin(image0, ".text");
+format_section_begin(image, ".text");
 start:
     xor eax, eax
     ret
 absolute_slot:
     dq(0);
-format_section_end(image0, ".text");
+format_section_end(image, ".text");
 
-format_section_begin(image0, ".bss");
+format_section_begin(image, ".bss");
     rb(64);
-format_section_end(image0, ".bss");
+format_section_end(image, ".bss");
 
-format_pe_import_section(image0, ".idata", imports);
+format_pe_import_section(image, ".idata", imports);
 
 format_pe_resource_section(
-    image0,
+    image,
     ".rsrc",
     "data/pe_resource_named_multilang.res"
 );
 
-const relocs0: list = pe_reloc_new()
-const relocs: list = format_pe_reloc_add(image0, relocs0, absolute_slot)
-format_pe_reloc_section(image0, ".reloc", relocs);
+let relocs: list = pe_reloc_new()
+format_pe_reloc_add_mut(image, relocs, absolute_slot)
+format_pe_reloc_section(image, ".reloc", relocs);
 
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 
 defer {

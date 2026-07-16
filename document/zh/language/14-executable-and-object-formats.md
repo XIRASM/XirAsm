@@ -11,7 +11,7 @@ import("format/format.inc");
 
 格式库让源码描述目标映像，不需要手写表的计数、行位置、文件偏移、虚拟地址和文件头字段。
 
-本章只介绍基本用法。完整的选项、导入导出、重定位、共享库、目标文件和底层辅助函数详见《可执行文件格式指南》。
+本章只介绍基本用法。模板、选项、导入导出、重定位、共享库和目标文件详见[《格式教程》](../format-tutorial.md)。需要直接控制格式字段和表项时，再阅读[《高级格式构造指南》](../../advanced-formats.md)。
 
 ## 声明段和权限
 
@@ -36,7 +36,7 @@ import("format/format.inc");
 x86.use64();
 
 // 声明 ELF64 可执行映像及其唯一的可装载代码段。
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_exec,
     list.of(
         format_segment(
@@ -45,19 +45,19 @@ const image0: map = format_elf64(
         )
     )
 )
-format_begin(image0);
+format_begin(image);
 
 // 在声明的 .text 段中写入程序入口代码。
-format_segment_begin(image0, ".text");
+format_segment_begin(image, ".text");
 start:
     // 调用 Linux 退出系统调用，并把退出状态设为零。
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image0, ".text");
+format_segment_end(image, ".text");
 
 // 绑定入口标号，随后完成映像中的文件头和表项。
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 ```
 
@@ -68,7 +68,7 @@ format_finish(image);
 2. `format_segment` 声明一个 segment 及其权限。
 3. `format_begin` 写出计划决定的头部结构。
 4. `format_segment_begin` 和 `format_segment_end` 包裹 segment 的实际指令和数据。
-5. `format_entry` 绑定入口标签，`format_finish` 完成映像。
+5. `format_entry_mut` 绑定入口标签，`format_finish` 完成映像。
 
 源文件不提供程序头计数、表行、文件偏移、加载地址或入口点字段偏移。格式库从计划表和已完成布局推导这些值。
 
@@ -105,18 +105,18 @@ format_segment_end(image, name)
 
 构造函数选项区分可执行文件与 DLL、控制台/GUI 子系统、位置无关、NX 策略、地址随机化等。Section/segment 描述符携带用途和读写执行权限。
 
-完整的选项和描述符列表见《可执行文件格式指南》。
+完整的选项和描述符列表见[《格式教程》](../format-tutorial.md)。
 
 ## 入口点绑定
 
 可执行文件在源码定义入口代码后绑定标签：
 
 ```text
-const image: map = format_entry(image0, start)
+format_entry_mut(image, start)
 format_finish(image);
 ```
 
-`format_entry` 返回更新后的计划。显式保持返回值让状态变化可见，也让 `format_finish` 能验证入口信息是否完整。
+`format_entry_mut` 直接更新传入的 `let` 配置。`format_finish` 随后检查入口信息并完成文件。
 
 目标文件和部分库形式不需要入口点。按所选格式的生命周期来，不要加无意义的入口标签。
 
@@ -146,7 +146,7 @@ format_finish(image);
 
 ## 后续阅读
 
-《可执行文件格式指南》涵盖完整示例：
+[《格式教程》](../format-tutorial.md)提供可直接使用的模板、参数说明和 API 摘要：
 - PE32/PE64 可执行文件和 DLL
 - COFF32/COFF64 目标文件
 - ELF32/ELF64 可执行文件和位置无关可执行文件

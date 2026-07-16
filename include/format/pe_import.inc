@@ -3,10 +3,10 @@
 // This file intentionally keeps PE32 and PE64 in one helper layer. The format
 // data is the same except for thunk width, thunk alignment, and ordinal flag.
 //
-// Import sets use value-style Meta APIs:
+// Import sets use grouped Meta APIs that return updated maps:
 //
-// const imports0: map = pe_import_new()
-// const imports1: map = pe_import_use64(imports0, "KERNEL32.DLL", "ExitProcess")
+// let imports: map = pe_import_new()
+// imports = pe_import_use64_many(imports, "KERNEL32.DLL", list.of("ExitProcess", "VirtualAlloc"))
 //
 // Including a large Win32 API catalog should only define wrappers/metadata.
 // Nothing is emitted until pe_import_emit32/64 is called for the final import
@@ -64,6 +64,22 @@ fn pe_import_use64(imports: map, dll: string, name: string) -> map {
     return next_imports;
 }
 
+fn pe_import_use32_many(imports: map, dll: string, names: list) -> map {
+    let next_imports: map = imports
+    for name in names {
+        next_imports = pe_import_use32(next_imports, dll, name)
+    }
+    return next_imports;
+}
+
+fn pe_import_use64_many(imports: map, dll: string, names: list) -> map {
+    let next_imports: map = imports
+    for name in names {
+        next_imports = pe_import_use64(next_imports, dll, name)
+    }
+    return next_imports;
+}
+
 fn pe_import_use32_as(imports: map, dll: string, name: string, slot: string) -> map {
     assert(len(dll) > 0, "PE import DLL name is empty");
     assert(len(name) > 0, "PE import function name is empty");
@@ -99,6 +115,47 @@ fn pe_import_use64_as(imports: map, dll: string, name: string, slot: string) -> 
         }
     }
 
+    let next_entries: list = entries
+    list.push_mut(next_entries, pe_import_name_entry(slot, name));
+    let next_imports: map = imports
+    map.set_mut(next_imports, dll, next_entries);
+    return next_imports;
+}
+
+fn pe_import_use32_pairs(imports: map, dll: string, pairs: list) -> map {
+    assert(len(pairs) % 2 == 0, "PE32 import pairs require slot/name entries");
+    assert(len(pairs) <= 128, "PE32 import pairs exceed the batch limit");
+    return pe_import_use_pairs_from(imports, dll, pairs, 0);
+}
+
+fn pe_import_use64_pairs(imports: map, dll: string, pairs: list) -> map {
+    assert(len(pairs) % 2 == 0, "PE64 import pairs require slot/name entries");
+    assert(len(pairs) <= 128, "PE64 import pairs exceed the batch limit");
+    return pe_import_use_pairs_from(imports, dll, pairs, 0);
+}
+
+fn pe_import_use_pairs_from(imports: map, dll: string, pairs: list, index: u64) -> map {
+    if index == len(pairs) {
+        return imports;
+    }
+    const slot: string = list.get(pairs, index)
+    const name: string = list.get(pairs, index + 1)
+    const next_imports: map = pe_import_append_named(imports, dll, name, slot)
+    return pe_import_use_pairs_from(next_imports, dll, pairs, index + 2);
+}
+
+fn pe_import_append_named(imports: map, dll: string, name: string, slot: string) -> map {
+    assert(len(dll) > 0, "PE import DLL name is empty");
+    assert(len(name) > 0, "PE import function name is empty");
+    assert(len(slot) > 0, "PE import slot label is empty");
+    const entries: list = map.get_or(imports, dll, list.new());
+    for entry in entries {
+        if map.get(entry, "slot") == slot {
+            assert(map.get(entry, "name") == name, "PE import slot already maps to a different name");
+            assert(map.get(entry, "kind") == 0, "PE import slot already maps to an ordinal");
+            return imports;
+        }
+    }
     let next_entries: list = entries
     list.push_mut(next_entries, pe_import_name_entry(slot, name));
     let next_imports: map = imports

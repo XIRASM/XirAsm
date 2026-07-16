@@ -24,6 +24,58 @@ fn pe_export_use64(exports: list, target_label: string, export_name: string) -> 
     return pe_export_use(exports, target_label, export_name);
 }
 
+fn pe_export_use32_many(exports: list, names: list) -> list {
+    let next_exports: list = exports
+    for name in names {
+        next_exports = pe_export_use32(next_exports, name, name)
+    }
+    return next_exports;
+}
+
+fn pe_export_use64_many(exports: list, names: list) -> list {
+    let next_exports: list = exports
+    for name in names {
+        next_exports = pe_export_use64(next_exports, name, name)
+    }
+    return next_exports;
+}
+
+fn pe_export_use32_pairs(exports: list, pairs: list) -> list {
+    assert(len(pairs) % 2 == 0, "PE32 export pairs require target/name entries");
+    assert(len(pairs) <= 128, "PE32 export pairs exceed the batch limit");
+    return pe_export_use_pairs_from(exports, pairs, 0);
+}
+
+fn pe_export_use64_pairs(exports: list, pairs: list) -> list {
+    assert(len(pairs) % 2 == 0, "PE64 export pairs require target/name entries");
+    assert(len(pairs) <= 128, "PE64 export pairs exceed the batch limit");
+    return pe_export_use_pairs_from(exports, pairs, 0);
+}
+
+fn pe_export_use_pairs_from(exports: list, pairs: list, index: u64) -> list {
+    if index == len(pairs) {
+        return exports;
+    }
+    const target_label: string = list.get(pairs, index)
+    const export_name: string = list.get(pairs, index + 1)
+    const next_exports: list = pe_export_append_pair(exports, target_label, export_name)
+    return pe_export_use_pairs_from(next_exports, pairs, index + 2);
+}
+
+fn pe_export_append_pair(exports: list, target_label: string, export_name: string) -> list {
+    assert(len(target_label) > 0, "PE export target label is empty");
+    assert(len(export_name) > 0, "PE export name is empty");
+    for entry in exports {
+        if (map.get(entry, "name") == export_name) {
+            assert(map.get(entry, "target") == target_label, "PE export name already maps to a different target");
+            return exports;
+        }
+    }
+    let next_exports: list = exports
+    list.push_mut(next_exports, pe_export_entry(target_label, export_name));
+    return next_exports;
+}
+
 fn pe_export_use(exports: list, target_label: string, export_name: string) -> list {
     assert(len(target_label) > 0, "PE export target label is empty");
     assert(len(export_name) > 0, "PE export name is empty");

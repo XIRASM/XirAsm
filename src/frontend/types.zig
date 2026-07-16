@@ -22,6 +22,20 @@ pub const IntSignedness = enum {
 pub const IntType = struct {
     bits: u16,
     signedness: IntSignedness = .unsigned,
+
+    pub fn acceptsValue(self: IntType, value: u64) bool {
+        if (self.bits == 0 or self.bits > @bitSizeOf(u64)) return false;
+
+        if (self.signedness == .unsigned) {
+            if (self.bits == @bitSizeOf(u64)) return true;
+            const limit = (@as(u64, 1) << @intCast(self.bits)) - 1;
+            return value <= limit;
+        }
+
+        const sign_bit = @as(u64, 1) << @intCast(self.bits - 1);
+        const minimum_negative = 0 -% sign_bit;
+        return value < sign_bit or value >= minimum_negative;
+    }
 };
 
 pub const ArrayType = struct {

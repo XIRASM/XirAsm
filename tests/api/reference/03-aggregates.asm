@@ -38,6 +38,13 @@ packed union PackedOdd {
     word: u16
 }
 
+packed struct SignedValues {
+    byte: i8
+    word: i16
+    dword: i32
+    qword: i64
+}
+
 const natural: NaturalHeader = NaturalHeader { }
 emit.struct(natural)
 emit.u8(sizeof(NaturalHeader))
@@ -69,3 +76,10 @@ emit.bytes(pack(odd))
 emit.u8(sizeof(NaturalOdd))
 emit.u8(sizeof(PackedOdd))
 emit.u8(record.kind)
+
+emit.struct(SignedValues {
+    byte: -1,
+    word: -2,
+    dword: -3,
+    qword: -4
+})

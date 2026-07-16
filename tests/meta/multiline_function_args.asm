@@ -1,6 +1,6 @@
-const imports0: map = map.new()
-const imports1: map = map.set(
-    imports0,
+const base_imports: map = map.new()
+const imports: map = map.set(
+    base_imports,
     "kernel32.dll",
     list.of(
         map.set(
@@ -33,8 +33,8 @@ packed struct Pair {
     hi: u8,
 }
 
-assert(len(imports1) == 1);
-assert(list.eq(map.get(imports1, "kernel32.dll"), list.of(map.set(map.set(map.new(), "name", "ExitProcess"), "slot", "ExitProcess"))));
+assert(len(imports) == 1);
+assert(list.eq(map.get(imports, "kernel32.dll"), list.of(map.set(map.set(map.new(), "name", "ExitProcess"), "slot", "ExitProcess"))));
 emit.u8(lengthof(import_symbol("KERNEL32.DLL", "ExitProcess")));
 emit.bytes(pack(
     Pair {

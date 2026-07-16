@@ -1511,21 +1511,21 @@ const init_pe32_template =
     \\import("format/format.inc");
     \\x86.use32();
     \\
-    \\const image0: map = format_pe32(
+    \\let image: map = format_pe32(
     \\    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_auto,
     \\    list.of(
     \\        format_section(".text", format_code | format_readable | format_executable)
     \\    )
     \\)
-    \\format_begin(image0);
+    \\format_begin(image);
     \\
-    \\format_section_begin(image0, ".text");
+    \\format_section_begin(image, ".text");
     \\start:
     \\    xor eax, eax
     \\    ret
-    \\format_section_end(image0, ".text");
+    \\format_section_end(image, ".text");
     \\
-    \\const image: map = format_entry(image0, start)
+    \\format_entry_mut(image, start)
     \\format_finish(image);
     \\
 ;
@@ -1535,21 +1535,21 @@ const init_pe64_template =
     \\import("format/format.inc");
     \\x86.use64();
     \\
-    \\const image0: map = format_pe64(
+    \\let image: map = format_pe64(
     \\    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_auto,
     \\    list.of(
     \\        format_section(".text", format_code | format_readable | format_executable)
     \\    )
     \\)
-    \\format_begin(image0);
+    \\format_begin(image);
     \\
-    \\format_section_begin(image0, ".text");
+    \\format_section_begin(image, ".text");
     \\start:
     \\    xor eax, eax
     \\    ret
-    \\format_section_end(image0, ".text");
+    \\format_section_end(image, ".text");
     \\
-    \\const image: map = format_entry(image0, start)
+    \\format_entry_mut(image, start)
     \\format_finish(image);
     \\
 ;
@@ -1559,22 +1559,22 @@ const init_elf32_template =
     \\import("format/format.inc");
     \\x86.use32();
     \\
-    \\const image0: map = format_elf32(
+    \\let image: map = format_elf32(
     \\    format_elf_exec,
     \\    list.of(
     \\        format_segment(".text", format_load | format_readable | format_executable)
     \\    )
     \\)
-    \\format_begin(image0);
+    \\format_begin(image);
     \\
-    \\format_segment_begin(image0, ".text");
+    \\format_segment_begin(image, ".text");
     \\start:
     \\    mov eax, 1
     \\    xor ebx, ebx
     \\    int 0x80
-    \\format_segment_end(image0, ".text");
+    \\format_segment_end(image, ".text");
     \\
-    \\const image: map = format_entry(image0, start)
+    \\format_entry_mut(image, start)
     \\format_finish(image);
     \\
 ;
@@ -1584,22 +1584,22 @@ const init_elf64_template =
     \\import("format/format.inc");
     \\x86.use64();
     \\
-    \\const image0: map = format_elf64(
+    \\let image: map = format_elf64(
     \\    format_elf_exec,
     \\    list.of(
     \\        format_segment(".text", format_load | format_readable | format_executable)
     \\    )
     \\)
-    \\format_begin(image0);
+    \\format_begin(image);
     \\
-    \\format_segment_begin(image0, ".text");
+    \\format_segment_begin(image, ".text");
     \\start:
     \\    mov eax, 60
     \\    xor edi, edi
     \\    syscall
-    \\format_segment_end(image0, ".text");
+    \\format_segment_end(image, ".text");
     \\
-    \\const image: map = format_entry(image0, start)
+    \\format_entry_mut(image, start)
     \\format_finish(image);
     \\
 ;
@@ -1945,6 +1945,8 @@ test "init executable templates use ordinary format facade" {
     });
     try std.testing.expect(std.mem.indexOf(u8, pe64, "import(\"format/format.inc\");") != null);
     try std.testing.expect(std.mem.indexOf(u8, pe64, "format_pe64(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, pe64, "format_entry_mut(image, start)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, pe64, "format_entry(image") == null);
     try std.testing.expect(std.mem.indexOf(u8, pe64, "format/pe64.inc") == null);
 
     const elf32 = initMainTemplate(.{
@@ -1955,6 +1957,8 @@ test "init executable templates use ordinary format facade" {
     });
     try std.testing.expect(std.mem.indexOf(u8, elf32, "import(\"format/format.inc\");") != null);
     try std.testing.expect(std.mem.indexOf(u8, elf32, "format_elf32(") != null);
+    try std.testing.expect(std.mem.indexOf(u8, elf32, "format_entry_mut(image, start)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, elf32, "format_entry(image") == null);
     try std.testing.expect(std.mem.indexOf(u8, elf32, "format/elf32.inc") == null);
 }
 

@@ -228,6 +228,58 @@ test "collection mutation uses nearest local and survives argument scope growth"
     defer module.deinit();
 }
 
+test "let procedure parameters write updated collections back to callers" {
+    var module = try lowerSource(
+        std.testing.allocator,
+        \\fn set_entry(let cfg: map, value: u64) {
+        \\    map.set_mut(cfg, "entry", value);
+        \\}
+        \\fn configure(let cfg: map) {
+        \\    set_entry(cfg, 42);
+        \\}
+        \\let image: map = map.new()
+        \\configure(image);
+        \\assert(map.get(image, "entry") == 42);
+        \\emit.u8(map.get(image, "entry"));
+        \\
+    ,
+        .{},
+    );
+    defer module.deinit();
+}
+
+test "let procedure parameters reject nonmutable caller bindings" {
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+    try std.testing.expectError(
+        error.FrontendDiagnostics,
+        lowerSourceIntoModule(std.testing.allocator, &module,
+            \\fn set_entry(let cfg: map) {
+            \\    map.set_mut(cfg, "entry", 1);
+            \\}
+            \\const image: map = map.new()
+            \\set_entry(image);
+            \\
+        ),
+    );
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    try std.testing.expectEqualStrings(
+        "mutable function argument must resolve to a let binding",
+        module.diagnostics.items.items[0].message,
+    );
+}
+
+test "let procedure parameters reject temporaries and mutable aliases" {
+    try expectCollectionMutationDiagnostic(
+        "fn update(let cfg: map) {\n}\nupdate(map.new());\n",
+        "mutable function argument must be a direct let binding",
+    );
+    try expectCollectionMutationDiagnostic(
+        "fn update(let left: map, let right: map) {\n}\nlet cfg: map = map.new()\nupdate(cfg, cfg);\n",
+        "mutable function arguments cannot alias the same binding",
+    );
+}
+
 fn expectCollectionMutationDiagnostic(source_text: []const u8, expected: []const u8) !void {
     var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
     defer module.deinit();

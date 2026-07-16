@@ -1,6 +1,10 @@
 // api-matrix-fixture: pe_finalize_export_dir32(
 // api-matrix-fixture: pe32_finish_export_section(
 // api-matrix-fixture: pe_export_use32(
+// api-matrix-fixture: pe_export_use32_many(
+// api-matrix-fixture: pe_export_use64_many(
+// api-matrix-fixture: pe_export_use32_pairs(
+// api-matrix-fixture: pe_export_use64_pairs(
 // api-matrix-fixture: pe_export_emit32(
 
 import("../../include/format/pe32.inc");
@@ -9,8 +13,10 @@ import("../../include/format/pe_export.inc");
 x86.use32();
 
 const exports0: list = pe_export_new()
-const exports1: list = pe_export_use32(exports0, "dll_main", "xir_add7")
-const exports2: list = pe_export_use32(exports1, "dll_sub3", "xir_sub3")
+const exports: list = pe_export_use32_pairs(
+    exports0,
+    list.of("dll_main", "xir_add7", "dll_sub3", "xir_sub3")
+)
 
 const text_rva: u64 = pe_section_rva(0, pe_default_section_align)
 const text_raw: u64 = pe_section_raw_ptr(0, pe_default_file_align)
@@ -32,7 +38,7 @@ pe32_end_section(0);
 
 pe32_section(".edata", 1);
 edata_start:
-pe_export_emit32(exports2, "xirasm_export32.dll", edata_rva, edata_start);
+pe_export_emit32(exports, "xirasm_export32.dll", edata_rva, edata_start);
 edata_end:
 pe32_end_section(1);
 

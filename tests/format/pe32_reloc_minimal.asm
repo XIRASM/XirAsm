@@ -23,12 +23,12 @@ text_end:
 pe32_end_section(0);
 
 const pointer_rva: u64 = pe_reloc_rva(text_rva, abs_ptr, text_start)
-const relocs0: list = pe_reloc_new()
-const relocs1: list = pe_reloc_add_highlow_at(relocs0, text_rva, abs_ptr, text_start)
+let relocs: list = pe_reloc_new()
+relocs = pe_reloc_add_highlow_at(relocs, text_rva, abs_ptr, text_start)
 
 pe32_section(".reloc", 1);
 reloc_start:
-pe_reloc_emit_block(relocs1, text_rva);
+pe_reloc_emit_block(relocs, text_rva);
 reloc_end:
 pe32_end_section(1);
 

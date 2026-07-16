@@ -1,26 +1,29 @@
+// api-matrix-fixture: format_elfexe_import_new(
+// api-matrix-fixture: format_elfexe_import_many_mut(
+// api-matrix-fixture: format_elfexe_import_pairs_mut(
+
 import("format/format.inc");
 
-const image0: map = format_elf64(
+let image: map = format_elf64(
     format_elf_exec,
     list.of(
         format_segment(".text", format_load | format_readable | format_executable)
     )
 )
-const imports: list = list.of(
-    format_elfexe_import_plt("libc.so.6", "getpid", "getpid_gotplt", "getpid_plt")
-)
-const image1: map = format_elfexe_tables(image0, imports)
-format_begin(image1);
+let imports: list = format_elfexe_import_new()
+format_elfexe_import_pairs_mut(imports, "libc.so.6", list.of("getpid", "getpid"))
+format_elfexe_tables_mut(image, imports)
+format_begin(image);
 
-format_segment_begin(image1, ".text");
+format_segment_begin(image, ".text");
 start:
     call getpid_plt
     xor edi, edi
     mov eax, 60
     syscall
-format_segment_end(image1, ".text");
+format_segment_end(image, ".text");
 
-const image: map = format_entry(image1, start)
+format_entry_mut(image, start)
 format_finish(image);
 
 defer {

@@ -105,6 +105,7 @@ fn cloneParam(
     return .{
         .name = owned_name,
         .type_name = owned_type_name,
+        .mutability = param.mutability,
         .span = param.span,
     };
 }

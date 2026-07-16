@@ -1,8 +1,8 @@
 import("../../include/format/pe64.inc");
 import("../../include/format/pe_import.inc");
 
-const imports0: map = pe_import_new()
-const imports1: map = pe_import_use64(imports0, "KERNEL32.DLL", "ExitProcess")
+let imports: map = pe_import_new()
+imports = pe_import_use64(imports, "KERNEL32.DLL", "ExitProcess")
 
 const text_rva: u64 = pe_section_rva(0, pe_default_section_align)
 const text_raw: u64 = pe_section_raw_ptr(0, pe_default_file_align)
@@ -27,7 +27,7 @@ pe64_end_section(0);
 
 pe64_section(".idata", 1);
 idata_start:
-pe_import_emit64(imports1, idata_rva, idata_start);
+pe_import_emit64(imports, idata_rva, idata_start);
 idata_end:
 pe64_end_section(1);
 
