@@ -2,39 +2,51 @@
 
 [简体中文](README.zh-CN.md) | [Website](https://xirasm-site.pages.dev/) | [What's New](https://xirasm-site.pages.dev/#updates)
 
-**Assembly syntax for instructions. A real compile-time language for everything
-around them.**
+**One modern assembler for x86, RISC-V, and SPIR-V. Write real assembly, emit
+usable binaries, and make the build programmable when you need more.**
 
-XIRASM is built for assembly programmers who want direct control without being
-trapped in an old directive dialect or fragile text-macro tricks.
+XIRASM assembles natural ISA text and directly produces flat binaries, Windows
+PE/COFF, Linux ELF, and complete SPIR-V modules. Start with ordinary assembly.
+Reach for its typed compile-time language only when a project needs generated
+code, reusable format logic, or precise binary layout.
 
-Write instructions normally. When the source needs calculation, generation,
-reuse, or transformation, use typed values, functions, control flow,
-collections, modules, file data, and token matching.
+- **Three ISA families:** x86 in 16/32/64-bit modes, RV32/RV64, and SPIR-V 1.6.
+- **Useful output, not an intermediate experiment:** executables, DLLs, shared
+  libraries, object files, flat binaries, and SPIR-V modules.
+- **Modern metaprogramming:** typed values, functions, collections, modules,
+  structured control flow, and source-located diagnostics instead of a fragile
+  text-macro layer.
+- **A short path to native output:** project templates provide ready-to-build
+  Windows and Linux programs; format facades handle ordinary PE, COFF, and ELF
+  work without requiring users to construct every header by hand.
 
-The result is one assembler language for handwritten instructions, generated
-code, binary layouts, and native output formats across x86, RISC-V, and SPIR-V.
+## Build a Native Program
 
-## The Difference
+Build XIRASM with Zig 0.17:
 
-- **Normal ISA text stays normal.** Write labels and processor instructions
-  directly; no function-call wrapper is required around assembly.
-- **Compile-time programming replaces text-macro puzzles.** Typed values,
-  functions, lexical scope, `if`/`else if`, `while`, `for`, `break`, and
-  `continue` express generation logic directly.
-- **Data and formats use the same language.** Structs, unions, float and integer
-  emission, reserve operations, modules, files, JSON, TOML, lists, maps, and
-  token matching compose without a second directive dialect.
-- **The frontend owns assembly semantics.** Source spans, symbols, fragments,
-  fixups, layout, relaxation, diagnostics, and output remain explicit; ISA
-  encoders are narrow leaf backends.
-- **One project model covers multiple instruction sets.** The same compile-time
-  language drives x86, x86-64, RV32, RV64, and SPIR-V sources.
+```text
+zig build -Doptimize=ReleaseSafe
+```
 
-## See It
+Put the resulting `xirasm` executable on `PATH`, then create and build a native
+project:
 
-Instructions remain assembly. Repetitive work becomes normal compile-time
-code:
+```text
+xirasm init hello --isa x86-64 --os windows --abi msvc
+cd hello
+xirasm build
+```
+
+For Linux, use `--os linux --abi sysv`. The generated project contains its
+source and `xirasm.toml`, so the next build is just `xirasm build`.
+
+CLI subcommands precede their options: use `xirasm build --timings`, not
+`xirasm --timings build`.
+
+## Assembly Stays Assembly
+
+Labels and processor instructions use their normal text form. Compile-time code
+appears only where it earns its place:
 
 ```asm
 x86.use64();
@@ -55,29 +67,11 @@ table:
 emit_square_table(4);
 ```
 
-The function and loop execute only while assembling. The output contains the
-machine code and generated table, not a runtime interpreter.
+The function and loop run while assembling. The output contains only the
+machine code and generated data, with no runtime interpreter and no instruction
+wrapper syntax.
 
-The language also provides:
-
-- typed constants and variables;
-- reusable functions and lexical scope;
-- lists, maps, strings, and byte sequences;
-- structs, unions, packing, alignment, and reserved data;
-- modules and imports;
-- JSON, TOML, and file-driven generation;
-- token matching for compact source DSLs;
-- assertions with source-positioned diagnostics.
-
-## Quick Start
-
-Build with Zig 0.17:
-
-```text
-zig build -Doptimize=ReleaseSafe
-```
-
-Create `hello.asm`:
+For a minimal flat binary, a source file can be as small as:
 
 ```asm
 x86.use64();
@@ -87,85 +81,91 @@ entry:
     ret
 ```
 
-Assemble a flat binary from the repository build:
-
 ```text
-./zig-out/bin/xirasm hello.asm --target x86-64 -o hello.bin
+xirasm hello.asm --target x86-64 -o hello.bin
 ```
 
-On Windows, run `zig-out\bin\xirasm.exe`. An installed `xirasm` can be used
-directly from `PATH`.
+## One Tool, Multiple Targets
 
-Create a ready-to-build native project:
-
-```text
-xirasm init hello-win --isa x86-64 --os windows --abi msvc
-xirasm init hello-linux --isa x86-64 --os linux --abi sysv
-```
-
-Each generated project contains `xirasm.toml`; run `xirasm build` inside that
-project to assemble its configured source and output.
-
-CLI subcommands come before their options. For example, use
-`xirasm build --timings`, not `xirasm --timings build`.
-
-## Supported Targets
-
-| CLI target | Instruction set |
+| CLI target | Output model |
 | --- | --- |
-| `x86-64`, `x64`, `x86_64` | 64-bit x86 |
-| `x86`, `x86-32` | 32-bit x86 |
-| `rv64`, `riscv64` | 64-bit RISC-V |
-| `rv32`, `riscv32` | 32-bit RISC-V |
-| `spv`, `spirv` | SPIR-V 1.6 module |
+| `x86-64`, `x64`, `x86_64` | 64-bit x86 instructions and native/flat outputs |
+| `x86`, `x86-32` | 32-bit x86 instructions and native/flat outputs |
+| `rv64`, `riscv64` | RV64 instructions |
+| `rv32`, `riscv32` | RV32 instructions |
+| `spv`, `spirv` | Complete SPIR-V 1.6 modules |
 
-The compile-time language and project structure stay consistent across targets.
+The same project model and compile-time language apply across targets. You do
+not have to learn one macro system for x86 and another generation language for
+RISC-V or SPIR-V.
 
 ## Output Formats
 
 XIRASM can directly produce:
 
-- flat and application-specific binaries;
-- PE32 and PE64 Windows executables and DLLs;
-- COFF32 and COFF64 object files;
-- ELF32 and ELF64 executables;
-- ELF64 position-independent executables;
-- ELF32 and ELF64 object files;
-- ELF64 shared libraries.
+| Platform or use | Formats |
+| --- | --- |
+| Windows | PE32/PE64 executables and DLLs; COFF32/COFF64 objects |
+| Linux | ELF32/ELF64 executables; ELF64 PIE and shared libraries; ELF32/ELF64 objects |
+| Bare metal and tooling | Flat and application-specific binaries |
+| GPU and IR tooling | Complete SPIR-V 1.6 modules |
 
-Executable-format projects use the ordinary format library:
+Normal PE, COFF, and ELF projects use the format library's high-level facades:
 
 ```asm
 import("format/format.inc");
 ```
 
-The CLI can also create ready-to-build Windows and Linux starter projects.
-The [Format Tutorial](document/format-tutorial.md) covers complete PE, COFF,
-and ELF workflows.
+When a loader, file format, or research tool needs an unusual layout, the same
+language also exposes regions, labels, alignment, finalizers, and direct format
+helpers. The common path stays short; low-level control remains available.
 
-## Editor Support
+## More Than a Macro Assembler
 
-The standalone [XIRASM VS Code extension](https://codeberg.org/kukuyun/xirasm-vscode)
+XIRASM's compile-time language is designed for assembly projects that outgrow
+copy-and-paste and textual substitution:
+
+- typed constants, mutable bindings, functions, and lexical scope;
+- `if`/`else if`, `while`, `for`, `break`, and `continue`;
+- strings, byte sequences, mutable lists and maps;
+- structs, unions, packing, alignment, and reserve operations;
+- modules, imports, JSON, TOML, and file-driven generation;
+- token matching for compact domain-specific source forms;
+- assertions and diagnostics tied to the original source location.
+
+This makes XIRASM useful for systems programs, executable-format work,
+embedded binaries, code generators, and instruction-level experiments without
+turning ordinary instruction text into a programming-language API.
+
+## Validation
+
+The regression suite checks final encoded bytes and boundary behavior, not only
+whether source text parses. It includes x86 layout and fixup cases, RISC-V byte
+comparisons with LLVM tooling, SPIR-V assembly/disassembly and validation, and
+structural, linker, loader, and native-runtime checks for supported binary
+formats.
+
+## Editor and Documentation
+
+The standalone [XIRASM VS Code extension](https://github.com/XIRASM/xir-vscode)
 provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
-## Documentation
-
-- [Language Guide](document/language.md) - learn the compile-time language and
-  assembler model.
-- [Format Tutorial](document/format-tutorial.md) - choose PE, COFF, and ELF
-  templates and build files with the user-facing facade APIs.
-- [Advanced Format Construction Guide](document/advanced-formats.md) - use
-  direct format helpers when manual control is required.
+- [Language Guide](document/language.md) - learn the assembly and compile-time
+  language model.
+- [Format Tutorial](document/format-tutorial.md) - build PE, COFF, and ELF files
+  with user-facing facade APIs.
 - [Language API Reference](document/api-reference.md) - look up syntax and
   built-in APIs.
+- [Advanced Format Construction](document/advanced-formats.md) - take direct
+  control of uncommon binary layouts.
 
 ## Status
 
 Current version: **0.2.16**
 
-XIRASM is pre-1.0 software: the assembler, language API, format library, CLI,
-and editor integration are usable now, while public contracts may still be
-refined before 1.0.
+XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI,
+and editor support are usable now, while public contracts may still be refined
+before 1.0.
 
 ## License
 
