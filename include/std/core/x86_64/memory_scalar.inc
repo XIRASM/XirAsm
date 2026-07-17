@@ -32,6 +32,8 @@ fn std_core_memory_emit_forward_tail() {
     isa(sym.join("jz ", skip1));
     movzx edx, byte [r11]
     mov byte [r10], dl
+    add r11, 1
+    add r10, 1
 
     label.define(skip1);
 }

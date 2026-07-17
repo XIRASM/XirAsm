@@ -8,6 +8,8 @@ import("std/core.inc");
 x86.use64();
 
 const guard_is_windows: bool = test_memory_abi == std_core_abi_windows64
+const guard_is_avx2: bool = test_memory_tier == std_core_memory_tier_avx2
+const guard_is_runtime: bool = test_memory_tier == std_core_dispatch_runtime
 const guard_page_size: u64 = 4096
 const guard_allocation_size: u64 = 8192
 
@@ -128,11 +130,18 @@ if guard_is_windows {
     format_segment_begin(guard_image, ".text");
 }
 guard_start:
+    if guard_is_avx2 {
+        guard_call_runtime(std_cpu_detect_symbol);
+        test rax, std_cpu_feature_avx2
+        jnz guard_avx2_supported
+        guard_exit(77);
+guard_avx2_supported:
+    }
     guard_allocate("guard_source", "guard_failed_allocate");
     guard_allocate("guard_target", "guard_failed_allocate");
 
     lea r13, [rel guard_lengths]
-    mov r14d, 13
+    mov r14d, 18
 guard_next_length:
     mov r15, [r13]
 
@@ -233,11 +242,14 @@ guard_compare_ordered:
 
 
     // move 的两个方向都让其中一个范围紧贴不可访问页。
+    // 完整 4096 字节范围没有空间再做 1 字节重叠偏移，已由 copy/fill/compare
+    // 覆盖整页边界；move 的最大重叠 guard 长度为 4095。
+    cmp r15, guard_page_size
+    je guard_move_checked
     test r15, r15
     jz guard_move_zero
     mov r11, [rel guard_source]
-    add r11, guard_page_size
-    sub r11, 1
+    add r11, guard_page_size - 1
     sub r11, r15
     mov r10, r11
     add r10, 1
@@ -248,8 +260,7 @@ guard_compare_ordered:
     jne guard_failed_memory
 
     mov r10, [rel guard_source]
-    add r10, guard_page_size
-    sub r10, 1
+    add r10, guard_page_size - 1
     sub r10, r15
     mov r11, r10
     add r11, 1
@@ -279,7 +290,15 @@ guard_failed_allocate:
 guard_failed_memory:
     guard_exit(2);
 
-std_memory_emit_tier(test_memory_abi, test_memory_tier);
+if guard_is_runtime {
+    std_cpu_emit(test_memory_abi);
+    std_memory_emit_runtime(test_memory_abi, "guard_memory_runtime_state");
+} else {
+    if guard_is_avx2 {
+        std_cpu_emit(test_memory_abi);
+    }
+    std_memory_emit_tier(test_memory_abi, test_memory_tier);
+}
 
 if guard_is_windows {
     format_section_end(guard_image, ".text");
@@ -292,10 +311,14 @@ guard_source:
     dq(0);
 guard_target:
     dq(0);
+if guard_is_runtime {
+guard_memory_runtime_state:
+    rq(8);
+}
 guard_old_protect:
     dd(0);
 guard_lengths:
-    dq(0, 1, 7, 8, 15, 16, 17, 31, 32, 33, 63, 64, 65);
+    dq(0, 1, 7, 8, 15, 16, 17, 31, 32, 33, 63, 64, 65, 95, 96, 97, 4095, 4096);
 if guard_is_windows {
     format_section_end(guard_image, ".data");
     format_pe_import_section(guard_image, ".idata", guard_imports);

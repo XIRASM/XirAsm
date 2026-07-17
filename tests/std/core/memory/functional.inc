@@ -8,6 +8,8 @@ import("std/core.inc");
 x86.use64();
 
 const test_is_windows: bool = test_memory_abi == std_core_abi_windows64
+const test_memory_is_avx2: bool = test_memory_tier == std_core_memory_tier_avx2
+const test_memory_is_runtime: bool = test_memory_tier == std_core_dispatch_runtime
 
 fn test_exit(status: u64) {
     if test_is_windows {
@@ -187,6 +189,15 @@ start:
     mov [rel saved_rsp], rsp
     test_seed_nonvolatile();
 
+    // fixed AVX2 只在 CPU 与 OS 都支持 YMM 状态时执行；否则安全跳过真机路径。
+    if test_memory_is_avx2 {
+        test_call_runtime(std_cpu_detect_symbol);
+        test rax, std_cpu_feature_avx2
+        jnz test_avx2_supported
+        test_exit(77);
+test_avx2_supported:
+    }
+
     // copy：零长度不得访问哨兵指针；33 字节覆盖 16 字节边界和未对齐地址。
     test_call_zero_copy();
     cmp rax, 1
@@ -269,6 +280,57 @@ start:
     test rax, rax
     jne failed_compare
 
+    if test_memory_is_runtime {
+        cmp qword [rel memory_runtime_state], 0
+        jns failed_abi
+        cmp qword [rel memory_runtime_state + 8], 0
+        je failed_abi
+        cmp qword [rel memory_runtime_state + 16], 0
+        jns failed_abi
+        cmp qword [rel memory_runtime_state + 24], 0
+        je failed_abi
+        cmp qword [rel memory_runtime_state + 32], 0
+        jns failed_abi
+        cmp qword [rel memory_runtime_state + 40], 0
+        je failed_abi
+        cmp qword [rel memory_runtime_state + 48], 0
+        jns failed_abi
+        cmp qword [rel memory_runtime_state + 56], 0
+        je failed_abi
+    }
+
+    // 支持 AVX2 时预置 YMM2 上半部，零长度入口也必须在返回前清零上半部。
+    if test_memory_is_avx2 || test_memory_is_runtime {
+        test_call_runtime(std_cpu_detect_symbol);
+        test rax, std_cpu_feature_avx2
+        jz test_vzeroupper_done
+        vpcmpeqd ymm2, ymm2, ymm2
+        test_call_zero_copy();
+        vextracti128 xmm0, ymm2, 1
+        vptest xmm0, xmm0
+        jnz failed_abi
+
+        vpcmpeqd ymm2, ymm2, ymm2
+        test_call_binary(std_memory_move_symbol, "move_buffer", 0, "move_buffer", 0, 0);
+        vextracti128 xmm0, ymm2, 1
+        vptest xmm0, xmm0
+        jnz failed_abi
+
+        vpcmpeqd ymm2, ymm2, ymm2
+        test_call_fill("fill_buffer", 0, 0, 0);
+        vextracti128 xmm0, ymm2, 1
+        vptest xmm0, xmm0
+        jnz failed_abi
+
+        vpcmpeqd ymm2, ymm2, ymm2
+        test_call_zero_compare();
+        vextracti128 xmm0, ymm2, 1
+        vptest xmm0, xmm0
+        jnz failed_abi
+        vzeroupper
+test_vzeroupper_done:
+    }
+
     test_check_nonvolatile("failed_abi");
     test_exit(0);
 failed_copy:
@@ -282,7 +344,15 @@ failed_compare:
 failed_abi:
     test_exit(5);
 
-std_memory_emit_tier(test_memory_abi, test_memory_tier);
+if test_memory_is_runtime {
+    std_cpu_emit(test_memory_abi);
+    std_memory_emit_runtime(test_memory_abi, "memory_runtime_state");
+} else {
+    if test_memory_is_avx2 {
+        std_cpu_emit(test_memory_abi);
+    }
+    std_memory_emit_tier(test_memory_abi, test_memory_tier);
+}
 
 if test_is_windows {
     format_section_end(image, ".text");
@@ -310,6 +380,10 @@ if test_is_windows {
 }
 saved_rsp:
     dq(0);
+if test_memory_is_runtime {
+memory_runtime_state:
+    rq(8);
+}
 xmm6_after:
     dq(0, 0);
 copy_buffer:

@@ -3626,7 +3626,161 @@ pub fn build(b: *std.Build) void {
         "tests/isa/x86/negative/symbolic_signed_immediate_overflow.asm",
         "x64",
         &.{},
-        "InvalidFixupTarget",
+        "does not fit the signed 32-bit field",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/symbolic_width_matrix64.asm",
+        "isa-x86-expression-fixups-symbolic-width-matrix64.bin",
+        "x64",
+        "04656605650005650000004981c3650000004981d3650000004981db650000004981e3650000004981cb650000004981f3650000004981eb650000004981fb6500000049f7c3650000004d69db65000000686500000049c1e36548813d0100000066000000c30000000000000000",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/symbolic_width_matrix32.asm",
+        "isa-x86-expression-fixups-symbolic-width-matrix32.bin",
+        "x64",
+        "041666051600051600000069c0160000006816000000c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/symbolic_width_matrix16.asm",
+        "isa-x86-expression-fixups-symbolic-width-matrix16.bin",
+        "x64",
+        "040c050c0069c00c00680c00c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/symbol_expression_matrix.asm",
+        "isa-x86-expression-fixups-symbol-expression-matrix.bin",
+        "x64",
+        "b8270000004981c32b0000004981eb230000004981fb2a0000008b050b000000488d1dfcffffffc3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/two_immediate_fixups.asm",
+        "isa-x86-expression-fixups-two-immediate-fixups.bin",
+        "x64",
+        "c8040005c3c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/label_difference_immediate.asm",
+        "isa-x86-expression-fixups-label-difference-immediate.bin",
+        "x64",
+        "90b806000000c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/symbolic_memory_displacements.asm",
+        "isa-x86-expression-fixups-symbolic-memory-displacements.bin",
+        "x64",
+        "8b801e0000008b84881e000000418b851e00000062f17e486f801e000000c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/compile_time_sub_byte_immediate.asm",
+        "isa-x86-expression-fixups-compile-time-sub-byte-immediate.bin",
+        "x64",
+        "6264cc0c39f2",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/explicit_short_layout_repatch.asm",
+        "isa-x86-expression-fixups-explicit-short-layout-repatch.bin",
+        "x64",
+        "eb06b80800000090c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/isa/x86/expression_fixups/cross_region_expression_fixups.asm",
+        "isa-x86-expression-fixups-cross-region-expression-fixups.bin",
+        "x64",
+        "b8002000004981c3042000008b05ee0f0000c3",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/signed_dual_fixup_overflow.asm",
+        "x64",
+        &.{},
+        "does not fit the signed 32-bit field",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/fixed_imm8_overflow.asm",
+        "x64",
+        &.{},
+        "does not fit the unsigned 8-bit field",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/fixed_imm16_overflow.asm",
+        "x64",
+        &.{},
+        "does not fit the signed-or-unsigned 16-bit field under wrap policy",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/wrap32_overflow.asm",
+        "x64",
+        &.{},
+        "does not fit the signed-or-unsigned 32-bit field under wrap policy",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/symbolic_memory_displacement_overflow.asm",
+        "x64",
+        &.{},
+        "does not fit the signed 32-bit field",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/isa/x86/expression_fixups/negative/symbolic_sub_byte_immediate.asm",
+        "x64",
+        &.{},
+        "symbolic sub-byte immediate is unsupported; use a compile-time constant",
     );
     addAsmFixture(
         b,
@@ -3692,7 +3846,7 @@ pub fn build(b: *std.Build) void {
         "tests/isa/x86/negative_branch_short_out_of_range.asm",
         "x64",
         &.{},
-        "PC-relative fixup target is out of range for the encoded displacement width",
+        "does not fit the signed 8-bit displacement",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -3701,7 +3855,7 @@ pub fn build(b: *std.Build) void {
         "tests/isa/x86/negative_branch_jcc_short_forward_out_of_range.asm",
         "x64",
         &.{},
-        "PC-relative fixup target is out of range for the encoded displacement width",
+        "does not fit the signed 8-bit displacement",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -3710,7 +3864,7 @@ pub fn build(b: *std.Build) void {
         "tests/isa/x86/negative_branch_jmp_short_backward_out_of_range.asm",
         "x64",
         &.{},
-        "PC-relative fixup target is out of range for the encoded displacement width",
+        "does not fit the signed 8-bit displacement",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -3719,7 +3873,7 @@ pub fn build(b: *std.Build) void {
         "tests/isa/x86/negative_branch_jcc_short_backward_out_of_range.asm",
         "x64",
         &.{},
-        "PC-relative fixup target is out of range for the encoded displacement width",
+        "does not fit the signed 8-bit displacement",
     );
     addFailingAsmFixtureWithInputs(
         b,

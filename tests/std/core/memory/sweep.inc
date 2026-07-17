@@ -1,6 +1,6 @@
 // std/core memory 的密集运行时正确性矩阵。
 //
-// copy/fill 扫描长度 0..256 和偏移 0..15；move 扫描长度 0..128 与
+// copy/fill 扫描长度 0..256 和偏移 0..31；move 扫描长度 0..128 与
 // 目标相对源 -32..32 的全部距离。reference_buffer 使用独立逐字节算法，
 // 每个用例之后比较完整 512 字节，包含目标范围外的 guard 数据。
 
@@ -9,7 +9,10 @@ import("std/core.inc");
 x86.use64();
 
 const sweep_is_windows: bool = test_memory_abi == std_core_abi_windows64
+const sweep_is_avx2: bool = test_memory_tier == std_core_memory_tier_avx2
+const sweep_is_runtime: bool = test_memory_tier == std_core_dispatch_runtime
 const sweep_buffer_size: u64 = 512
+const sweep_alignment_count: u64 = 32
 
 fn sweep_exit(status: u64) {
     if sweep_is_windows {
@@ -79,7 +82,14 @@ if sweep_is_windows {
     format_segment_begin(sweep_image, ".text");
 }
 sweep_start:
-    // copy：257 个长度 × 16 种源/目标相对对齐。
+    if sweep_is_avx2 {
+        sweep_call_runtime(std_cpu_detect_symbol);
+        test rax, std_cpu_feature_avx2
+        jnz sweep_avx2_supported
+        sweep_exit(77);
+sweep_avx2_supported:
+    }
+    // copy：257 个长度 × 32 种源/目标相对对齐。
     xor r12d, r12d
 sweep_copy_length:
     xor r13d, r13d
@@ -136,13 +146,13 @@ sweep_copy_compare:
     jnz sweep_copy_compare
 
     add r13d, 1
-    cmp r13d, 16
+    cmp r13d, sweep_alignment_count
     jb sweep_copy_alignment
     add r12d, 1
     cmp r12d, 257
     jb sweep_copy_length
 
-    // fill：257 个长度 × 16 种目标对齐，value 高位必须被忽略。
+    // fill：257 个长度 × 32 种目标对齐，value 高位必须被忽略。
     xor r12d, r12d
 sweep_fill_length:
     xor r13d, r13d
@@ -194,7 +204,7 @@ sweep_fill_compare:
     jnz sweep_fill_compare
 
     add r13d, 1
-    cmp r13d, 16
+    cmp r13d, sweep_alignment_count
     jb sweep_fill_alignment
     add r12d, 1
     cmp r12d, 257
@@ -285,7 +295,15 @@ sweep_failed_fill:
 sweep_failed_move:
     sweep_exit(3);
 
-std_memory_emit(test_memory_abi);
+if sweep_is_runtime {
+    std_cpu_emit(test_memory_abi);
+    std_memory_emit_runtime(test_memory_abi, "sweep_memory_runtime_state");
+} else {
+    if sweep_is_avx2 {
+        std_cpu_emit(test_memory_abi);
+    }
+    std_memory_emit_tier(test_memory_abi, test_memory_tier);
+}
 
 if sweep_is_windows {
     format_section_end(sweep_image, ".text");
@@ -308,6 +326,10 @@ if sweep_is_windows {
 actual_buffer:
 for slot in range(0, 64) {
     dq(0);
+}
+if sweep_is_runtime {
+sweep_memory_runtime_state:
+    rq(8);
 }
 reference_buffer:
 for slot in range(0, 64) {

@@ -654,11 +654,6 @@ fn runAssembleCommand(
         break :assembled assembleFlatTimed(gpa, io, source_path, source_bytes, options.target, stderr, &timing_trace) catch |err| {
             if (progress_enabled) std.Progress.setStatus(.failure);
             if (err != error.FrontendDiagnostics) {
-                if (assemblyErrorMessage(err)) |message| {
-                    try stderr.print("error: {s}\n", .{message});
-                    try stderr.flush();
-                    std.process.exit(1);
-                }
                 try stderr.print("error: assembly failed: {s}\n", .{@errorName(err)});
             }
             try stderr.flush();
@@ -751,11 +746,6 @@ fn runBuildCommand(
         ) catch |err| {
             if (progress_enabled) std.Progress.setStatus(.failure);
             if (err != error.FrontendDiagnostics) {
-                if (assemblyErrorMessage(err)) |message| {
-                    try stderr.print("error: {s}\n", .{message});
-                    try stderr.flush();
-                    std.process.exit(1);
-                }
                 try stderr.print("error: build failed: {s}\n", .{@errorName(err)});
             }
             try stderr.flush();
@@ -1220,13 +1210,6 @@ fn renderListing(allocator: Allocator, source_path: []const u8, assembled: *cons
         .source_path = source_path,
         .output_bytes = assembled.bytes,
     });
-}
-
-fn assemblyErrorMessage(err: anyerror) ?[]const u8 {
-    return switch (err) {
-        error.RelativeFixupOutOfRange => "PC-relative fixup target is out of range for the encoded displacement width",
-        else => null,
-    };
 }
 
 fn writeDiagnostics(writer: *Io.Writer, module: *const xirasm.Module) !void {

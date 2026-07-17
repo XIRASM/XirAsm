@@ -5,7 +5,13 @@ const frontend = @import("frontend/root.zig");
 const Allocator = std.mem.Allocator;
 
 const AssemblyError = error{
+    FixupAddressOverflow,
+    FixupPatchOutOfBounds,
+    InvalidFixupWidth,
     RelativeFixupOutOfRange,
+    SignedFixupOutOfRange,
+    UnsignedFixupOutOfRange,
+    WrapFixupOutOfRange,
 };
 
 pub const Stage = enum {
@@ -480,7 +486,7 @@ fn storeByteCount(name: []const u8) ?u8 {
 
 fn patchResolvedFixups(
     bytes: []u8,
-    module: *const frontend.Module,
+    module: *frontend.Module,
     module_layout: *const frontend.ModuleLayout,
     image_regions: []const frontend.output.ImageRegion,
     fixup_result: frontend.FixupPassResult,
@@ -507,7 +513,10 @@ fn patchResolvedFixups(
                 const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
                 const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
                 const fragment_layout = fragmentLayout(section_layout, stored_fixup.fragment) orelse return error.InvalidFragment;
-                try patchOneFixup(bytes, section_layout.*, image_region, fragment_layout, stored_fixup, resolved.value);
+                patchOneFixup(bytes, section_layout.*, image_region, fragment_layout, stored_fixup, resolved.value) catch |err| {
+                    try addFixupPatchDiagnostic(module, stored_fixup, resolved.value, err);
+                    return error.FrontendDiagnostics;
+                };
             },
         }
     }
@@ -640,63 +649,134 @@ fn patchOneFixup(
     fragment_layout: frontend.FragmentLayout,
     stored_fixup: frontend.Fixup,
     target_value: u64,
-) (AssemblyError || anyerror)!void {
-    const width_bytes = fixupWidthBytes(stored_fixup.width_bits) catch return error.InvalidFixupTarget;
-    const section_relative_patch_offset = std.math.add(u64, fragment_layout.offset, stored_fixup.offset) catch return error.OffsetOverflow;
-    const patch_end_relative = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.OffsetOverflow;
-    if (patch_end_relative > image_region.file_size) return error.InvalidFixupTarget;
-    const patch_offset = std.math.add(u64, image_region.file_offset, section_relative_patch_offset) catch return error.OffsetOverflow;
-    const patch_start = try sizeToUsize(patch_offset);
-    const patch_end = std.math.add(usize, patch_start, width_bytes) catch return error.OffsetOverflow;
-    if (patch_end > bytes.len) return error.InvalidFixupTarget;
+) AssemblyError!void {
+    const width_bytes = try fixupWidthBytes(stored_fixup.width_bits);
+    const section_relative_patch_offset = std.math.add(u64, fragment_layout.offset, stored_fixup.offset) catch return error.FixupAddressOverflow;
+    const patch_end_relative = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.FixupAddressOverflow;
+    if (patch_end_relative > image_region.file_size) return error.FixupPatchOutOfBounds;
+    const patch_offset = std.math.add(u64, image_region.file_offset, section_relative_patch_offset) catch return error.FixupAddressOverflow;
+    const patch_start = std.math.cast(usize, patch_offset) orelse return error.FixupAddressOverflow;
+    const patch_end = std.math.add(usize, patch_start, width_bytes) catch return error.FixupAddressOverflow;
+    if (patch_end > bytes.len) return error.FixupPatchOutOfBounds;
 
     const value = switch (stored_fixup.kind) {
         .absolute => try absolutePatchValue(target_value, stored_fixup.width_bits, stored_fixup.value_range),
         .pc_relative => value: {
-            const next_ip_offset = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.OffsetOverflow;
-            const next_ip = std.math.add(u64, section_layout.origin, next_ip_offset) catch return error.OffsetOverflow;
+            const next_ip_offset = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.FixupAddressOverflow;
+            const next_ip = std.math.add(u64, section_layout.origin, next_ip_offset) catch return error.FixupAddressOverflow;
             break :value try relativePatchValue(target_value, next_ip, stored_fixup.width_bits);
         },
     };
     writeSignedLittleEndian(bytes[patch_start..patch_end], value);
 }
 
-fn fixupWidthBytes(width_bits: u16) !usize {
-    if (width_bits == 0 or width_bits % 8 != 0) return error.InvalidFixupTarget;
+fn fixupWidthBytes(width_bits: u16) AssemblyError!usize {
+    if (width_bits == 0 or width_bits % 8 != 0) return error.InvalidFixupWidth;
     const width_bytes = width_bits / 8;
-    if (width_bytes != 1 and width_bytes != 2 and width_bytes != 4 and width_bytes != 8) return error.InvalidFixupTarget;
+    if (width_bytes != 1 and width_bytes != 2 and width_bytes != 4 and width_bytes != 8) return error.InvalidFixupWidth;
     return @intCast(width_bytes);
 }
 
-fn absolutePatchValue(value: u64, width_bits: u16, value_range: frontend.fixup.ValueRange) !i64 {
+fn absolutePatchValue(value: u64, width_bits: u16, value_range: frontend.fixup.ValueRange) AssemblyError!i64 {
     const signed_value: i64 = @bitCast(value);
-    const unsigned_fits = width_bits == 64 or value <= (@as(u64, 1) << @intCast(width_bits)) - 1;
+    const unsigned_fits = switch (width_bits) {
+        8 => value <= std.math.maxInt(u8),
+        16 => value <= std.math.maxInt(u16),
+        32 => value <= std.math.maxInt(u32),
+        64 => true,
+        else => return error.InvalidFixupWidth,
+    };
     const signed_fits = switch (width_bits) {
         8 => signed_value >= std.math.minInt(i8) and signed_value <= std.math.maxInt(i8),
         16 => signed_value >= std.math.minInt(i16) and signed_value <= std.math.maxInt(i16),
         32 => signed_value >= std.math.minInt(i32) and signed_value <= std.math.maxInt(i32),
         64 => true,
-        else => return error.InvalidFixupTarget,
+        else => return error.InvalidFixupWidth,
     };
     const fits = switch (value_range) {
         .wrap => unsigned_fits or signed_fits,
         .signed => signed_fits,
         .unsigned => unsigned_fits,
     };
-    if (!fits) return error.InvalidFixupTarget;
+    if (!fits) return switch (value_range) {
+        .wrap => error.WrapFixupOutOfRange,
+        .signed => error.SignedFixupOutOfRange,
+        .unsigned => error.UnsignedFixupOutOfRange,
+    };
     return signed_value;
 }
 
 test "absolute fixup values honor backend signedness" {
     try std.testing.expectEqual(@as(i64, 127), try absolutePatchValue(127, 8, .signed));
     try std.testing.expectEqual(@as(i64, -128), try absolutePatchValue(@bitCast(@as(i64, -128)), 8, .signed));
-    try std.testing.expectError(error.InvalidFixupTarget, absolutePatchValue(128, 8, .signed));
-    try std.testing.expectError(error.InvalidFixupTarget, absolutePatchValue(0x80000000, 32, .signed));
+    try std.testing.expectError(error.SignedFixupOutOfRange, absolutePatchValue(128, 8, .signed));
+    try std.testing.expectError(error.SignedFixupOutOfRange, absolutePatchValue(0x80000000, 32, .signed));
     try std.testing.expectEqual(@as(i64, -1), try absolutePatchValue(std.math.maxInt(u64), 64, .wrap));
     try std.testing.expectEqual(@as(i64, 255), try absolutePatchValue(255, 8, .unsigned));
+    try std.testing.expectError(error.UnsignedFixupOutOfRange, absolutePatchValue(256, 8, .unsigned));
+    try std.testing.expectError(error.WrapFixupOutOfRange, absolutePatchValue(256, 8, .wrap));
+    try std.testing.expectError(error.InvalidFixupWidth, absolutePatchValue(0, 128, .wrap));
 }
 
-fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) !i64 {
+test "fixup patching distinguishes invalid widths bounds and address overflow" {
+    try std.testing.expectError(error.InvalidFixupWidth, fixupWidthBytes(12));
+    try std.testing.expectError(error.RelativeFixupOutOfRange, relativePatchValue(128, 0, 8));
+
+    var target = [_]u8{ 't', 'a', 'r', 'g', 'e', 't' };
+    const section_layout: frontend.SectionLayout = .{
+        .section = .{ .index = 0 },
+        .origin = 0,
+        .file_offset = 0,
+        .logical_size = 1,
+        .file_size = 1,
+        .fragments = &.{},
+    };
+    const image_region: frontend.output.ImageRegion = .{
+        .section = .{ .index = 0 },
+        .origin = 0,
+        .file_offset = 0,
+        .logical_size = 1,
+        .file_size = 1,
+    };
+    var bytes = [_]u8{0};
+    const base_fixup: frontend.Fixup = .{
+        .fragment = .{ .index = 0 },
+        .target = .{ .symbol = &target },
+        .kind = .absolute,
+        .offset = 0,
+        .width_bits = 16,
+        .span = frontend.source.unknown_span,
+    };
+
+    try std.testing.expectError(
+        error.FixupPatchOutOfBounds,
+        patchOneFixup(
+            &bytes,
+            section_layout,
+            image_region,
+            .{ .fragment = .{ .index = 0 }, .offset = 0, .logical_size = 1, .file_size = 1 },
+            base_fixup,
+            0,
+        ),
+    );
+
+    var overflow_fixup = base_fixup;
+    overflow_fixup.width_bits = 8;
+    overflow_fixup.offset = 1;
+    try std.testing.expectError(
+        error.FixupAddressOverflow,
+        patchOneFixup(
+            &bytes,
+            section_layout,
+            image_region,
+            .{ .fragment = .{ .index = 0 }, .offset = std.math.maxInt(u64), .logical_size = 1, .file_size = 1 },
+            overflow_fixup,
+            0,
+        ),
+    );
+}
+
+fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) AssemblyError!i64 {
     const target_i128: i128 = @intCast(target_value);
     const next_ip_i128: i128 = @intCast(next_ip);
     const value = target_i128 - next_ip_i128;
@@ -705,9 +785,142 @@ fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) !i64 {
         16 => if (value < std.math.minInt(i16) or value > std.math.maxInt(i16)) return error.RelativeFixupOutOfRange,
         32 => if (value < std.math.minInt(i32) or value > std.math.maxInt(i32)) return error.RelativeFixupOutOfRange,
         64 => if (value < std.math.minInt(i64) or value > std.math.maxInt(i64)) return error.RelativeFixupOutOfRange,
-        else => return error.InvalidFixupTarget,
+        else => return error.InvalidFixupWidth,
     }
     return @intCast(value);
+}
+
+fn addFixupPatchDiagnostic(
+    module: *frontend.Module,
+    stored_fixup: frontend.Fixup,
+    target_value: u64,
+    patch_error: AssemblyError,
+) !void {
+    const message = try fixupPatchDiagnostic(
+        module.allocator,
+        fixupTargetText(stored_fixup),
+        stored_fixup.width_bits,
+        target_value,
+        patch_error,
+    );
+    defer module.allocator.free(message);
+    try module.diagnostics.add(
+        module.allocator,
+        frontend.diagnostic.Severity.err,
+        stored_fixup.span,
+        message,
+    );
+}
+
+fn fixupPatchDiagnostic(
+    allocator: Allocator,
+    target: []const u8,
+    width_bits: u16,
+    target_value: u64,
+    patch_error: AssemblyError,
+) Allocator.Error![]u8 {
+    return switch (patch_error) {
+        error.InvalidFixupWidth => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' uses unsupported {d}-bit field width; supported widths are 8, 16, 32, and 64 bits",
+            .{ target, width_bits },
+        ),
+        error.FixupPatchOutOfBounds => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' writes a {d}-bit field outside the output image",
+            .{ target, width_bits },
+        ),
+        error.FixupAddressOverflow => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' overflows address arithmetic for its {d}-bit field",
+            .{ target, width_bits },
+        ),
+        error.RelativeFixupOutOfRange => std.fmt.allocPrint(
+            allocator,
+            "PC-relative fixup target '{s}' (0x{x}) does not fit the signed {d}-bit displacement",
+            .{ target, target_value, width_bits },
+        ),
+        error.SignedFixupOutOfRange => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' (0x{x}) does not fit the signed {d}-bit field",
+            .{ target, target_value, width_bits },
+        ),
+        error.UnsignedFixupOutOfRange => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' (0x{x}) does not fit the unsigned {d}-bit field",
+            .{ target, target_value, width_bits },
+        ),
+        error.WrapFixupOutOfRange => std.fmt.allocPrint(
+            allocator,
+            "fixup target '{s}' (0x{x}) does not fit the signed-or-unsigned {d}-bit field under wrap policy",
+            .{ target, target_value, width_bits },
+        ),
+    };
+}
+
+test "fixup patch diagnostics preserve target width and range policy" {
+    const Case = struct {
+        patch_error: AssemblyError,
+        width_bits: u16,
+        value: u64,
+        expected: []const u8,
+    };
+    const cases = [_]Case{
+        .{
+            .patch_error = error.InvalidFixupWidth,
+            .width_bits = 12,
+            .value = 0,
+            .expected = "fixup target 'target + 4' uses unsupported 12-bit field width; supported widths are 8, 16, 32, and 64 bits",
+        },
+        .{
+            .patch_error = error.FixupPatchOutOfBounds,
+            .width_bits = 32,
+            .value = 0,
+            .expected = "fixup target 'target + 4' writes a 32-bit field outside the output image",
+        },
+        .{
+            .patch_error = error.FixupAddressOverflow,
+            .width_bits = 64,
+            .value = 0,
+            .expected = "fixup target 'target + 4' overflows address arithmetic for its 64-bit field",
+        },
+        .{
+            .patch_error = error.RelativeFixupOutOfRange,
+            .width_bits = 8,
+            .value = 0x1234,
+            .expected = "PC-relative fixup target 'target + 4' (0x1234) does not fit the signed 8-bit displacement",
+        },
+        .{
+            .patch_error = error.SignedFixupOutOfRange,
+            .width_bits = 8,
+            .value = 0x80,
+            .expected = "fixup target 'target + 4' (0x80) does not fit the signed 8-bit field",
+        },
+        .{
+            .patch_error = error.UnsignedFixupOutOfRange,
+            .width_bits = 8,
+            .value = 0x100,
+            .expected = "fixup target 'target + 4' (0x100) does not fit the unsigned 8-bit field",
+        },
+        .{
+            .patch_error = error.WrapFixupOutOfRange,
+            .width_bits = 32,
+            .value = 0x1_0000_0000,
+            .expected = "fixup target 'target + 4' (0x100000000) does not fit the signed-or-unsigned 32-bit field under wrap policy",
+        },
+    };
+
+    for (cases) |case| {
+        const message = try fixupPatchDiagnostic(
+            std.testing.allocator,
+            "target + 4",
+            case.width_bits,
+            case.value,
+            case.patch_error,
+        );
+        defer std.testing.allocator.free(message);
+        try std.testing.expectEqualStrings(case.expected, message);
+    }
 }
 
 fn writeSignedLittleEndian(out: []u8, value: i64) void {

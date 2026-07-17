@@ -113,6 +113,15 @@ pub fn encodeInstructionFragments(
                         );
                         return error.FrontendDiagnostics;
                     },
+                    error.SymbolicSubByteImmediate => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "symbolic sub-byte immediate is unsupported; use a compile-time constant",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
                     error.UnsupportedOperandSyntax => {
                         try module.diagnostics.add(
                             allocator,

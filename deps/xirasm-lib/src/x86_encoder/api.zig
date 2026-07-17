@@ -187,6 +187,7 @@ pub const EncodeError = Allocator.Error || size.CalcSizeError || encode.GencodeE
     LegacyOnlyTemplate,
     NegativeInstructionSize,
     NoMatchingTemplate,
+    SymbolicSubByteImmediate,
     UnsupportedMnemonic,
     UnsupportedOperands,
     UnsupportedOperandSyntax,
@@ -336,7 +337,10 @@ pub fn encodeBuiltinUnitsWithResolver(
 
     try size.insnEarlySetup(&ins);
     const match_result = match.findMatch(BuiltinMatchContext{}, &ins);
-    if (!match_result.isSuccess()) return error.NoMatchingTemplate;
+    if (!match_result.isSuccess()) {
+        if (matchesWithSymbolicFourBitImmediate(&ins)) return error.SymbolicSubByteImmediate;
+        return error.NoMatchingTemplate;
+    }
     try rejectAmbiguousUnsizedMemory(name, &ins);
 
     const template = ins.itemp orelse return error.MissingTemplate;
@@ -361,6 +365,19 @@ pub fn encodeBuiltinUnitsWithResolver(
         .route = .source_runtime,
         .branch_relaxation_decision = branch_relaxation_decision,
     };
+}
+
+fn matchesWithSymbolicFourBitImmediate(ins: *const match.Instruction) bool {
+    var candidate = ins.*;
+    var found_symbolic_immediate = false;
+    for (candidate.oprs[0..candidate.operands]) |*operand| {
+        if ((operand.type_bits & match.immediate) == 0) continue;
+        if ((operand.opflags & types.opflag_unknown) == 0) continue;
+        operand.type_bits |= match.fourbits;
+        found_symbolic_immediate = true;
+    }
+    if (!found_symbolic_immediate) return false;
+    return match.findMatch(BuiltinMatchContext{}, &candidate).isSuccess();
 }
 
 fn isNonLegacyTemplate(template: match.TemplateRef) bool {
@@ -2130,6 +2147,27 @@ test "encodeBuiltinUnits matches APX DFV spec4 CCMP templates" {
     try testing.expectEqualSlices(u8, &.{ 0x62, 0x64, 0xCC, 0x0C, 0x39, 0xF2 }, bytes);
 }
 
+test "encodeBuiltinUnits rejects symbolic sub-byte immediates explicitly" {
+    const testing = std.testing;
+    var resolver_context: u8 = 0;
+    const resolver: ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = testUnknownExpressionResolver,
+    };
+
+    try testing.expectError(
+        error.SymbolicSubByteImmediate,
+        encodeBuiltinUnitsWithResolver(
+            testing.allocator,
+            "ccmpl",
+            &.{ "target", "rdx", "r30" },
+            EncodeContext.init(64),
+            false,
+            resolver,
+        ),
+    );
+}
+
 test "encodeBuiltinUnits projects explicit memory size prefixes into x86 operand bits" {
     const testing = std.testing;
 
@@ -2263,6 +2301,146 @@ test "encodeBuiltinUnits keeps unknown immediates on conservative fixup widths" 
     const mov_fixup = mov.units()[mov.units().len - 1].fixup orelse return error.UnexpectedTestResult;
     try testing.expectEqual(@as(u8, 8), mov_fixup.size);
     try testing.expectEqual(FixupValueRange.wrap, fixupValueRange(mov_fixup));
+}
+
+test "encodeBuiltinUnits preserves unknown immediate width and range matrix" {
+    const testing = std.testing;
+    var resolver_context: u8 = 0;
+    const resolver: ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = testUnknownExpressionResolver,
+    };
+    const Case = struct {
+        mnemonic: []const u8,
+        operands: []const []const u8,
+        mode: u8 = 64,
+        size: u8,
+        value_range: FixupValueRange,
+    };
+    const cases = [_]Case{
+        .{ .mnemonic = "add", .operands = &.{ "al", "target" }, .size = 1, .value_range = .wrap },
+        .{ .mnemonic = "add", .operands = &.{ "ax", "target" }, .size = 2, .value_range = .wrap },
+        .{ .mnemonic = "add", .operands = &.{ "eax", "target" }, .size = 4, .value_range = .wrap },
+        .{ .mnemonic = "add", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "adc", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "sbb", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "and", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "or", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "xor", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "sub", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "cmp", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "test", .operands = &.{ "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "imul", .operands = &.{ "r11", "r11", "target" }, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "push", .operands = &.{"target"}, .size = 4, .value_range = .signed },
+        .{ .mnemonic = "push", .operands = &.{"target"}, .mode = 32, .size = 4, .value_range = .wrap },
+        .{ .mnemonic = "push", .operands = &.{"target"}, .mode = 16, .size = 2, .value_range = .wrap },
+        .{ .mnemonic = "shl", .operands = &.{ "r11", "target" }, .size = 1, .value_range = .wrap },
+        .{ .mnemonic = "mov", .operands = &.{ "eax", "target" }, .size = 4, .value_range = .wrap },
+        .{ .mnemonic = "mov", .operands = &.{ "rax", "target" }, .size = 8, .value_range = .wrap },
+    };
+
+    for (cases) |case| {
+        var result = try encodeBuiltinUnitsWithResolver(
+            testing.allocator,
+            case.mnemonic,
+            case.operands,
+            EncodeContext.init(case.mode),
+            false,
+            resolver,
+        );
+        defer result.deinit(testing.allocator);
+
+        var actual: ?Fixup = null;
+        for (result.units()) |unit| {
+            if (unit.fixup) |candidate| {
+                try testing.expect(actual == null);
+                actual = candidate;
+            }
+        }
+        const fixup = actual orelse return error.UnexpectedTestResult;
+        try testing.expectEqual(case.size, fixup.size);
+        try testing.expectEqual(case.value_range, fixupValueRange(fixup));
+    }
+}
+
+test "encodeBuiltinUnits preserves multiple unknown fixup order and ranges" {
+    const testing = std.testing;
+    var resolver_context: u8 = 0;
+    const resolver: ExpressionResolver = .{
+        .context = &resolver_context,
+        .resolveFn = testUnknownExpressionResolver,
+    };
+
+    var memory_immediate = try encodeBuiltinUnitsWithResolver(
+        testing.allocator,
+        "cmp",
+        &.{ "qword [rel slot]", "value" },
+        EncodeContext.init(64),
+        false,
+        resolver,
+    );
+    defer memory_immediate.deinit(testing.allocator);
+    var memory_immediate_fixups: [2]Fixup = undefined;
+    var memory_immediate_count: usize = 0;
+    for (memory_immediate.units()) |unit| {
+        if (unit.fixup) |fixup| {
+            if (memory_immediate_count >= memory_immediate_fixups.len) return error.UnexpectedTestResult;
+            memory_immediate_fixups[memory_immediate_count] = fixup;
+            memory_immediate_count += 1;
+        }
+    }
+    try testing.expectEqual(memory_immediate_fixups.len, memory_immediate_count);
+    try testing.expectEqual(FixupKind.relative, memory_immediate_fixups[0].kind);
+    try testing.expectEqual(@as(u8, 4), memory_immediate_fixups[0].size);
+    try testing.expectEqual(FixupValueRange.signed, fixupValueRange(memory_immediate_fixups[0]));
+    try testing.expectEqual(FixupKind.absolute, memory_immediate_fixups[1].kind);
+    try testing.expectEqual(@as(u8, 4), memory_immediate_fixups[1].size);
+    try testing.expectEqual(FixupValueRange.signed, fixupValueRange(memory_immediate_fixups[1]));
+
+    var base_displacement = try encodeBuiltinUnitsWithResolver(
+        testing.allocator,
+        "mov",
+        &.{ "eax", "[rax + target]" },
+        EncodeContext.init(64),
+        false,
+        resolver,
+    );
+    defer base_displacement.deinit(testing.allocator);
+    var base_displacement_fixup: ?Fixup = null;
+    for (base_displacement.units()) |unit| {
+        if (unit.fixup) |fixup| {
+            try testing.expect(base_displacement_fixup == null);
+            base_displacement_fixup = fixup;
+        }
+    }
+    const displacement_fixup = base_displacement_fixup orelse return error.UnexpectedTestResult;
+    try testing.expectEqual(FixupKind.absolute, displacement_fixup.kind);
+    try testing.expectEqual(@as(u8, 4), displacement_fixup.size);
+    try testing.expectEqual(FixupValueRange.signed, fixupValueRange(displacement_fixup));
+
+    var enter = try encodeBuiltinUnitsWithResolver(
+        testing.allocator,
+        "enter",
+        &.{ "frame_size", "nesting_level" },
+        EncodeContext.init(64),
+        false,
+        resolver,
+    );
+    defer enter.deinit(testing.allocator);
+    var enter_fixups: [2]Fixup = undefined;
+    var enter_count: usize = 0;
+    for (enter.units()) |unit| {
+        if (unit.fixup) |fixup| {
+            if (enter_count >= enter_fixups.len) return error.UnexpectedTestResult;
+            enter_fixups[enter_count] = fixup;
+            enter_count += 1;
+        }
+    }
+    try testing.expectEqual(enter_fixups.len, enter_count);
+    try testing.expectEqual(@as(u8, 2), enter_fixups[0].size);
+    try testing.expectEqual(FixupValueRange.wrap, fixupValueRange(enter_fixups[0]));
+    try testing.expectEqual(@as(u8, 1), enter_fixups[1].size);
+    try testing.expectEqual(FixupValueRange.unsigned, fixupValueRange(enter_fixups[1]));
 }
 
 test "encodeBuiltinUnits preserves symbolic near Jcc fixup at nonzero origin" {
