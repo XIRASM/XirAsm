@@ -1,6 +1,6 @@
-# 1. 选择模板
+# 1. 先选输出类型
 
-写格式文件时，先从“最终想得到什么输出”开始，不要从 PE 或 ELF 的头字段开始。`format.inc` 的高层封装已经把常见输出整理成几组模板。
+写格式文件时，先问“我要得到哪种文件”，不要一开始就从 PE 或 ELF 的头字段推。`format.inc` 已经把常见输出整理成几组入口函数。
 
 ## 统一入口
 
@@ -8,7 +8,7 @@
 import("format/format.inc");
 ```
 
-直接导入 `pe.inc`、`elfexe.inc`、`elfobj.inc` 之类文件，会进入更底层的字段和表项构造层。普通教程不需要它们；只有当高层配置无法表达目标文件时，才改用高级格式构造。
+直接导入 `pe.inc`、`elfexe.inc`、`elfobj.inc` 之类文件，就要自己处理更多格式字段和表项。本教程不从那里开始；只有当 `format.inc` 表达不了目标文件时，才改用高级格式构造。
 
 ## 配置函数
 
@@ -69,7 +69,7 @@ PE、COFF 和 ELF 目标文件按“节”组织内容；ELF 可执行文件和 
 | PE 资源 | `format_resources \| format_readable` |
 | PE 重定位表 | `format_fixups \| format_readable \| format_discardable` |
 
-节名必须唯一。PE 和 COFF 的普通封装要求节名不超过 8 字节。`format_imports`、`format_exports`、`format_resources`、`format_fixups` 这类特殊用途在同一个配置里也只能出现一次。
+节名必须唯一。PE 和 COFF 节名不超过 8 字节。`format_imports`、`format_exports`、`format_resources`、`format_fixups` 这类特殊用途在同一个配置里也只能出现一次。
 
 ## 装载段描述
 
@@ -89,11 +89,11 @@ PE、COFF 和 ELF 目标文件按“节”组织内容；ELF 可执行文件和 
 | 可写数据 | `format_load \| format_readable \| format_writeable` |
 | BSS | `format_load \| format_readable \| format_writeable` |
 
-装载段名必须唯一。普通层目前只暴露 `format_load` 这种可装载段；需要其他程序头类型时，属于高级格式构造范围。
+装载段名必须唯一。`format.inc` 目前只声明 `format_load` 这种可装载段；需要其他程序头类型时，改用高级格式构造。
 
 ## 完整流程
 
-下面是一个最小 PE64 控制台程序。它声明 `.text` 和 `.bss`，由格式层生成 PE 头、节表、入口字段和 BSS 的文件/内存大小差异。
+下面是一个最小 PE64 控制台程序。它声明 `.text` 和 `.bss`，由 `format.inc` 生成 PE 头、节表、入口字段，并正确处理 BSS 的文件大小和内存大小差异。
 
 ```asm
 import("format/format.inc");

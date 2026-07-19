@@ -8,7 +8,7 @@
 // let imports: map = pe_import_new()
 // imports = pe_import_use64_many(imports, "KERNEL32.DLL", list.of("ExitProcess", "VirtualAlloc"))
 //
-// Including a large Win32 API catalog should only define wrappers/metadata.
+// Including a large Win32 API catalog should only define helper functions and metadata.
 // Nothing is emitted until pe_import_emit32/64 is called for the final import
 // set. This gives deterministic dead import elimination without hidden
 // use-tracking magic or bridge state.

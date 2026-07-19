@@ -15,26 +15,27 @@ A loadable program still needs answers to these questions:
 - which absolute addresses must be fixed if the loader chooses another base;
 - which fields an external linker must patch later.
 
-The high-level XIRASM format facade turns those answers into templates and
-parameters. Normal programs start here:
+`format.inc` turns those answers into file headers, tables, offsets, RVAs,
+alignment, and final backfills. Normal PE, COFF, and ELF programs start here:
 
 ```asm
-// Import the user-facing format facade.
+// Import the common PE/COFF/ELF format API.
 import("format/format.inc");
 ```
 
-The files under `include/format/` are layered:
+The files under `include/format/` serve different jobs:
 
-- `format.inc` is the user entry point for plans, named sections or segments,
-  common imports, exports, resources, relocations, symbols, and finalization.
+- `format.inc` is the common entry point for format configuration, named
+  sections or segments, imports, exports, resources, relocations, symbols, and
+  finalization.
 - `pe32.inc`, `pe64.inc`, `elf32.inc`, and `elf64.inc` are thin width-specific
-  wrappers that ordinary users can usually ignore.
+  entry points for existing sources or specialized format code.
 - `pe.inc`, `elfexe.inc`, `elfobj.inc`, and related files are direct
   construction helpers for advanced control over fields and table rows.
 
-This tutorial is the complete guide to the ordinary facade. Use the
+This tutorial covers `format.inc`. Use the
 [Advanced Format Construction Guide](advanced-formats.md) only when a standard
-plan cannot express the file you need.
+configuration cannot express the file you need.
 
 ## Chapters
 
@@ -58,12 +59,12 @@ plan cannot express the file you need.
 
 ## Lifecycle
 
-High-level format templates all follow the same shape:
+Format configurations all follow the same shape:
 
 ```text
 import("format/format.inc");
 
-// 1. Create a plan: file family, width, permissions, sections or segments.
+// 1. Create a configuration: file family, width, permissions, sections or segments.
 let image: map = ...
 
 // 2. Optional: attach imports, exports, symbols, or relocations.
@@ -83,8 +84,8 @@ format_entry_mut(image, start)
 format_finish(image);
 ```
 
-Plan and declaration mutators are statements. Their mutable argument must be a
-direct `let` binding:
+Configuration and declaration mutators are statements. Their mutable argument
+must be a direct `let` binding:
 
 ```text
 let image: map = format_pe64(options, sections)

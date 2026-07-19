@@ -1,4 +1,4 @@
-// User-facing ELF32 format facade.
+// Width-specific ELF32 format compatibility include.
 //
 // This file provides short executable entry points. It delegates raw record
 // emission and final backfill to elfexe.inc.

@@ -1,5 +1,5 @@
-// Tail reserve advances logical region size but is not materialized in flat
-// file bytes. A following initialized byte makes the reserve a middle gap.
+// Tail reserve advances logical region size without adding raw file bytes yet.
+// A following initialized byte makes the reserve a middle gap.
 // This is the custom-format boundary for section-tail reserve trimming.
 
 region.begin("payload", 0x5000, 0);

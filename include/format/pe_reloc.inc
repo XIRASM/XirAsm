@@ -1,6 +1,6 @@
 // PE base relocation table helpers for XIRASM.
 //
-// This facade intentionally keeps relocation records explicit. It mirrors
+// This helper intentionally keeps relocation records explicit. It mirrors
 // the final PE block shape without hidden relocation
 // recording: caller code decides which RVAs need HIGHLOW/DIR64 records, then
 // emits the .reloc payload at the chosen section placement.

@@ -1,6 +1,6 @@
 # 4. COFF 和 ELF 目标文件
 
-目标文件不是操作系统直接加载的程序，而是交给链接器继续处理的中间文件。普通格式层可以生成 COFF32/COFF64 和 ELF32/ELF64 目标文件，并让你声明公开符号、外部符号和重定位字段。
+目标文件不是操作系统直接加载的程序，而是交给链接器继续处理的中间文件。`format.inc` 可以生成 COFF32/COFF64 和 ELF32/ELF64 目标文件，并让你声明公开符号、外部符号和重定位字段。
 
 目标文件没有普通可执行入口，不要调用 `format_entry_mut`。它们的关键是：
 
@@ -11,7 +11,7 @@
 
 ## COFF 目标文件
 
-COFF 普通层支持 `format_code`、`format_data`、`format_uninitialized_data` 三类节。节名必须不超过 8 字节。
+COFF 目标文件支持 `format_code`、`format_data`、`format_uninitialized_data` 三类节。节名必须不超过 8 字节。
 
 ```asm
 import("format/format.inc");
@@ -64,7 +64,7 @@ format_finish(object);
 
 ## ELF 目标文件
 
-ELF 目标文件普通层同样支持代码、数据和 BSS 节。ELF 节名可以长于 8 字节。
+ELF 目标文件同样支持代码、数据和 BSS 节。ELF 节名可以长于 8 字节。
 
 ```asm
 import("format/format.inc");

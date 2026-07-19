@@ -1,6 +1,6 @@
 # 2. Windows PE and DLLs
 
-Windows programs use PE files. A PE plan says whether the file is an executable
+Windows programs use PE files. A PE configuration says whether the file is an executable
 or DLL, which subsystem it uses, which safety flags are enabled, whether ASLR is
 allowed or required, and which sections must be loaded.
 
@@ -66,7 +66,8 @@ format_finish(image);
 ## Imports
 
 Imports describe external function addresses that the Windows loader fills at
-startup. Declare imports first, then let the facade generate `.idata`.
+startup. Declare imports first, then call `format_pe_import_section` to generate
+`.idata`.
 
 ```asm
 import("format/format.inc");
@@ -117,9 +118,9 @@ Import helpers:
 | Function | Parameters | Use |
 | --- | --- | --- |
 | `format_pe_import_new()` | none | create an empty import map |
-| `format_pe_import_many_mut(plan, imports, dll, names)` | plan, map, DLL, list | add matching-name PE32/PE64 imports |
-| `format_pe_import_pairs_mut(plan, imports, dll, pairs)` | plan, map, DLL, slot/name list | add PE32/PE64 imports with local labels |
-| `format_pe_import_section(plan, name, imports)` | plan, import section name, map | generate the import section |
+| `format_pe_import_many_mut(image, imports, dll, names)` | image config, map, DLL, list | add matching-name PE32/PE64 imports |
+| `format_pe_import_pairs_mut(image, imports, dll, pairs)` | image config, map, DLL, slot/name list | add PE32/PE64 imports with local labels |
+| `format_pe_import_section(image, name, imports)` | image config, import section name, map | generate the import section |
 
 Call a grouped mutator once per DLL. Reusing the same `imports` binding builds
 one `.idata` section containing all DLLs and APIs. For PE64 calls, use
@@ -180,7 +181,7 @@ format_pe_resource_section(image, ".rsrc", "data/app.res");
 
 | Function | Parameters | Use |
 | --- | --- | --- |
-| `format_pe_resource_section(plan, name, path)` | plan, declared resource section, `.res` path | copy a compiled resource tree and register the PE resource directory |
+| `format_pe_resource_section(image, name, path)` | image config, declared resource section, `.res` path | copy a compiled resource tree and register the PE resource directory |
 
 ## Base Relocations
 
@@ -240,7 +241,8 @@ defer {
 }
 ```
 
-`format_pe_reloc_add_mut` chooses the PE32 or PE64 relocation kind from the plan.
+`format_pe_reloc_add_mut` chooses the PE32 or PE64 relocation kind from the image
+configuration.
 Its address argument is the storage location that contains the pointer, not the
 pointer target. Pass records to `format_pe_reloc_section` in ascending RVA
 order. A `rel` instruction reference is already position-relative and does not
@@ -250,8 +252,8 @@ selects the 32-bit relocation kind.
 | Function | Parameters | Use |
 | --- | --- | --- |
 | `pe_reloc_new()` | none | create an empty relocation list |
-| `format_pe_reloc_add_mut(plan, relocs, storage)` | plan, list, pointer storage address | append the width-appropriate base relocation |
-| `format_pe_reloc_section(plan, name, relocs)` | plan, declared relocation section, sorted list | generate `.reloc` and register its data directory |
+| `format_pe_reloc_add_mut(image, relocs, storage)` | image config, list, pointer storage address | append the width-appropriate base relocation |
+| `format_pe_reloc_section(image, name, relocs)` | image config, declared relocation section, sorted list | generate `.reloc` and register its data directory |
 
 ## Checksum
 
@@ -263,5 +265,5 @@ PE checksum field:
 format_pe_checksum(image);
 ```
 
-`format_pe_checksum(plan)` takes the finished PE plan and backfills the checksum
-field from the final file bytes.
+`format_pe_checksum(image)` takes the finished PE configuration and backfills
+the checksum field from the final file bytes.

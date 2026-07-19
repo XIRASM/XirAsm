@@ -1,28 +1,25 @@
 # 第 13 章：Flat Binary 与自定义文件格式
 
-XIRASM 默认写出 flat binary。输出文件只包含指令、数据声明、填充和输出区域最终物理化的字节；除非源码显式创建，否则不会自动带上操作系统文件头。
+XIRASM 默认生成 flat binary：输出文件只包含源码明确写出的指令、数据、填充、区域字节和后期布局字节。它不会自动添加 PE、ELF、COFF 头，也不会自动生成入口点、section 表、segment 表或重定位表。
 
-这种直接模型适合：
+这种模式适合：
 
-- 引导扇区、固件映像
-- ROM 表、嵌入式资源
-- 协议消息、测试数据
-- 紧凑的资源容器
-- 私有二进制格式
-- 被其他程序加载的小段可执行代码
+- 引导扇区、固件映像、ROM 表；
+- 协议消息、测试数据、资源容器；
+- 私有二进制格式；
+- 由其他程序加载的一小段机器码；
+- 格式库内部用于生成头、表、字符串池的底层构造。
 
-flat binary 仍然可以有丰富的内部结构。标号描述逻辑位置，结构体描述记录，区域分离逻辑坐标和物理坐标，收尾处理根据完整映像推导字段值。
+flat binary 不等于“没有结构”。你仍然可以用标号表示位置，用 `packed struct` 描述记录，用区域分开 RVA 和 FOA，用 `late_layout` 创建晚生成表，用 `defer` 回填最终字段。
 
 ## 原始机器码
 
-ISA 指令就是 flat 文件的全部内容。
+最简单的 flat 文件就是指令字节本身：
 
 ```asm
-// 选择 64 位 x86 指令编码，输出文件只包含下面两条指令的机器码。
 x86.use64();
 
 entry:
-    // 把数值 42 写入 eax，然后返回给调用者。
     mov eax, 42
     ret
 ```
@@ -33,18 +30,18 @@ entry:
 b8 2a 00 00 00 c3
 ```
 
-这里没有可执行文件头、入口点字段或加载器元数据。`entry` 只是汇编器标号，不是操作系统入口点。加载这些字节的程序必须已经知道目标 ISA、指令模式、加载地址和调用约定。
+这里没有操作系统文件头，也没有“入口点字段”。`entry` 只是 XIRASM 标号。加载这些字节的程序必须自己知道 ISA、模式、装载地址和调用约定。
 
-## 组合文件头与 Payload
+## 文件头加 Payload
+
+自定义格式通常先写固定头，再写 payload：
 
 ```asm
-// 先写出四字节文件标识，再写出两个小端顺序的 16 位头字段。
 emit.bytes(b"RAW1");
 emit.u16(1);
 emit.u16(0);
 
 payload:
-// 标号记录数据的逻辑起点，随后写出三个数据字节。
 emit.bytes(b"ABC");
 ```
 
@@ -54,20 +51,18 @@ emit.bytes(b"ABC");
 52 41 57 31 01 00 00 00 41 42 43
 ```
 
-前四字节是文件签名，第一个 `u16` 存版本号，第二个 `u16` 目前保留，剩下的字节构成 payload。这里不需要特殊的文件格式声明；源文件顺序就是文件顺序。
+前四字节是签名，第一个 `u16` 是版本号，第二个 `u16` 保留，后面是 payload。没有额外格式声明；源码写出顺序就是文件顺序。
 
-## 用 Struct 描述记录
+## 用 `packed struct` 描述记录
 
-当二进制记录需要命名字段、且字段之间没有隐式对齐间隙时，使用 `packed struct`。
+二进制记录需要固定字段和固定宽度时，用 `packed struct` 把格式写清楚：
 
 ```asm
-// 紧凑结构体按声明顺序连续存放两个 16 位字段。
 packed struct ChunkHeader {
     kind: u16
     size: u16
 }
 
-// 写出记录头，随后紧接着写出三个字节的记录内容。
 emit.struct(ChunkHeader {
     kind: 1,
     size: 3,
@@ -81,18 +76,16 @@ emit.bytes(b"ABC");
 01 00 03 00 41 42 43
 ```
 
-结构体让字段名和宽度留在源码里，`emit.struct` 会按 packed 表示写出。只有当文件格式本身要求同样的对齐和尾部填充时，才使用普通 struct。
+`packed struct` 不插入隐式对齐间隙，适合描述磁盘格式、网络格式和紧凑表项。只有文件格式本身要求普通结构体的对齐和尾部填充时，才用普通 `struct`。
 
-重复的写出逻辑封装成函数：
+重复记录可以封装成函数：
 
 ```asm
-// 每次调用都按“一个字节的标签、四个字节的数值”写出一条记录。
 fn emit_record(tag: u8, value: u32) {
     emit.u8(tag);
     emit.u32(value);
 }
 
-// 两条记录按照调用顺序连续写入文件。
 emit_record(1, 0x11223344);
 emit_record(2, 0xaabbccdd);
 ```
@@ -103,22 +96,20 @@ emit_record(2, 0xaabbccdd);
 01 44 33 22 11 02 dd cc bb aa
 ```
 
-过程有助于保持自定义写出逻辑一致，但最终文件仍由普通源码顺序决定。
+函数负责保持记录写法一致；最终文件仍然按调用顺序生成。
 
-## 推导文件头字段
+## 用 `defer` 回填文件头
 
-不要手工维护偏移、大小和校验和。先写出固定宽度占位字段，给相关数据打上标号，再在 `defer` 中推导最终值：
+不要手工维护大小、偏移和校验和。先写固定宽度占位字段，再用标号和最终字节回填：
 
 ```asm
-// 让本区域的逻辑地址从零开始，便于用标号差表示文件内距离。
 origin(0);
 
 magic:
 emit.bytes(b"XIF1");
-// 先为总大小、数据偏移和校验和各写出一个四字节占位字段。
 size_field:
 emit.u32(0);
-payload_offset_field:
+payload_foa_field:
 emit.u32(0);
 checksum_field:
 emit.u32(0);
@@ -128,15 +119,13 @@ emit.bytes(b"OK!!");
 payload_end:
 
 defer {
-    // 布局稳定后，根据标号回填大小、偏移和前两个数据字节的校验和。
     store.u32(size_field, payload_end - magic);
-    store.u32(payload_offset_field, payload - magic);
+    store.u32(payload_foa_field, payload - region_base());
     store.u32(checksum_field, load.u8(payload) + load.u8(payload + 1));
 
-    // 检查最终文件中的标识和三个回填字段。
     assert(load.bytes(magic, 4) == b"XIF1");
     assert(load.u32(size_field) == 20);
-    assert(load.u32(payload_offset_field) == 16);
+    assert(load.u32(payload_foa_field) == payload - magic);
     assert(load.u32(checksum_field) == 0x9a);
 }
 ```
@@ -147,55 +136,52 @@ defer {
 58 49 46 31 14 00 00 00 10 00 00 00 9a 00 00 00 4f 4b 21 21
 ```
 
-这个示例没有硬编码总大小或 payload 偏移。文件头或 payload 改变时，收尾处理会把新值写回既有字段。由于本例使用一个从 origin 0 开始的紧凑区域，`magic` 起算的逻辑距离同时也是文件内的 payload 相对偏移。
+这个例子没有硬编码总大小和 payload 偏移。头或 payload 改了，`defer` 会按最终布局写回新值。
 
-明确区分要存入字段的坐标：
+本例从 `origin(0)` 开始，逻辑地址差值正好等于文件内相对偏移。只要你开始使用多个区域，这个关系就不一定成立。
 
-- 格式需要逻辑距离时，使用标号相减；
-- 需要当前物理光标时，在写出阶段使用 `file_offset()`；
-- 需要某个区域最终物理基址时，在 `defer` 中使用 `region_file_offset(address)`；
-- 需要稳定后的最终大小时，使用 `region_file_size(address)` 和 `region_logical_size(address)`。
+## 明确字段要的是 RVA 还是 FOA
 
-## 区分逻辑地址与文件偏移
+自定义格式里最容易出错的是把逻辑地址和 raw 文件偏移混用。写字段前先问清楚它要哪一个：
 
-文件可以连续存放字节，同时给这些字节分配完全不同的逻辑地址。
+- 需要逻辑地址 / RVA：用标号值，或用标号相减得到逻辑距离；
+- 需要当前 raw 文件偏移 / FOA：写出阶段用 `file_offset()` 或 `file_cursor_real()`；
+- 需要某个区域最终 FOA：在 `defer` 里用 `region_file_offset(address)`；
+- 需要 raw size：在 `defer` 里用 `region_file_size(address)`；
+- 需要 virtual size / logical size：在 `defer` 里用 `region_logical_size(address)`。
+
+例子：
 
 ```asm
-// 文件头位于文件偏移 0，但它的逻辑地址从 0x1000 开始。
 region.begin("header", 0x1000, 0);
 emit.bytes(b"HDR0");
 
-// 数据紧接文件头写入文件，但逻辑地址改从 0x2000 开始。
 output.section("payload", 0x2000);
 payload:
 emit.bytes(b"DATA");
 
 defer {
-    // payload 正好位于区域起点，因此可用它查询区域的起始文件偏移。
     assert(payload == 0x2000);
     assert(region_file_offset(payload) == 4);
 }
 ```
 
-物理文件仍然紧凑：
+raw 文件仍然紧凑：
 
 ```text
 48 44 52 30 44 41 54 41
 ```
 
-payload 从文件偏移 `4` 开始，但逻辑地址是 `0x2000`。固件、ROM、内存映像以及描述加载位置的格式里经常需要这种区分。
+`payload` 的逻辑地址是 `0x2000`，但它在文件里从 FOA `4` 开始。除非格式明确规定二者相等，否则不要从逻辑地址推导 FOA。
 
-除非格式明确规定二者关系，否则不要从逻辑地址推导文件偏移。应分别查询或记录各自的坐标。
+## 表示文件间隙和 file-free 尾部
 
-## 表示已初始化间隙和 File-Free 尾部
+`reserve` 是否进入 raw 文件，取决于它是不是仍然处在区域尾部：
 
-`reserve` 是否进入文件，取决于后面是否还有已初始化数据：
-
-- 文件中间的间隙会物理化为零字节；
-- 连续的预留尾部可以只增加逻辑大小，不出现在文件中。
+- 中间间隙：后面还有真实字节，reserve 会写成文件里的零；
+- 尾部预留：只增加逻辑大小，可以不占 raw 文件空间。
 
 ```asm
-// 建立逻辑地址从 0x5000 开始、文件偏移从零开始的映像区域。
 region.begin("image", 0x5000, 0);
 
 emit.bytes(b"HDR0");
@@ -204,14 +190,12 @@ emit.u32(0);
 logical_size_field:
 emit.u32(0);
 
-// 中间三字节空隙会因后续的 0xee 而写入文件，末尾八字节只增加逻辑大小。
 emit.u8(0xaa);
 reserve(3);
 emit.u8(0xee);
 reserve(8);
 
 defer {
-    // 布局稳定后，分别回填文件大小与逻辑大小。
     store.u32(file_size_field, region_file_size(file_size_field));
     store.u32(logical_size_field, region_logical_size(logical_size_field));
 
@@ -220,33 +204,30 @@ defer {
 }
 ```
 
-物理文件只有 17 字节：
+raw 文件只有 17 字节：
 
 ```text
 48 44 52 30 11 00 00 00 19 00 00 00 aa 00 00 00 ee
 ```
 
-中间的 3 字节预留因为后面还有已初始化数据而物理化。最后 8 字节预留只把逻辑大小增加到 25，不增加文件字节。
+中间 3 字节 reserve 因为后面有 `0xee`，所以进入 raw 文件。最后 8 字节 reserve 仍在区域尾部，只把 logical size 增加到 25，不增加 raw size。
 
-这适合零初始化存储等场景：文件记录已初始化前缀，剩余逻辑空间由加载器或消费程序提供。
+这正是 BSS、未初始化尾部、节尾虚拟空间这类格式字段的基础：文件记录已初始化前缀，剩余地址范围由加载器或消费程序提供。
 
-## Late Layout：追加尾部或放置晚生成表
+## `late_layout`：晚生成但仍参与布局
 
-只有真实尾部必须追加，或表、字符串池、重定位记录这类内容必须等普通源码处理完后才能创建/放置时，才使用 `late_layout`。
+只有在真实字节必须等主源码登记完之后才能创建时，才用 `late_layout`。最简单的例子是追加尾部：
 
 ```asm
-// 文件开头先为最终大小写出一个四字节占位字段。
 total_size:
 emit.u32(0);
 emit.bytes(b"DATA");
 
 late_layout {
-    // 普通源代码处理完成后，把真实尾部加入最终布局。
     emit.bytes(b"END!");
 }
 
 defer {
-    // 收尾处理能够看到包含尾部在内的最终文件大小。
     store.u32(total_size, region_file_size(total_size));
     assert(load.u32(total_size) == 12);
 }
@@ -258,60 +239,77 @@ defer {
 0c 00 00 00 44 41 54 41 45 4e 44 21
 ```
 
-追加的尾部会参与最终布局。`defer` 看到完整映像，并修补已经分配好的文件头字段。
+这里 `late_layout` 写出的 `END!` 会参与最终 raw size。`defer` 能看到它，并把总大小回填到开头。
 
-只有这些追加字节确实必须晚于主源码创建时，才使用 late layout。普通源码顺序能够表达同样布局时，普通顺序更清楚。
+如果 `late_layout` 里只写 `emit.*`，它就是从默认输出区域的尾部继续。若晚生成内容应该落到某个自定义表区、数据区或指定 FOA，就必须在块里显式切区域：
 
-如果 `late_layout` 里只调用 `emit.*`，它就是在默认输出尾部继续写；这也是最简单、最常见的尾部追加。若晚生成内容属于某个自定义表区或节数据区，应在块里显式 `region.begin(name, origin, file_offset)`，把后续字节放入那个真实区域。
+```asm
+table_foa_field:
+emit.u32(0);
+emit.bytes(b"HDR");
 
-这解决的是“布局尚未封存前创建真实字节”的问题，不是最终映像里的随机插入。已经物理化且位置固定的字段，用 `defer` 回填；缺少的变长表、字符串池、重定位记录等，必须在普通源码或 `late_layout` 中创建，然后再由 `defer` 回填指针、大小和校验。
+const table_origin: u64 = 0x8000
+const table_foa: u64 = 0x10
 
-构造类似 PE section 的自定义区域时要分清两层：
+virtual.begin(0);
+table_tmp:
+emit.bytes(b"TAB");
+table_tmp_end:
+virtual.end();
 
-- `region.begin` 的名称只是 XIRASM 的布局区域名，不会自动生成 PE section 表项；
-- 如果只是往当前文件尾部补一张表，直接尾部 `emit.*` 就够；
-- 如果要把晚生成表放到数据区或某个中间文件偏移，必须显式切换到那块区域，并确保它不和已有文件范围冲突；
-- 如果字段已经在头部预留，只需要最终值，使用 `defer`，不要用 `late_layout` 重新造空间；
-- 标准 PE/COFF/ELF 优先使用格式接口，让接口维护 section/segment 表、raw pointer、virtual size 和回填字段。
+late_layout {
+    region.begin("late-table", table_origin, table_foa);
+    emit.bytes(load.bytes(table_tmp, table_tmp_end - table_tmp));
+}
 
-## 断言确认文件正确
+defer {
+    store.u32(table_foa_field, table_foa);
+}
+```
 
-自定义写入器应该用断言保证输出可读：
+这不是在最终文件里“插入”字节，而是在最终映像封存前创建一个真实区域。它可以放到文件尾，也可以放到你指定的 FOA；关键是你必须自己保证区域不重叠、头字段一致、raw size/logical size 符合格式规则。
 
-- 签名和版本字段值符合预期
-- 偏移指向区域内部
-- 计数与写出的记录数一致
-- 存的大小与区域最终信息匹配
-- 校验和覆盖了正确的字节范围
-- 逻辑大小和物理大小符合格式规则
+如果只是回填头部已有字段，用 `defer`。如果缺的是变长表、字符串池、重定位记录等真实字节，就要在普通源码或 `late_layout` 里创建它们。
 
-`defer` 中的断言验证将要写出的精确字节，包括已编码指令和已解析 fixup。断言失败会停止汇编，避免产出看似有效但实际不合法的文件。
+## 用断言保护自定义格式
 
-断言紧贴它保护的字段。大小回填和对应的断言通常在同一个 `defer` 块里。
+自定义格式应该把关键不变量写成断言：
 
-## 自定义格式的组织顺序
+- 签名、版本和标志字段正确；
+- 偏移字段指向预期区域；
+- 计数等于实际写出的记录数；
+- raw size 和 logical size 符合格式规则；
+- 校验和覆盖正确字节范围；
+- 尾部 reserve 是否进入文件符合预期。
 
-小格式的源码组织顺序：
+`defer` 中的断言检查最终输出字节，包括已经编码的指令、已解析的 fixup、`late_layout` 生成的字节和所有回填结果。断言失败时汇编停止，避免产出表面上有文件头、实际上字段已经错位的文件。
 
-1. 声明记录类型和常量
-2. 写出固定头字段（含占位符）
-3. 写出数据区
-4. 追加真正需要晚出的表或尾部
-5. 回填稳定字段并做断言
+大小回填和对应断言通常放在同一个 `defer` 块里，这样字段来源和验证条件靠在一起。
 
-可复用 include 可以封装记录声明和写出过程。格式状态应通过参数和值显式传递，不要把互不相关的硬编码偏移散落在源码里。
+## 推荐组织顺序
 
-格式变复杂后保持同样分离：
+小型自定义格式可以按这个顺序写：
 
-- 源码和过程决定有哪些记录
-- 标签和区域描述布局
-- `late_layout` 创建必须参与最终布局的字节
-- `defer` 推导并验证稳定字段
+1. 声明常量、记录类型和辅助函数；
+2. 写固定文件头，占位字段先写 0；
+3. 写 payload 和普通表；
+4. 用 `late_layout` 创建确实需要晚出的真实字节；
+5. 用 `defer` 回填大小、偏移、校验和，并断言最终结果。
 
-## 何时使用格式接口
+格式变复杂后仍然保持同样分工：
 
-不要因为 flat 写出器能够表达字节，就手工拼标准可执行文件或目标文件格式。PE、COFF、ELF 还需要协调文件头、表、权限、导入、导出、重定位和加载器规则。
+- 源码和函数决定写哪些记录；
+- 标号和区域描述逻辑地址、FOA 和大小；
+- `virtual.begin` 用于临时生成和测量；
+- `late_layout` 创建必须参与最终布局的晚生成字节；
+- `defer` 只回填和验证稳定后的字段。
 
-XIRASM 为这些任务提供面向用户的格式接口。语言指南只介绍它们的角色；普通接口的完整示例见[《格式教程》](../format-tutorial.md)，需要直接构造底层格式结构时再看[《高级格式构造指南》](../../advanced-formats.md)。
+不要把一堆硬编码偏移散落在源码里。把固定格式常量放在一起；把记录写出封装成函数；把最终值统一由标号、区域查询和断言推导出来。
+
+## 什么时候用格式接口
+
+flat 输出能表达任意字节，但不代表应该手写标准可执行文件或目标文件格式。PE、COFF、ELF 还要维护文件头、section/segment 表、权限、导入、导出、重定位、BSS、对齐和加载器规则。
+
+标准格式优先用 `format.inc` 包装层。语言指南只解释底层机制：RVA/FOA、区域、虚拟输出、`late_layout` 和 `defer`。完整普通用法见[《格式教程》](../format-tutorial.md)。只有在实现新的格式接口或手写私有格式时，才需要直接使用本章这些底层能力。
 
 [返回目录](../language.md)

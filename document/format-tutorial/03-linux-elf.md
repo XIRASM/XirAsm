@@ -1,8 +1,8 @@
 # 3. Linux ELF Executables and Shared Objects
 
 ELF images describe loadable segments. A loadable segment has file offsets,
-virtual addresses, file size, memory size, and permissions. The facade derives
-those fields from named segments.
+virtual addresses, file size, memory size, and permissions. `format.inc`
+derives those fields from named segments.
 
 ## ELF Executable
 
@@ -43,8 +43,8 @@ format_entry_mut(image, start)
 format_finish(image);
 ```
 
-For ELF32, use `format_elf32(format_elf_exec, segments)`. ELF32 PIE is not
-exposed by the user-facing facade.
+For ELF32, use `format_elf32(format_elf_exec, segments)`. `format.inc` does not
+provide an ELF32 PIE entry point.
 
 ## ELF64 PIE
 
@@ -92,8 +92,7 @@ The instructions must also be position-independent where the ISA requires it.
 For x86-64, use `rel` references for labels in the same image. They encode a
 relative displacement, so they do not need an absolute dynamic relocation. An
 absolute pointer stored in a PIE or shared object does require a dynamic
-relocation; arbitrary user pointer relocations belong to the direct ELF layer,
-not the ordinary facade.
+relocation; arbitrary user pointer relocations require direct ELF construction.
 
 ## ELF64 Executable Imports
 
@@ -110,7 +109,7 @@ let image: map = format_elf64(
     )
 )
 
-// Add several APIs from libc. The facade derives <name>_gotplt and <name>_plt.
+// Add several APIs from libc. format.inc derives <name>_gotplt and <name>_plt.
 let imports: list = format_elfexe_import_new()
 format_elfexe_import_many_mut(imports, "libc.so.6", list.of("getpid", "getppid"))
 // Add another library and give cos a different local prefix.
@@ -132,7 +131,7 @@ format_finish(image);
 ```
 
 Call a grouped mutator once per library and keep using the same `imports` list.
-The facade creates the dynamic segment, PLT, GOT, and related relocations. In
+`format.inc` creates the dynamic segment, PLT, GOT, and related relocations. In
 the example, the aliased import is available as `cos_fn_plt` and
 `cos_fn_gotplt`.
 
@@ -231,11 +230,11 @@ calls use the generated PLT labels.
 | `format_elfexe_import_new()` | empty ELF64 executable import list |
 | `format_elfexe_import_many_mut(imports, library, names)` | grouped ELF64 executable PLT/GOT imports |
 | `format_elfexe_import_pairs_mut(imports, library, pairs)` | ELF64 executable local-name/import-name pairs |
-| `format_elfexe_tables_mut(plan, imports)` | attach executable import metadata |
+| `format_elfexe_tables_mut(image, imports)` | attach executable import metadata |
 | `format_elfso_export_new()` | empty shared-object export list |
 | `format_elfso_export_many_mut(exports, names, segment, size)` | grouped shared-object exports |
 | `format_elfso_export_pairs_mut(exports, pairs, segment, size)` | shared-object target/name export pairs |
 | `format_elfso_import_new()` | empty shared-object import list |
 | `format_elfso_import_many_mut(imports, library, names)` | grouped shared-object PLT/GOT imports |
 | `format_elfso_import_pairs_mut(imports, library, pairs)` | shared-object local-name/import-name pairs |
-| `format_elfso_tables_mut(plan, exports, imports)` | attach shared-object dynamic metadata |
+| `format_elfso_tables_mut(image, exports, imports)` | attach shared-object dynamic metadata |

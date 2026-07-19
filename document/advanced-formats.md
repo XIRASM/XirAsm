@@ -1,44 +1,43 @@
 # XIRASM Advanced Format Construction Guide
 
-Most programs should use XIRASM's ordinary format facade:
+Most programs should start with XIRASM's `format.inc` user layer:
 
 ```text
 import("format/format.inc");
 ```
 
-It turns declarations such as sections, segments, imports, exports, and
-relocations into a complete PE, COFF, or ELF layout. It also derives the
-counts, indexes, rows, offsets, and generated tables that standard files
-require.
+That layer turns declarations such as sections, segments, imports, exports, and
+relocations into a complete PE, COFF, or ELF layout. It also derives the counts,
+indexes, rows, FOAs, and generated tables that standard files require.
 
-Some programs need control below that level. A custom loader may require an
+Some programs need control below that layer. A custom loader may require an
 unusual header arrangement. A linker experiment may need a specific relocation
-row. A runtime image may need metadata that the ordinary facade does not
-expose. XIRASM provides direct format helpers for those cases.
+row. A runtime image may need metadata that `format.inc` intentionally keeps
+internal. XIRASM provides direct format helpers for those cases.
 
 This guide explains that direct layer. It assumes that you already understand:
 
 - the XIRASM language and output-region model;
-- the ordinary format lifecycle;
+- the `format.inc` lifecycle;
 - the target format's terminology and ABI;
-- the difference between logical addresses and physical file offsets.
+- the difference between logical addresses/RVAs and FOAs/raw file offsets.
 
 Read the [Language Guide](language.md) for the language itself and the
-[Format Tutorial](format-tutorial.md) for ordinary PE, COFF, and ELF
+[Format Tutorial](format-tutorial.md) for `format.inc` PE, COFF, and ELF
 workflows.
 
-Direct control is not a more correct version of the ordinary facade. It is a
-different responsibility boundary. The assembler exposes more of the format,
-and the source must preserve more of the format's invariants.
+Direct control is not a more correct version of `format.inc`. It is a different
+responsibility boundary. The assembler exposes more of the format, and the
+source must preserve more of the format's invariants.
 
 ## Guide Map
 
 ### Part I: Choosing Direct Control
 
 1. **Choosing the Advanced Layer**
-   - The ordinary facade, compatibility wrappers, and direct family helpers
+   - The `format.inc` user layer, width-specific compatibility includes, and direct family helpers
 2. **Coordinates, Regions, and Finalization**
-   - Logical addresses, file offsets, reserve, BSS, region closure, and backfill
+   - Logical addresses, FOAs/raw file offsets, reserve, BSS, region closure, and backfill
 3. **Manual Responsibilities**
    - Counts, indexes, rows, alignments, and table relationships
 
@@ -74,18 +73,18 @@ the source.
 
 The three layers are:
 
-1. the ordinary user facade;
-2. width-specific compatibility wrappers;
+1. the `format.inc` user layer;
+2. width-specific compatibility includes;
 3. direct family helpers.
 
 Choose the highest layer that can express the required file. Moving downward
 does not merely change function names. It transfers counts, indexes, addresses,
-table relationships, and validation responsibilities from the facade to the
+table relationships, and validation responsibilities from `format.inc` to the
 source.
 
-### Layer 1: The Ordinary User Facade
+### Layer 1: The `format.inc` User Layer
 
-The ordinary layer is:
+The `format.inc` user layer is:
 
 ```text
 include/format/format.inc
@@ -104,32 +103,32 @@ finish the format
 ```
 
 The plan records relationships by name. For example, a relocation names its
-target symbol, and an export names its containing section or segment. The
-facade converts those relationships into numeric rows and indexes after it has
-the complete declaration set.
+target symbol, and an export names its containing section or segment.
+`format.inc` converts those relationships into numeric rows and indexes after it
+has the complete declaration set.
 
-The ordinary layer normally owns:
+The `format.inc` layer normally owns:
 
 - section or segment counts;
 - section and program-header row assignment;
 - symbol indexes;
 - relocation-table grouping;
 - string-table offsets;
-- file offsets and virtual-address placement;
+- FOAs and virtual-address placement;
 - generated import and export tables;
 - generated dynamic metadata;
 - final header counts and directory links.
 
 Use this layer for standard executables, DLLs, shared objects, and relocatable
-objects. If the file can be described through the ordinary facade, direct
-helpers usually add work without adding useful control.
+objects. If the file can be described through `format.inc`, direct helpers
+usually add work without adding useful control.
 
 The [Format Tutorial](format-tutorial.md) documents this layer completely
-enough for ordinary construction. This guide does not repeat those workflows.
+enough for standard construction. This guide does not repeat those workflows.
 
-### Layer 2: Width-Specific Compatibility Wrappers
+### Layer 2: Width-Specific Compatibility Includes
 
-The compatibility wrappers are:
+The width-specific compatibility includes are:
 
 ```text
 include/format/pe32.inc
@@ -143,7 +142,7 @@ include/format/coff64.inc
 These files provide short, width-specific names and common flag combinations.
 They delegate their work to the direct family helpers.
 
-For example, a wrapper may:
+For example, a width-specific include may:
 
 - select PE32 instead of PE64;
 - select i386 COFF instead of AMD64 COFF;
@@ -152,9 +151,9 @@ For example, a wrapper may:
 - select an automatic file-offset helper instead of its raw counterpart;
 - combine several related finalizer calls into one width-specific procedure.
 
-They do not provide the ordinary plan model.
+They do not provide the `format.inc` plan model.
 
-A compatibility wrapper may still require the caller to supply:
+A width-specific include may still require the caller to supply:
 
 - a section or segment count;
 - a section or program-header row;
@@ -162,7 +161,7 @@ A compatibility wrapper may still require the caller to supply:
 - a section name encoded for a header row;
 - an entry label and containing section start;
 - explicit relocation-table positions;
-- raw file offsets when using a `_raw` function;
+- FOAs/raw file offsets when using a `_raw` function;
 - the correct order of header, payload, table, and finalizer calls.
 
 For example, `pe64_exe(section_count)` fixes the PE width but still requires an
@@ -171,11 +170,11 @@ default base but still requires an explicit program-header count.
 `coff64_obj(section_count, symbol_count)` fixes the COFF machine type but still
 requires both counts.
 
-These wrappers remain useful when maintaining an existing source that already
+These includes remain useful when maintaining an existing source that already
 uses their row-oriented workflow. They can also make a small direct example
 easier to read when their defaults exactly match the required file.
 
-They are not the preferred starting point for a new ordinary program. Their
+They are not the preferred starting point for a new `format.inc` program. Their
 shorter names do not remove the caller's low-level responsibilities.
 
 ### Layer 3: Direct Family Helpers
@@ -218,20 +217,20 @@ At this layer, the source can call helpers that correspond closely to format
 records and relationships:
 
 - emit an executable or object header with an explicit count;
-- begin a section or segment at an explicit file offset;
+- begin a section or segment at an explicit FOA;
 - select a section-table or program-header row;
 - emit a symbol or relocation with an explicit numeric index;
 - emit a section header, program header, dynamic row, or directory record;
-- calculate a table row's physical file position;
+- calculate a table row's FOA;
 - register stable-image finalizers for sizes, addresses, and header fields.
 
 The direct helpers still use XIRASM's region and finalizer model. They are not
 raw byte constants disguised as an API. However, they deliberately expose
-format facts that the ordinary facade keeps internal.
+format facts that `format.inc` keeps internal.
 
 ### Responsibility Increases as the Layer Gets Lower
 
-| Responsibility | Ordinary facade | Compatibility wrapper | Direct helper |
+| Responsibility | `format.inc` user layer | Width-specific include | Direct helper |
 | --- | --- | --- | --- |
 | Select format and width | Declarative plan | Width-specific entry | Explicit family entry |
 | Count sections or segments | Derived | Caller-supplied | Caller-supplied |
@@ -240,17 +239,16 @@ format facts that the ordinary facade keeps internal.
 | Place file data | Derived | Partly automatic or raw | Automatic or explicit |
 | Relate VA/RVA to FOA | Derived | Caller participates | Caller controls |
 | Generate tables | From declarations | Source orchestrates | Source orchestrates |
-| Register backfill | Facade-owned | Wrapper combines helpers | Source selects helpers |
-| Validate relations | Facade-owned | Shared responsibility | Source-owned |
+| Register backfill | `format.inc` owns it | Include combines helpers | Source selects helpers |
+| Validate relations | `format.inc` owns it | Shared responsibility | Source owns it |
 
 An automatic direct helper may derive one local value, such as a section's
-physical size from region facts. That does not make the complete workflow
-automatic. The source still chooses the correct row, table relationship, and
-call order.
+raw size from region facts. That does not make the complete workflow automatic.
+The source still chooses the correct row, table relationship, and call order.
 
 ### Choose the Layer by the Required Control
 
-Use the ordinary facade when:
+Use `format.inc` when:
 
 - the target is a standard PE, COFF, or ELF workflow;
 - sections and segments can be declared before writing their contents;
@@ -258,9 +256,9 @@ Use the ordinary facade when:
 - names can describe relationships more clearly than numeric indexes;
 - the source should remain easy to maintain.
 
-Use a compatibility wrapper when:
+Use a width-specific compatibility include when:
 
-- an existing source already follows that wrapper's row-oriented workflow;
+- an existing source already follows that include's row-oriented workflow;
 - its width-specific defaults exactly match the required layout;
 - changing the source to the plan model provides no immediate benefit;
 - the remaining explicit counts and rows are intentional.
@@ -268,8 +266,8 @@ Use a compatibility wrapper when:
 Use direct family helpers when:
 
 - a nonstandard header field or table arrangement must be emitted;
-- the source must control a specific row, index, or file offset;
-- metadata must be ordered differently from the ordinary facade;
+- the source must control a specific row, index, or FOA;
+- metadata must be ordered differently from `format.inc`;
 - a custom loader or linker contract requires unusual records;
 - the work is explicitly about constructing or studying the file format.
 
@@ -279,46 +277,47 @@ control that can express it.
 
 ### Do Not Mix Layers Accidentally
 
-The ordinary facade already emits headers, assigns rows, generates tables, and
+The `format.inc` user layer already emits headers, assigns rows, generates tables, and
 registers finalizers. Calling row-oriented helpers inside the same plan can
 create two owners for the same fields.
 
 Unsafe accidental combinations include:
 
-- beginning an ordinary PE plan and then emitting another PE header directly;
-- letting the ordinary facade assign section rows while manually finalizing a
+- beginning a `format.inc` PE plan and then emitting another PE header directly;
+- letting `format.inc` assign section rows while manually finalizing a
   different row number;
-- attaching ordinary imports and also emitting a second import directory;
-- letting the ordinary ELF facade generate program headers while manually
+- attaching `format.inc` imports and also emitting a second import directory;
+- letting the `format.inc` ELF layer generate program headers while manually
   patching their count;
-- combining an ordinary symbol plan with separately numbered direct symbols.
+- combining a `format.inc` symbol plan with separately numbered direct symbols.
 
 This can produce a file that looks plausible but contains contradictory counts,
 overlapping tables, duplicated directories, or finalizers that overwrite each
 other.
 
 Mixing levels is valid only when ownership is explicit. A direct extension must
-know which fields remain facade-owned and which fields the extension replaces.
+know which fields remain `format.inc`-owned and which fields the extension
+replaces.
 If that boundary cannot be stated precisely, use one layer for the entire
 format workflow.
 
 ### Compatibility Is Not the Same as Recommendation
 
-A compatibility wrapper is a supported source surface, but support does not
+A width-specific compatibility include is a supported source surface, but support does not
 make it the best teaching layer for new code.
 
-The wrappers preserve concise width-specific workflows. They do not promise:
+These includes preserve concise width-specific workflows. They do not promise:
 
 - automatic discovery of section or segment counts;
 - name-based symbol and relocation resolution;
 - complete generated metadata;
 - protection from inconsistent row numbering;
-- the same validation performed by an ordinary plan.
+- the same validation performed by a `format.inc` plan.
 
-New standard programs should begin with `format.inc`. Existing wrapper-based
-programs do not need to be rewritten merely for style. Rewrite them when the
-ordinary plan removes meaningful manual state or when a source is already
-being restructured.
+New standard programs should begin with `format.inc`. Existing sources that use
+width-specific includes do not need to be rewritten merely for style. Rewrite
+them when the `format.inc` plan removes meaningful manual state or when a source
+is already being restructured.
 
 ### Direct Helpers Are a Contract, Not an Escape Hatch
 
@@ -331,7 +330,7 @@ The source remains responsible for:
 - keeping counts consistent with emitted records;
 - keeping row and symbol indexes stable;
 - preserving required alignments;
-- separating logical addresses from physical file positions;
+- separating logical addresses/RVAs from FOAs/raw file positions;
 - representing BSS without accidental file payload;
 - connecting directories and tables to the correct ranges;
 - choosing relocation types that match the encoded fields;
@@ -344,12 +343,12 @@ complete direct workflows.
 
 1. Start with `format.inc`.
 2. Move lower only when a concrete output requirement cannot be expressed.
-3. Treat width-specific wrappers as compatibility and convenience surfaces.
+3. Treat width-specific includes as compatibility and convenience surfaces.
 4. Do not confuse an `_auto` helper with a complete automatic format writer.
 5. Use direct helpers when explicit rows, indexes, offsets, or table order are
    the purpose of the source.
 6. Keep one clear owner for every header field and generated table.
-7. Do not combine ordinary and direct table generation without a written
+7. Do not combine `format.inc` and direct table generation without a written
    ownership boundary.
 8. Keep format API signatures in the Format API Reference rather than copying
    every helper into tutorial prose.
@@ -358,7 +357,7 @@ complete direct workflows.
     additional control.
 
 Chapter 2 establishes the coordinate and finalization model used by every
-direct format family: logical addresses, physical file offsets, regions,
+direct format family: logical addresses/RVAs, FOAs/raw file offsets, regions,
 reserve, BSS, and stable-image backfill.
 
 ## 2. Coordinates, Regions, and Finalization
@@ -373,7 +372,7 @@ Direct format construction depends on a precise answer to four questions:
 A flat binary often gives the same answer to all four questions. Executable and
 object formats do not.
 
-A PE section can begin at RVA `0x1000` while its bytes begin at file offset
+A PE section can begin at RVA `0x1000` while its bytes begin at FOA
 `0x200`. An ELF `PT_LOAD` segment can reserve memory beyond its stored bytes.
 A COFF BSS section can describe storage without contributing payload bytes.
 
@@ -382,14 +381,14 @@ them.
 
 ### The Four Facts of an Output Region
 
-An ordinary output region has four independent layout facts:
+A file-backed output region has four independent layout facts:
 
 | Fact | Meaning |
 |---|---|
 | Logical origin | Address assigned to the first byte or reserved unit |
 | Logical size | Complete address-space extent, including reserve |
-| File offset | Physical position of the region's first stored byte |
-| File size | Number of bytes materialized for the region |
+| FOA / raw file offset | File offset of the region's first raw byte |
+| Raw size | Number of bytes that enter the output file for the region |
 
 `region.begin(name, origin, file_offset)` chooses the first and third facts.
 Normal emission and reserve determine the two sizes.
@@ -408,17 +407,18 @@ At this point:
 ```text
 logical origin = 0x401000
 logical size   = 16
-file offset    = 0x200
-file size      = 3
+FOA            = 0x200
+raw size       = 3
 ```
 
-The reserved tail belongs to the memory image but is not yet part of the file.
-In flat output, the explicit FOA also creates a zero-filled gap up to `0x200`.
-An executable-format layout normally places its headers in that earlier range.
+The reserved tail belongs to the logical image but is not yet part of the raw
+file. In flat output, the explicit FOA also creates a zero-filled gap up to
+`0x200`. An executable-format layout normally places its headers in that earlier
+range.
 
 These facts map to different fields in each format:
 
-| Format | Logical facts commonly describe | Physical facts commonly describe |
+| Format | Logical facts commonly describe | Raw file facts commonly describe |
 |---|---|---|
 | PE | RVA, virtual size, image size | raw pointer, raw size |
 | COFF | section-relative extent, BSS size | raw pointer, relocation pointer |
@@ -442,33 +442,35 @@ assert(here() == 0x401001);
 assert(file_cursor_real() == 0x201);
 ```
 
-The label value is a runtime-style address. The file cursor is a physical file
-position.
+The label value is a runtime-style address. The file cursor is a FOA.
 
 The common derived forms are:
 
 ```text
 PE RVA             = logical address - image base
 section-relative   = logical address - section start
-physical FOA       = region file offset + physical offset within the region
+FOA                = region FOA + raw offset within the region
 ```
 
 An ELF virtual address is not generally `image_base + file_offset`. That
 shortcut works only for layouts deliberately constructed with that mapping.
 Direct layouts must preserve the actual region origin.
 
-### Real and Potential File Cursors
+### Committed FOA and Tail Reserve
 
-XIRASM keeps two live file cursors:
+XIRASM exposes the committed raw-file end and the raw-file end that would result
+if the current tail reserve had to become file bytes:
 
 | Query | Meaning |
 |---|---|
-| `file_cursor_real()` | End of materialized file bytes |
-| `file_cursor_potential()` | End if the active reserved tail becomes physical |
-| `tail_reserve_size()` | Current unmaterialized reserved tail |
+| `file_cursor_real()` | Current committed FOA: the end of bytes already in the file |
+| `file_cursor_potential()` | Committed FOA plus the active tail reserve, if that reserve becomes raw zero bytes |
+| `tail_reserve_size()` | Current tail reserve that has logical size but no raw bytes yet |
 
-Initialized bytes advance both cursors. A reserve advances only the potential
-cursor until later initialized output requires the gap to exist.
+Initialized bytes advance both FOA queries. A reserve advances the logical
+cursor and `file_cursor_potential()`, but it does not advance
+`file_cursor_real()` until later initialized output in the same region forces
+the gap to exist in the file.
 
 ```asm
 emit.u8(0xaa);
@@ -480,7 +482,7 @@ assert(tail_reserve_size() == 3);
 ```
 
 If another byte is emitted in the same region, the reserved range becomes a
-physical middle gap:
+middle zero gap in the raw file:
 
 ```asm
 emit.u8(0xaa);
@@ -501,11 +503,11 @@ aa 00 00 00 bb
 The distinction matters whenever the next region should follow stored bytes
 but the next logical address must follow the complete memory extent.
 
-### Closing a Region
+### Closing Raw File Output
 
-`region.file_align(alignment)` finalizes the active region's physical extent.
-It first trims any unmaterialized reserved tail, then rounds the stored size to
-the requested file alignment.
+`region.file_align(alignment)` finalizes the active region's raw-file extent. It
+first trims any tail reserve that still has no raw bytes, then rounds the stored
+size to the requested file alignment.
 
 Use alignment `1` to close a region without adding file padding:
 
@@ -524,13 +526,13 @@ region.begin("second", 0x2000, next_foa);
 emit.u8(0x5a);
 ```
 
-The first region occupies sixteen logical bytes and three physical bytes. The
-second region begins at file offset `3`.
+The first region occupies sixteen logical bytes and three raw file bytes. The
+second region begins at FOA `3`.
 
-A larger alignment changes only the physical extent:
+A larger alignment changes only the raw-file extent:
 
 ```text
-region.file_align(1)      exact physical close
+region.file_align(1)      exact raw-file close
 region.file_align(4)      close and round to a four-byte boundary
 region.file_align(0x200)  close and round to a 512-byte boundary
 ```
@@ -539,7 +541,7 @@ File alignment and logical alignment are separate decisions. Closing a PE
 section at a 512-byte file boundary does not imply that its next RVA advances
 by 512 bytes. A PE image normally uses a larger section alignment for RVAs.
 
-Calling `region.file_align` closes physical output for the active region.
+Calling `region.file_align` closes raw output for the active region.
 Begin another region before emitting more content.
 
 ### Compact Files Do Not Require Compact Addresses
@@ -562,9 +564,9 @@ therefore:
 
 This produces compact file bytes while preserving independent virtual pages.
 
-Do not create page-sized physical padding merely because virtual addresses are
-page separated. Physical padding is required only when the format or chosen
-layout requires it.
+Do not create page-sized raw padding merely because virtual addresses are page
+separated. File padding is required only when the format or chosen layout
+requires it.
 
 ### BSS Is a Logical Extent Without Payload
 
@@ -601,23 +603,23 @@ must encode them according to the target format.
 
 ### Continue Both Coordinate Systems After BSS
 
-A BSS region advances the logical address but not the real file cursor. The
-next file-backed region must therefore use two different continuation facts:
+A BSS region advances the logical address but not the committed FOA. The next
+file-backed region must therefore use two different continuation facts:
 
 ```text
-next physical offset = previous real file cursor
+next FOA             = previous committed FOA
 next logical address = at least previous logical end
 ```
 
-Using the real file cursor for both values makes the next region overlap BSS in
-memory. Using the potential cursor for both values creates unnecessary file
+Using the committed FOA for both values makes the next region overlap BSS in
+memory. Using the potential FOA for both values creates unnecessary file
 padding.
 
 For page-congruent ELF segments, the next logical address must also satisfy:
 
 ```text
 next logical address mod page alignment
-    = next physical offset mod page alignment
+    = next FOA mod page alignment
 ```
 
 The direct source owns this calculation unless the selected helper explicitly
@@ -633,12 +635,12 @@ overlap.
 A generated table row can have both:
 
 - a logical address used by `load.*` and `store.*`;
-- a file offset written into format metadata or used for structural checks.
+- a FOA written into format metadata or used for structural checks.
 
 These values may happen to match in a zero-origin flat layout. Direct format
 code must not rely on that coincidence.
 
-This is incorrect when logical and physical coordinates differ:
+This is incorrect when logical and raw-file coordinates differ:
 
 ```text
 const row_foa = file_cursor_real()
@@ -649,8 +651,7 @@ defer {
 }
 ```
 
-`store.u32` expects an address in XIRASM's logical output space, not a file
-offset.
+`store.u32` expects an address in XIRASM's logical output space, not a FOA.
 
 Capture both facts when both are needed:
 
@@ -673,8 +674,8 @@ Final region facts are queried with an address inside the region:
 
 | Query | Stable result |
 |---|---|
-| `region_file_offset(address)` | Physical base offset |
-| `region_file_size(address)` | Materialized byte count |
+| `region_file_offset(address)` | Region FOA / raw base offset |
+| `region_file_size(address)` | Region raw size |
 | `region_logical_size(address)` | Complete logical extent |
 
 These are stable-image queries. Use them in `defer` or in helpers that register
@@ -756,7 +757,7 @@ Direct format construction has two explicit delayed phases:
 | `late_layout` | Yes | Append tables, copy virtual scratch data, create final regions |
 | `defer` | No | Backfill fields, read bytes, compute checksums, assert invariants |
 
-Use `late_layout` when real bytes do not exist until ordinary source has
+Use `late_layout` when real bytes do not exist until the main source has
 finished registering sections, symbols, or relocations:
 
 ```asm
@@ -787,10 +788,10 @@ Do not use `defer` to:
 - add instructions;
 - change section or segment boundaries.
 
-If a finalizer needs a field, row, or table, ordinary source or `late_layout`
+If a finalizer needs a field, row, or table, the main source or `late_layout`
 must create that storage first.
 
-### Virtual Scratch Data and Late Materialization
+### Virtual Scratch Data and Late Copying
 
 Virtual regions are useful when a table must be assembled, measured, or patched
 before its bytes are placed in the file.
@@ -805,7 +806,7 @@ A typical direct workflow is:
 6. use `defer` for final header fields and validation.
 
 Virtual bytes do not enter the output automatically. Copying them during
-`late_layout` is an explicit materialization step.
+`late_layout` is an explicit step.
 
 This pattern is useful for symbol tables, relocation tables, string tables, and
 section-header tables whose final order is chosen after payload emission.
@@ -844,45 +845,44 @@ Before using a direct family helper, verify:
 
 1. Every label and `here()` value is treated as a logical address.
 2. Every FOA comes from explicit layout math or `region_file_offset`.
-3. Logical size and file size are written to the correct format fields.
+3. Logical size and raw size are written to the correct format fields.
 4. Tail reserve is trimmed only when it represents file-free storage.
-5. Middle reserve remains physical when initialized data follows it.
+5. Middle reserve becomes raw zero bytes when initialized data follows it.
 6. Every region is closed before the next file-backed region begins.
-7. BSS advances the next logical address even when the real file cursor does
+7. BSS advances the next logical address even when the committed FOA does
    not move.
-8. ELF load addresses remain congruent with their physical offsets.
+8. ELF load addresses remain congruent with their FOAs.
 9. A row's logical address is captured separately from its FOA.
 10. `late_layout` creates final bytes; `defer` only patches or validates them.
-11. All backfill targets already exist in the physical image.
+11. All backfill targets already exist in the raw file image.
 12. Each field has one clear owner.
 
 Chapter 3 lists the additional counts, indexes, rows, alignments, and table
-relationships that become the source's responsibility when it leaves the
-ordinary facade.
+relationships that become the source's responsibility when it leaves
+`format.inc`.
 
 ## 3. Manual Responsibilities
 
-Moving below the ordinary facade changes more than syntax. It transfers
-ownership.
+Moving below `format.inc` changes more than syntax. It transfers ownership.
 
-The ordinary facade accepts named declarations and derives the records needed
-to represent them. Compatibility wrappers transfer part of that work to the
-source. Direct family helpers transfer nearly all of it.
+`format.inc` accepts named declarations and derives the records needed to
+represent them. Width-specific compatibility includes transfer part of that work
+to the source. Direct family helpers transfer nearly all of it.
 
 Before choosing a lower layer, identify every value that the source will now
 own. A direct format is correct only when its independently emitted records
 describe one coherent file.
 
-### What the Ordinary Facade Normally Owns
+### What `format.inc` Normally Owns
 
-The ordinary facade normally performs these tasks:
+`format.inc` normally performs these tasks:
 
-| Responsibility | Ordinary behavior |
+| Responsibility | `format.inc` behavior |
 |---|---|
 | Record counts | Derives counts from declared sections, segments, and symbols |
 | Row assignment | Assigns rows in declaration order |
 | Name resolution | Resolves section and symbol names to numeric indexes |
-| File placement | Advances physical regions and generated tables |
+| File placement | Advances raw output regions and generated tables |
 | Logical placement | Advances RVAs or virtual addresses independently |
 | Table generation | Emits standard import, export, relocation, and dynamic data |
 | Relationships | Connects directories, links, indexes, and target records |
@@ -890,7 +890,7 @@ The ordinary facade normally performs these tasks:
 | Validation | Rejects inconsistent declarations and unsupported combinations |
 
 A direct helper may still derive one local fact. For example, an `_auto`
-finalizer may read a region's final file size. It does not assume ownership of
+finalizer may read a region's final raw size. It does not assume ownership of
 the entire format plan.
 
 The source still decides:
@@ -1020,13 +1020,13 @@ indexes and offsets.
 Do not sort one table after another table has stored references into its old
 order.
 
-### Offsets Must Identify the Correct Physical Object
+### FOAs Must Identify the Correct Raw Object
 
-Direct helpers frequently accept explicit physical locations:
+Direct helpers frequently accept explicit FOAs or raw file locations:
 
 ```text
 section raw pointer
-program-header file offset
+program-header `p_offset` / FOA
 symbol-table FOA
 relocation-table FOA
 section-header-table FOA
@@ -1034,7 +1034,7 @@ string-table FOA
 dynamic-table FOA
 ```
 
-Each offset must point to the first byte of the encoded object it describes.
+Each FOA must point to the first byte of the encoded object it describes.
 The corresponding size must cover exactly the intended range.
 
 Avoid deriving table offsets from a guessed record count when the table may
@@ -1042,12 +1042,12 @@ contain alignment, sentinels, auxiliary rows, or variable-length strings.
 
 Prefer one of these sources:
 
-- a real file cursor captured immediately before emission;
+- the committed FOA captured immediately before emission;
 - `region_file_offset` after stable layout;
 - a checked calculation from fixed-width records;
 - a label pair for a measured byte range.
 
-Do not use a logical label value as a physical file offset.
+Do not use a logical label value as a FOA.
 
 ### Sizes Must Use the Correct Extent
 
@@ -1056,7 +1056,7 @@ Direct formats commonly expose several size meanings:
 | Size | Includes |
 |---|---|
 | Logical size | Initialized bytes, middle gaps, and reserved tail |
-| Physical size | Materialized bytes and physical file alignment |
+| Raw size | Raw bytes and file alignment |
 | Record size | Bytes occupied by one encoded record |
 | Table size | Complete encoded range of all table records |
 | Image size | Final logical extent rounded by format rules |
@@ -1065,8 +1065,8 @@ Choose the size that matches the field.
 
 Common mistakes include:
 
-- writing logical BSS size into a physical file-size field;
-- writing aligned physical size into a virtual-size field;
+- writing logical BSS size into a raw file-size field;
+- writing aligned raw size into a virtual-size field;
 - excluding a required null record from a table size;
 - using a symbol count where a byte size is required;
 - using the end of the file instead of the end of the directory range.
@@ -1083,9 +1083,9 @@ Direct construction may need:
 | Alignment | Purpose |
 |---|---|
 | Record alignment | Natural placement of a table or encoded structure |
-| File alignment | Physical padding between stored ranges |
+| File alignment | Raw padding between stored ranges |
 | Logical alignment | RVA or virtual-address placement |
-| Page congruence | Required relationship between ELF virtual and file offsets |
+| Page congruence | Required relationship between ELF virtual addresses and FOAs |
 | ABI alignment | Runtime stack, data, or symbol requirements |
 
 Applying the wrong alignment can produce a structurally plausible file with
@@ -1098,7 +1098,7 @@ Examples:
 - an ELF load segment may use a compact FOA while its virtual address advances
   to another page;
 - a section's `addralign` field describes contained data, not necessarily the
-  physical alignment of the section-header row.
+  placement alignment of the section-header row.
 
 Keep alignment names explicit:
 
@@ -1177,7 +1177,7 @@ Common examples include:
 - the minimum COFF string-table length field;
 - padding relocation entries required by a block format.
 
-These bytes are part of the physical layout even when they do not represent a
+These bytes are part of the raw file layout even when they do not represent a
 user declaration.
 
 Decide whether each sentinel contributes to:
@@ -1243,8 +1243,8 @@ ambiguous alias can corrupt several dependent records at once.
 
 An `_auto` helper normally derives values available from one known region:
 
-- physical file offset;
-- physical size;
+- FOA / raw file offset;
+- raw size;
 - logical size;
 - entry displacement within a segment;
 - a local record count from a measured range.
@@ -1293,10 +1293,10 @@ different fields. They must not silently overwrite the same field.
 Be especially careful when mixing:
 
 - raw and `_auto` finalizers;
-- a compatibility wrapper and its underlying direct helper;
+- a width-specific compatibility include and its underlying direct helper;
 - manual directory patches and directory-specific helpers;
 - checksum helpers and later header writes;
-- ordinary facade generation and direct table emission.
+- `format.inc` generation and direct table emission.
 
 If field ownership is unclear, use one layer for the entire structure.
 
@@ -1310,7 +1310,7 @@ sequence:
 3. Assign every row, index, section number, and fixed directory slot.
 4. Derive counts from the frozen record plan.
 5. Emit headers and fixed-width placeholders.
-6. Emit payload regions with separate logical and physical coordinates.
+6. Emit payload regions with separate logical and raw-file coordinates.
 7. Close each region and preserve BSS semantics.
 8. Emit or append generated tables in their planned order.
 9. Register backfills for stable offsets, sizes, addresses, and relationships.
@@ -1327,8 +1327,8 @@ must remain explicit.
 |---|---|
 | Header sees fewer records than emitted | Count frozen too early or sentinel omitted |
 | Relocation targets the wrong name | Symbol ordering changed after index assignment |
-| BSS consumes file bytes | Logical and physical sizes were conflated |
-| Later region overlaps BSS | Logical progression followed the real file cursor |
+| BSS consumes file bytes | Logical and raw sizes were conflated |
+| Later region overlaps BSS | Logical progression followed the committed FOA |
 | File contains page-sized zero holes | Virtual alignment was applied as file padding |
 | Finalizer writes an unrelated range | FOA was used as a logical store address |
 | Loader rejects a directory | RVA, size, or termination relationship is incomplete |
@@ -1348,8 +1348,8 @@ Before entering a family-specific direct chapter, confirm:
 2. Every count includes required reserved and sentinel records.
 3. Row, section-number, section-index, and symbol-index namespaces are distinct.
 4. Every dependent index is assigned after its table order is frozen.
-5. Every physical offset points to the intended encoded range.
-6. Every size uses the correct logical, physical, record, or table extent.
+5. Every FOA points to the intended encoded range.
+6. Every size uses the correct logical, raw, record, or table extent.
 7. File, logical, page, record, and ABI alignments are not conflated.
 8. Flags match the content and permissions of their region.
 9. All directory and table relationships are paired and measurable.
@@ -1358,7 +1358,7 @@ Before entering a family-specific direct chapter, confirm:
 12. `_auto` helpers are treated as local derivation only.
 13. Every deferred field has one final owner.
 14. Finalizer registration order matches data dependencies.
-15. No field is simultaneously owned by the ordinary facade and direct code.
+15. No field is simultaneously owned by `format.inc` and direct code.
 
 Part II applies these rules to direct PE construction, beginning with headers
 and section rows.
@@ -1517,13 +1517,13 @@ alignment. The `_at` form accepts an explicit raw pointer.
 Both forms start a region whose:
 
 - logical origin is `image_base + rva`;
-- physical base is the chosen raw pointer.
+- raw base is the chosen raw pointer.
 
 The section name passed to the begin call names the XIRASM region. The
 eight-byte section name written into the PE row is supplied separately to the
 finalizer.
 
-### Close File-Backed Sections with Physical Alignment
+### Close File-Backed Sections with File Alignment
 
 For region-derived finalization, close a file-backed section with:
 
@@ -1542,9 +1542,9 @@ SizeOfRawData    = 512
 PointerToRawData = section file offset
 ```
 
-Use `pe_end_section(row, raw_size)` when the direct source intentionally
-materializes an explicit raw size and will call the non-automatic section
-finalizer with matching values.
+Use `pe_end_section(row, raw_size)` when the direct source intentionally commits
+an explicit raw size and will call the non-automatic section finalizer with
+matching values.
 
 Do not use ordinary logical `align` to replace PE file alignment. Logical
 alignment changes section addresses and can make padding part of the virtual
@@ -1837,22 +1837,22 @@ The width-specific header fields differ:
 
 The section-row semantics remain the same.
 
-### Use `_at` for Irregular Physical Layouts
+### Use `_at` for Irregular Raw Layouts
 
 The default raw-pointer helper reserves one `0x200` slot for every row. Use the
 explicit `_at` begin calls when:
 
 - a section's raw data exceeds one file-alignment unit;
 - BSS appears before another file-backed section;
-- sections are reordered physically;
+- sections are reordered in raw file order;
 - metadata is placed outside row order;
 - the file uses a deliberate nondefault raw layout.
 
 A compact direct layout should derive the next raw pointer from the previous
-file-backed region's real end, then pass it explicitly:
+file-backed region's committed raw end, then pass it explicitly:
 
 ```text
-next_raw_ptr = aligned previous physical end
+next_raw_ptr = aligned previous raw end
 pe_begin_section_at(name, row, rva, next_raw_ptr)
 ```
 
@@ -1868,11 +1868,11 @@ Before adding directories or relocations, confirm:
 3. Every row number is unique and within the declared count.
 4. Every RVA is aligned and follows the previous logical extent.
 5. Every file-backed raw pointer is aligned and does not overlap another range.
-6. File-backed regions close with the intended physical alignment.
+6. File-backed regions close with the intended file alignment.
 7. BSS has nonzero virtual size, zero raw size, and zero raw pointer.
 8. Section names and characteristics match their content.
 9. Entry RVA identifies executable code.
-10. SizeOfCode and SizeOfInitializedData use physical sizes.
+10. SizeOfCode and SizeOfInitializedData use raw sizes.
 11. SizeOfUninitializedData uses logical BSS sizes.
 12. SizeOfImage follows the last logical section and section alignment.
 13. PE32 BaseOfData identifies the first data RVA.
@@ -2544,12 +2544,12 @@ incomplete as a loader contract. Three features commonly expose that gap:
 - base relocations describe absolute image addresses that must move with the
   image;
 - resources describe typed data through a directory tree rooted in `.rsrc`;
-- the PE checksum covers the final physical file after every backfill.
+- the PE checksum covers the final raw file after every backfill.
 
 These features use different coordinate systems and different finalization
 rules. A relocation identifies an RVA inside the loaded image. A resource data
-entry stores an RVA but is physically located inside `.rsrc`. A checksum reads
-the final file bytes in FOA order.
+entry stores an RVA for payload bytes inside `.rsrc`. A checksum reads the final
+file bytes in FOA order.
 
 The direct layer leaves those relationships visible. It provides record
 emitters and finalizers, but the caller still owns section rows, section
@@ -2565,7 +2565,7 @@ import("format/pe_reloc.inc");
 ```
 
 Both extensions load the common direct PE definitions. Do not import a
-width-specific compatibility wrapper into the same example.
+width-specific compatibility include into the same example.
 
 The relocation extension provides:
 
@@ -2583,7 +2583,7 @@ The resource extension provides:
 - resource-tree sorting and grouping.
 
 Checksum helpers remain in the common direct PE layer because they operate on
-the complete physical file rather than one metadata section.
+the complete raw file rather than one metadata section.
 
 ### Base Relocations Describe Stored Absolute Addresses
 
@@ -2735,11 +2735,11 @@ characteristics, and the PE data-directory finalizer.
 
 ### Checksums Must Run Last
 
-The PE checksum is calculated over physical file bytes. It is not a hash, a
+The PE checksum is calculated over raw file bytes. It is not a hash, a
 signature, or an integrity boundary. It is a folded word sum with the checksum
 field treated as zero, followed by the final file size.
 
-The direct checksum helpers divide the work by physical region:
+The direct checksum helpers divide the work by raw output region:
 
 | Helper | Responsibility |
 |---|---|
@@ -2793,7 +2793,7 @@ headers_size =
 ```
 
 The first raw section starts at `headers_size`, not at a permanently assumed
-`0x200`. Subsequent raw pointers advance by each section's physical extent.
+`0x200`. Subsequent raw pointers advance by each section's raw extent.
 
 The complete example below uses four `0x200`-byte raw slots:
 
@@ -3119,7 +3119,7 @@ Before accepting a direct PE image with these features, confirm:
 17. `.reloc` is readable, non-executable, and normally discardable.
 18. SizeOfInitializedData includes all file-backed metadata sections.
 19. Pointer, directory, flag, and size finalizers run before checksum folding.
-20. Checksum regions are registered in final physical file order.
+20. Checksum regions are registered in final FOA order.
 21. The final checksum includes the file size.
 22. Every data-directory slot has one finalizer owner.
 
@@ -3157,7 +3157,7 @@ Use the common direct helper:
 import("format/coff.inc")
 ```
 
-Do not import `coff32.inc`, `coff64.inc`, or the ordinary format facade into
+Do not import `coff32.inc`, `coff64.inc`, or `format.inc` into
 the same construction.
 
 The common direct layer contains both machine variants:
@@ -3221,7 +3221,7 @@ The direct helpers provide:
 | `coff_symbol_foa` | FOA of one symbol record |
 | `coff_string_table_foa` | FOA immediately after all symbol records |
 
-These are physical file calculations. They are not section-relative symbol
+These are FOA/raw file calculations. They are not section-relative symbol
 values.
 
 ### Section Rows and Section Numbers Are Different
@@ -3279,14 +3279,14 @@ Begin a direct section at an explicit raw pointer:
 coff_begin_section(name, raw_pointer)
 ```
 
-Emit its bytes, then close the physical range:
+Emit its bytes, then close the raw range:
 
 ```text
 coff_end_section(raw_size)
 ```
 
 The explicit form is useful when the object plan already contains fixed raw
-sizes. `coff_end_section` pads the section to the declared physical extent.
+sizes. `coff_end_section` pads the section to the declared raw extent.
 
 Finalize the matching section row with:
 
@@ -3329,7 +3329,7 @@ are present.
 Use a reserve-only region to establish the logical extent:
 
 ```text
-begin BSS with physical pointer zero
+begin BSS with raw pointer zero
 reserve the required size
 close the region
 ```
@@ -3347,8 +3347,8 @@ coff_finalize_section(
 ```
 
 Do not use `coff_finalize_section_auto` for this case. That helper derives the
-physical file size of a known region, while BSS requires a logical size and a
-zero raw pointer.
+raw size of a known region, while BSS requires a logical size and a zero raw
+pointer.
 
 ### Symbol Records Are Fixed at 18 Bytes
 
@@ -3587,7 +3587,7 @@ coff_finalize_section(
 );
 ```
 
-The physical object layout is:
+The raw object layout is:
 
 | Range | Content |
 |---|---|
@@ -3666,13 +3666,13 @@ The complete example places the symbol table with:
 region.begin(".symtab", symbol_table_foa, symbol_table_foa)
 ```
 
-Both coordinates use the physical symbol-table position because symbol records
+Both coordinates use the symbol-table FOA because symbol records
 are metadata rather than section-relative program content.
 
-`coff_begin_symbols` is useful when the current real file cursor already equals
+`coff_begin_symbols` is useful when the committed FOA already equals
 the planned symbol-table FOA. After a reserve-only BSS region, make that
-relationship explicit rather than assuming the current region's zero physical
-cursor still represents the end of previous file-backed data.
+relationship explicit rather than assuming the current region's zero raw cursor
+still represents the end of previous file-backed data.
 
 The direct rule is simple:
 
@@ -3830,9 +3830,9 @@ dd(0)
 The zero is the initial addend for a call with no additional displacement.
 The linker replaces that field according to the relocation type.
 
-This manual field emission is specific to direct object construction. The
-ordinary format facade accepts a named relocation declaration and performs
-the index planning on behalf of the user.
+This manual field emission is specific to direct object construction.
+`format.inc` accepts a named relocation declaration and performs the index
+planning on behalf of the user.
 
 ### Choose the Relocation Type by Machine
 
@@ -3904,7 +3904,7 @@ If several sections contain relocations, each section needs its own contiguous
 relocation table. Each section row then stores the FOA and row count of its own
 table.
 
-The tables may be physically adjacent, but their ownership remains
+The tables may be adjacent in the file, but their ownership remains
 section-specific.
 
 ### Emit and Count Relocation Rows
@@ -3924,7 +3924,7 @@ reloc_end:
 ```
 
 The logical base of this metadata region is not used as a runtime address. Its
-physical base is the relocation-table FOA.
+raw base is the relocation-table FOA.
 
 Derive the count from the bytes actually emitted:
 
@@ -3969,7 +3969,7 @@ coff_finalize_section_reloc(
 )
 ```
 
-when the direct object plan already knows the physical values.
+when the direct object plan already knows the raw pointer and raw size.
 
 Use:
 
@@ -4071,9 +4071,9 @@ The resulting object is 150 bytes:
 |---|---|
 | `0x0000 .. 0x003b` | file header and one section row |
 | `0x003c .. 0x004e` | nineteen `.text` bytes |
-| `0x004f` | physical alignment byte |
+| `0x004f` | file-alignment byte |
 | `0x0050 .. 0x0059` | one relocation record |
-| `0x005a .. 0x005b` | physical alignment bytes |
+| `0x005a .. 0x005b` | file-alignment bytes |
 | `0x005c .. 0x0091` | three symbol records |
 | `0x0092 .. 0x0095` | minimum string table |
 
@@ -4408,7 +4408,7 @@ Every `PT_LOAD` has two coordinate systems:
 
 | Coordinate | Meaning |
 |---|---|
-| `p_offset` | physical position in the file |
+| `p_offset` | FOA of the segment |
 | `p_vaddr` | logical position in the process image |
 
 The next file-backed segment can begin immediately after the previous
@@ -4419,14 +4419,14 @@ Its virtual address can advance to another page.
 This allows:
 
 ```text
-compact physical file
+compact raw file
 separate virtual pages
 different page permissions
 ```
 
 Do not make the second segment's FOA equal to its virtual page distance.
-That would turn a virtual-memory separation requirement into thousands of
-physical zero bytes.
+That would turn a virtual-memory separation requirement into thousands of raw
+zero bytes.
 
 ### Page Congruence
 
@@ -4503,12 +4503,12 @@ After emitting a file-backed segment, use:
 region.file_align(1)
 ```
 
-to close the region at its exact physical end.
+to close the region at its exact raw end.
 
 Alignment `1` means:
 
 ```text
-commit the region's real file extent
+commit the region's raw file extent
 add no padding bytes
 ```
 
@@ -4526,7 +4526,7 @@ These are different operations:
 
 | Operation | Purpose |
 |---|---|
-| `region.file_align(1)` | close the physical output region exactly |
+| `region.file_align(1)` | close the raw output region exactly |
 | `p_align = 0x1000` | describe loader page congruence |
 
 ### Choose the Explicit Finalizer for Independent Coordinates
@@ -4612,7 +4612,7 @@ region.begin(name, virtual_address, file_offset)
 This is still the direct ELF model:
 
 - `elfexe.inc` emits and finalizes the ELF records;
-- the region API provides the logical and physical output coordinates.
+- the region API provides the logical address and raw-file coordinates.
 
 ### Entry Addresses Use Logical Position
 
@@ -4751,7 +4751,7 @@ Its program headers are:
 | `0` | `R X` | `176` | `0x4000b0` | `13` | `13` |
 | `1` | `RW` | `189` | `0x4010bd` | `4` | `68` |
 
-The physical file ends at:
+The raw file ends at:
 
 ```text
 189 + 4 = 193
@@ -4855,7 +4855,7 @@ Its program headers are:
 | `0` | `R X` | `128` | `0x08048080` | `13` | `13` |
 | `1` | `RW` | `141` | `0x0804908d` | `4` | `68` |
 
-The physical file ends at:
+The raw file ends at:
 
 ```text
 141 + 4 = 145
@@ -4942,7 +4942,7 @@ import("format/elfobj.inc")
 
 The direct object layer requires the caller to plan section indexes, symbol
 indexes, string offsets, table offsets, and relocation records explicitly.
-Use the ordinary format facade when those details should be generated
+Use `format.inc` when those details should be generated
 automatically.
 
 ### Relocatable Objects Use Section Headers
@@ -4963,7 +4963,7 @@ e_phnum = 0
 The important object-header fields are:
 
 ```text
-e_shoff     file offset of the section-header table
+e_shoff     FOA of the section-header table
 e_shentsize size of one section-header row
 e_shnum     number of section-header rows
 e_shstrndx  index of the section-name string table
@@ -5030,13 +5030,13 @@ elfobj_end_section(raw_size)
 ```
 
 `elfobj_begin_section` starts the section with a section-relative logical
-address of zero and the supplied physical file offset.
+address of zero and the supplied FOA.
 
-`elfobj_end_section` extends the physical section to the declared raw size.
+`elfobj_end_section` extends the raw section to the declared raw size.
 Use it only when that raw size is supposed to occupy the file.
 
 Small alignment gaps between file-backed sections may contain padding. A
-virtual-memory size must not be converted into a physical file gap.
+virtual-memory size must not be converted into a raw file gap.
 
 ### NOBITS and BSS
 
@@ -5073,7 +5073,7 @@ Do not call:
 elfobj_end_section(64)
 ```
 
-for BSS. That helper describes 64 physical bytes and would write padding into
+for BSS. That helper describes 64 raw bytes and would write padding into
 the object.
 
 Because `SHT_NOBITS` consumes no file bytes, the next file-backed section may
@@ -5774,7 +5774,7 @@ Before accepting a direct ELF object, confirm:
 15. Every relocation offset lies inside its target section.
 16. RELA addends are stored in relocation rows.
 17. REL addends are stored in relocated fields.
-18. BSS uses `SHT_NOBITS` and has zero physical size.
+18. BSS uses `SHT_NOBITS` and has zero raw size.
 19. BSS logical size and symbol sizes remain correct.
 20. `.note.GNU-stack` does not request executable stack permission.
 21. The object is accepted by an independent object reader.
@@ -5823,7 +5823,7 @@ The program-header table is authoritative for loading.
 The section-header table must still agree with the same bytes:
 
 ```text
-section sh_offset -> physical file position
+section sh_offset -> FOA
 section sh_addr   -> runtime virtual address
 ```
 
@@ -5856,7 +5856,7 @@ RX PLT
 RW GOT and dynamic metadata
 ```
 
-The file does not need a physical 4 KiB hole between those mappings.
+The file does not need a raw 4 KiB hole between those mappings.
 
 For every `PT_LOAD` row:
 
@@ -5928,7 +5928,7 @@ DT_SONAME  -> byte offset inside .dynstr
 The direct export and import emitters accept runtime virtual addresses for
 address-valued entries.
 
-Pass FOAs only to fields that explicitly describe physical file positions.
+Pass FOAs only to fields that explicitly describe raw file positions.
 
 ### Direct Shared-Object Helpers
 
@@ -6016,7 +6016,7 @@ elfso_finalize_phdr64(
 );
 ```
 
-This preserves the distinct physical and logical coordinates.
+This preserves the distinct raw-file and logical coordinates.
 
 ### Export-Only Shared Object
 
@@ -6280,7 +6280,7 @@ Its runtime mappings are:
 | 1 | `PT_LOAD` | `0x0f8` | `0x10f8` | `0x0f8` | RW |
 | 2 | `PT_DYNAMIC` | `0x180` | `0x1180` | `0x070` | RW |
 
-The physical file stays contiguous.
+The raw file stays contiguous.
 
 The metadata mapping is one virtual page above the code mapping and remains
 page-congruent with its FOA.
@@ -6382,7 +6382,7 @@ elfso_import_emit_plt64
 elfso_import_emit_gotplt64
 ```
 
-The physical placement is controlled separately by `region.begin`.
+Raw-file placement is controlled separately by `region.begin`.
 
 ### Dynamic Symbols for Imports and Exports
 
@@ -6413,7 +6413,7 @@ r_addend = 0
 
 `r_offset` is not the slot's FOA.
 
-The relocation section itself still has a physical file position:
+The relocation section itself still has a FOA:
 
 ```text
 .rela.plt sh_offset -> relocation row FOA
@@ -6899,7 +6899,7 @@ Allocated shared-object sections use both coordinates:
 
 ```text
 sh_addr = 0
-sh_offset = physical string-table position
+sh_offset = string-table FOA
 ```
 
 The section-header table itself also does not need to be part of a loadable
@@ -6933,7 +6933,7 @@ Before accepting a direct ELF shared object, confirm:
 19. `.rela.plt sh_link` identifies `.dynsym`.
 20. Allocated section headers separate `sh_addr` from `sh_offset`.
 21. Non-allocated tables use zero `sh_addr`.
-22. The final physical file size is explained by real records and alignment.
+22. The final raw file size is explained by actual records and alignment.
 23. An independent reader accepts the headers, symbols, and relocations.
 24. A real loader can load the export-only object.
 25. A real loader can resolve and call the imported function.
@@ -6942,7 +6942,7 @@ The direct shared-object layer is appropriate when the caller needs complete
 control over dynamic metadata, permission boundaries, table ordering, or
 runtime address assignment.
 
-Use the ordinary format facade when those details are not part of the intended
+Use `format.inc` when those details are not part of the intended
 design.
 
 ## 12. Validation and Interoperability
@@ -6967,11 +6967,11 @@ Each layer catches failures that the previous layer cannot see.
 
 ### Validation Is Part of the Layout Plan
 
-Direct helpers expose values that the ordinary facade normally derives:
+Direct helpers expose values that `format.inc` normally derives:
 
 - header counts;
 - row indexes;
-- file offsets;
+- FOAs/raw file offsets;
 - virtual addresses;
 - section and segment sizes;
 - symbol indexes;
@@ -7011,27 +7011,27 @@ Every allocated range should answer four questions:
 
 1. Where are its bytes in the file?
 2. Where are those bytes mapped in memory?
-3. How many bytes exist physically?
+3. How many bytes exist in the raw file?
 4. How many bytes exist logically after loading?
 
 These answers may be different.
 
 | Fact | Meaning |
 |---|---|
-| FOA | Physical position in the file |
+| FOA | Position in the raw file |
 | VA or RVA | Runtime location in the loaded image |
-| File size | Number of stored bytes |
+| Raw file size | Number of stored bytes |
 | Memory size | Number of bytes visible after loading |
 
 A range containing only reserve data may have:
 
 ```text
-file size   = 0
-memory size = nonzero
+raw file size = 0
+memory size   = nonzero
 ```
 
-A compact file may place two ranges next to each other physically while mapping
-them on different virtual pages.
+A compact file may place two ranges next to each other in the raw file while
+mapping them on different virtual pages.
 
 An independent reader should compare each field with the coordinate system it
 belongs to. Numeric equality between FOA and VA is not evidence that the field
@@ -7125,7 +7125,7 @@ PointerToRawData respects FileAlignment when raw data is present
 Reserve-only tails may increase `VirtualSize` without increasing
 `SizeOfRawData`.
 
-Sections with zero raw size should not force a block of physical zero bytes
+Sections with zero raw size should not force a block of raw zero bytes
 into the file.
 
 The entry RVA must lie inside an executable section.
@@ -7297,7 +7297,7 @@ part of the design.
 
 A BSS-only segment may have `p_filesz = 0` and nonzero `p_memsz`.
 
-The next file-backed segment may reuse the same physical file position while
+The next file-backed segment may reuse the same FOA while
 starting at a later virtual address.
 
 ### ELF Object Structural Validation
@@ -7474,15 +7474,15 @@ writable mapping rather than making the code mapping writable.
 The validation reader should reject an unexpected W+X section or segment even
 when the image executes successfully.
 
-### Validate Compact Physical Output
+### Validate Compact Raw Output
 
 Virtual page separation should not create unnecessary file-sized zero gaps.
 
 For each range, compare:
 
 ```text
-next physical start
-previous physical start + previous physical size
+next raw start
+previous raw start + previous raw size
 ```
 
 The difference should be explained by an actual alignment requirement or an
@@ -7496,10 +7496,10 @@ A larger file can be correct when the format requires aligned raw data.
 
 The reader should prove:
 
-- physical ranges do not overlap;
+- raw ranges do not overlap;
 - logical ranges do not overlap unintentionally;
 - reserve-only tails do not become stored zeros;
-- required physical alignment is preserved;
+- required file alignment is preserved;
 - virtual alignment is represented by addresses, not file padding.
 
 ### Validate Finalizer Results
@@ -7596,8 +7596,8 @@ Before publishing a direct format implementation, confirm:
 7. All section indexes exist.
 8. All relocation widths are nonzero and supported.
 9. All relocation targets use the correct coordinate system.
-10. All reserve-only ranges avoid physical zero filling.
-11. All physical ranges are compact and non-overlapping.
+10. All reserve-only ranges avoid raw zero filling.
+11. All raw ranges are compact and non-overlapping.
 12. All logical ranges are intentional and non-overlapping.
 13. All alignment and congruence rules hold.
 14. Entry points lie inside executable mappings.

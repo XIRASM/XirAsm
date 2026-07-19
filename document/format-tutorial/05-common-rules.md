@@ -1,6 +1,6 @@
 # 5. Common Rules and Mistakes
 
-When a format source fails, check the plan, names, permissions, and lifecycle
+When a format source fails, check the configuration, names, permissions, and lifecycle
 order before digging into file-format internals.
 
 ## Use One Layer
@@ -11,12 +11,12 @@ For normal programs, use:
 import("format/format.inc");
 ```
 
-Do not mix high-level facade calls with manual header or table emission unless
-you are intentionally writing an advanced construction.
+Do not mix `format.inc` lifecycle calls with manual header or table emission
+unless you are intentionally writing an advanced construction.
 
 ## Mutate One Configuration
 
-Create plans and declaration collections as `let` bindings. Mutating facade
+Create configurations and declaration collections as `let` bindings. Mutating
 calls update those bindings directly:
 
 ```text
@@ -32,7 +32,7 @@ The first argument of a `_mut` function must name a compatible `let` binding.
 ## Declare Before Emitting
 
 The name passed to `format_section_begin`, `format_section_end`,
-`format_segment_begin`, or `format_segment_end` must exist in the plan:
+`format_segment_begin`, or `format_segment_end` must exist in the configuration:
 
 ```text
 format_section(".text", format_code | format_readable | format_executable)
@@ -72,7 +72,7 @@ data executable.
 
 ## BSS Is Memory, Not File Payload
 
-For `format_uninitialized_data`, emit `rb(...)` or `reserve(...)`. The facade
+For `format_uninitialized_data`, emit `rb(...)` or `reserve(...)`. `format.inc`
 records logical size while keeping initialized file bytes empty when required.
 
 ## Relocations Are Not Pointers
@@ -100,7 +100,7 @@ loader or linker that those bytes may need adjustment.
 
 ## Entry Points Belong to Executables
 
-Use `format_entry_mut(plan, label)` for PE and ELF executables. Object files and
+Use `format_entry_mut(image, label)` for PE and ELF executables. Object files and
 ELF shared objects do not use the same entry workflow.
 
 ## Finalizers May Backfill, Not Re-layout

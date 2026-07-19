@@ -1,6 +1,6 @@
-// User-facing PE64 format facade.
+// Width-specific PE64 format compatibility include.
 //
-// This facade remains as a source-level compatibility layer over pe.inc for
+// This include remains as a source-level compatibility layer over pe.inc for
 // examples that spell out PE rows and finalizers in DSL.
 
 import("pe.inc");

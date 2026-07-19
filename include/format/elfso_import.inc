@@ -1,7 +1,7 @@
 // ELF64 shared-object import helpers for XIRASM.
 //
 // This layer deliberately models imports through explicit value-style Meta APIs.
-// Including a large catalog should only define helper wrappers and metadata;
+// Including a large catalog should only define helper functions and metadata;
 // nothing is emitted until elfso_import_* emitters are called with the final
 // import set. The current usable model emits writable import slots plus
 // .dynsym, .dynstr, .rela.dyn, and .dynamic entries. Each slot receives a

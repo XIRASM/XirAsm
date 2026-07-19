@@ -5,7 +5,7 @@ Start from the output file you want. Do not begin with PE or ELF header fields.
 ## One Include
 
 ```asm
-// Import the user-facing format facade.
+// Import the common format API.
 import("format/format.inc");
 ```
 
@@ -13,9 +13,9 @@ Direct includes such as `pe.inc`, `elfexe.inc`, and `elfobj.inc` expose lower
 header and table helpers. Use them only when you intentionally need manual
 construction.
 
-## Plan Functions
+## Configuration Functions
 
-| Output | Plan function | Content descriptor |
+| Output | Configuration function | Content descriptor |
 | --- | --- | --- |
 | PE32 executable or DLL | `format_pe32(options, sections)` | `format_section(...)` |
 | PE64 executable or DLL | `format_pe64(options, sections)` | `format_section(...)` |
@@ -107,7 +107,7 @@ let image: map = format_pe64(
     )
 )
 
-// Start the file. Headers and section rows are emitted by the facade.
+// Start the file. format.inc emits the headers and section rows.
 format_begin(image);
 
 format_section_begin(image, ".text");
@@ -124,5 +124,5 @@ format_entry_mut(image, start)
 format_finish(image);
 ```
 
-The facade derives headers, table rows, file offsets, RVAs, file alignment, and
-BSS sizes from the named blocks.
+`format.inc` derives headers, table rows, file offsets, RVAs, file alignment,
+and BSS sizes from the named blocks.

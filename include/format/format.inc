@@ -1,4 +1,4 @@
-// User-facing executable-format facade.
+// User-facing executable-format API layer.
 //
 // This layer owns declarative format plans and named section lookup. The
 // family-specific include files remain available as advanced row-level APIs.
@@ -222,9 +222,9 @@ fn format_validate_coff_sections(sections: list) -> bool {
             purpose == format_code ||
             purpose == format_data ||
             purpose == format_uninitialized_data,
-            "COFF user facade supports code, data, and uninitialized-data sections"
+            "COFF format API supports code, data, and uninitialized-data sections"
         );
-        assert((attributes & format_discardable) == 0, "COFF user facade does not expose discardable sections");
+        assert((attributes & format_discardable) == 0, "COFF format API does not expose discardable sections");
     }
     return true;
 }
@@ -249,7 +249,7 @@ fn format_coff64(sections: list) -> map {
 }
 
 fn format_coff_public(name: string, section_name: string, section_start: u64, address: u64, sym_type: u16) -> map {
-    assert(len(name) > 0 && len(name) <= 8, "COFF user symbol names must fit in eight bytes");
+    assert(len(name) > 0 && len(name) <= 8, "COFF symbol names must fit in eight bytes");
     assert(len(section_name) > 0, "COFF public symbol requires a section name");
     assert(address >= section_start, "COFF public symbol is before its section start");
     let symbol: map = map.new()
@@ -262,7 +262,7 @@ fn format_coff_public(name: string, section_name: string, section_start: u64, ad
 }
 
 fn format_coff_extern(name: string, sym_type: u16) -> map {
-    assert(len(name) > 0 && len(name) <= 8, "COFF user symbol names must fit in eight bytes");
+    assert(len(name) > 0 && len(name) <= 8, "COFF symbol names must fit in eight bytes");
     let symbol: map = map.new()
     map.set_mut(symbol, "kind", format_coff_symbol_extern);
     map.set_mut(symbol, "name", name);
@@ -296,7 +296,7 @@ fn format_coff_symbol_index(symbols: list, name: string) -> u64 {
 }
 
 fn format_validate_coff_tables(plan: map, symbols: list, relocs: list) -> bool {
-    assert(len(symbols) > 0, "COFF user facade requires at least one symbol");
+    assert(len(symbols) > 0, "COFF format API requires at least one symbol");
     for i in range(0, len(symbols)) {
         const symbol: map = list.get(symbols, i)
         const name: string = map.get(symbol, "name")
@@ -308,11 +308,11 @@ fn format_validate_coff_tables(plan: map, symbols: list, relocs: list) -> bool {
         assert(
             symbol_kind == format_coff_symbol_public ||
             symbol_kind == format_coff_symbol_extern,
-            "unknown COFF user symbol kind"
+            "unknown COFF format symbol kind"
         );
         for j in range(i + 1, len(symbols)) {
             const other: map = list.get(symbols, j)
-            assert(map.get(other, "name") != name, "COFF user symbol name is duplicated");
+            assert(map.get(other, "name") != name, "COFF symbol name is duplicated");
         }
     }
     for reloc in relocs {
@@ -327,7 +327,7 @@ fn format_validate_coff_tables(plan: map, symbols: list, relocs: list) -> bool {
 fn format_coff_tables_mut(let plan: map, symbols: list, relocs: list) {
     const kind: u64 = map.get(plan, "kind")
     assert(kind == format_kind_coff32 || kind == format_kind_coff64, "format plan is not a COFF object");
-    assert(format_validate_coff_tables(plan, symbols, relocs), "invalid COFF user tables");
+    assert(format_validate_coff_tables(plan, symbols, relocs), "invalid COFF format API tables");
     map.set_mut(plan, "symbols", symbols);
     map.set_mut(plan, "relocs", relocs);
 }
@@ -341,11 +341,11 @@ fn format_validate_elfobj_sections(sections: list) -> bool {
             purpose == format_code ||
             purpose == format_data ||
             purpose == format_uninitialized_data,
-            "ELF object user facade supports code, data, and uninitialized-data sections"
+            "ELF object format API supports code, data, and uninitialized-data sections"
         );
         assert(
             (attributes & format_discardable) == 0,
-            "ELF object user facade does not expose discardable sections"
+            "ELF object format API does not expose discardable sections"
         );
     }
     return true;
@@ -428,7 +428,7 @@ fn format_elfobj_symbol_index(plan: map, symbols: list, name: string) -> u64 {
 }
 
 fn format_validate_elfobj_tables(plan: map, symbols: list, relocs: list) -> bool {
-    assert(len(symbols) > 0, "ELF object user facade requires at least one symbol");
+    assert(len(symbols) > 0, "ELF object format API requires at least one symbol");
     for i in range(0, len(symbols)) {
         const symbol: map = list.get(symbols, i)
         const name: string = map.get(symbol, "name")
@@ -440,11 +440,11 @@ fn format_validate_elfobj_tables(plan: map, symbols: list, relocs: list) -> bool
         assert(
             symbol_kind == format_elfobj_symbol_public ||
             symbol_kind == format_elfobj_symbol_extern,
-            "unknown ELF object user symbol kind"
+            "unknown ELF object format symbol kind"
         );
         for j in range(i + 1, len(symbols)) {
             const other: map = list.get(symbols, j)
-            assert(map.get(other, "name") != name, "ELF object user symbol name is duplicated");
+            assert(map.get(other, "name") != name, "ELF object symbol name is duplicated");
         }
     }
     for reloc in relocs {
@@ -459,7 +459,7 @@ fn format_validate_elfobj_tables(plan: map, symbols: list, relocs: list) -> bool
 fn format_elfobj_tables_mut(let plan: map, symbols: list, relocs: list) {
     const kind: u64 = map.get(plan, "kind")
     assert(kind == format_kind_elfobj32 || kind == format_kind_elfobj64, "format plan is not an ELF object");
-    assert(format_validate_elfobj_tables(plan, symbols, relocs), "invalid ELF object user tables");
+    assert(format_validate_elfobj_tables(plan, symbols, relocs), "invalid ELF object format API tables");
     map.set_mut(plan, "symbols", symbols);
     map.set_mut(plan, "relocs", relocs);
 }
@@ -502,7 +502,7 @@ fn format_validate_elf_options(kind: u64, options: u64) -> bool {
     assert(options != 0, "ELF format requires executable or PIE mode");
     assert((options & (options - 1)) == 0, "ELF format has multiple file modes");
     if kind == format_kind_elf32 {
-        assert(options == format_elf_exec, "ELF32 user facade currently supports executable mode");
+        assert(options == format_elf_exec, "format.inc ELF32 layer currently supports executable mode");
     }
     return true;
 }
@@ -637,7 +637,7 @@ fn format_elfso_import_pairs_mut(let imports: list, library: string, pairs: list
 
 fn format_validate_elfso_tables(plan: map, exports: list, imports: list) -> bool {
     assert(map.get(plan, "kind") == format_kind_elfso64, "format plan is not an ELF64 shared object");
-    assert(len(exports) > 0, "ELF shared-object user facade requires at least one export");
+    assert(len(exports) > 0, "ELF shared-object format API requires at least one export");
 
     for i in range(0, len(exports)) {
         const export0: map = list.get(exports, i)
@@ -668,7 +668,7 @@ fn format_validate_elfso_tables(plan: map, exports: list, imports: list) -> bool
 }
 
 fn format_elfso_tables_mut(let plan: map, exports: list, imports: list) {
-    assert(format_validate_elfso_tables(plan, exports, imports), "invalid ELF shared-object user tables");
+    assert(format_validate_elfso_tables(plan, exports, imports), "invalid ELF shared-object format API tables");
     map.set_mut(plan, "exports", exports);
     map.set_mut(plan, "imports", imports);
 }
@@ -1275,7 +1275,7 @@ fn format_section_end(plan: map, name: string) {
         const sections: list = map.get(plan, "sections")
         const section: map = list.get(sections, row)
         const attributes: u64 = map.get(section, "attributes")
-        assert(format_elfobj_section_alignment(kind, attributes) <= 16, "ELF object section alignment exceeds facade boundary");
+        assert(format_elfobj_section_alignment(kind, attributes) <= 16, "ELF object section alignment exceeds format.inc layer limit");
         label.define(format_elfobj_section_end_label(name));
         region.file_align(16);
     }
@@ -1463,7 +1463,7 @@ fn format_segment_begin(plan: map, name: string) {
     }
     const logical_offset: u64 = format_elf_next_load_logical_offset(image_base, file_offset, row)
 
-    assert(purpose == format_load, "ordinary ELF facade supports LOAD segments only");
+    assert(purpose == format_load, "format.inc ELF layer supports LOAD segments only");
 
     if kind == format_kind_elf32 {
         region.begin(name, elf_default_base32 + logical_offset, file_offset);
@@ -1511,7 +1511,7 @@ fn format_segment_end(plan: map, name: string) {
     const attributes: u64 = map.get(segment, "attributes")
     const purpose: u64 = attributes & format_segment_purpose_mask
 
-    assert(purpose == format_load, "ordinary ELF facade supports LOAD segments only");
+    assert(purpose == format_load, "format.inc ELF layer supports LOAD segments only");
 
     if kind == format_kind_elf32 {
         region.file_align(1);
@@ -1760,7 +1760,7 @@ fn format_coff_emit_symbol(plan: map, symbol: map) {
     assert(
         symbol_kind == format_coff_symbol_public ||
         symbol_kind == format_coff_symbol_extern,
-        "unknown COFF user symbol kind"
+        "unknown COFF format symbol kind"
     );
 
     db(name);
@@ -1776,7 +1776,7 @@ fn format_coff_finish_tables(plan: map) {
     const sections: list = map.get(plan, "sections")
     const symbols: list = map.get(plan, "symbols")
     const relocs: list = map.get(plan, "relocs")
-    assert(len(symbols) > 0, "COFF user facade requires format_coff_tables_mut before format_finish");
+    assert(len(symbols) > 0, "COFF format API requires format_coff_tables_mut before format_finish");
 
     region.begin(".coff.tables", file_cursor_potential(), file_cursor_real());
     for row in range(0, len(sections)) {
@@ -1873,7 +1873,7 @@ fn format_elfobj_emit_user_symbol32(plan: map, symbol: map, name_offset: u64) {
     assert(
         symbol_kind == format_elfobj_symbol_public ||
         symbol_kind == format_elfobj_symbol_extern,
-        "unknown ELF object user symbol kind"
+        "unknown ELF object format symbol kind"
     );
     elfobj_sym32(
         name_offset,
@@ -1895,7 +1895,7 @@ fn format_elfobj_emit_user_symbol64(plan: map, symbol: map, name_offset: u64) {
     assert(
         symbol_kind == format_elfobj_symbol_public ||
         symbol_kind == format_elfobj_symbol_extern,
-        "unknown ELF object user symbol kind"
+        "unknown ELF object format symbol kind"
     );
     elfobj_sym64(
         name_offset,
@@ -1911,7 +1911,7 @@ fn format_elfobj_finish_tables(plan: map) {
     const sections: list = map.get(plan, "sections")
     const symbols: list = map.get(plan, "symbols")
     const relocs: list = map.get(plan, "relocs")
-    assert(len(symbols) > 0, "ELF object user facade requires format_elfobj_tables_mut before format_finish");
+    assert(len(symbols) > 0, "ELF object format API requires format_elfobj_tables_mut before format_finish");
 
     let table_alignment = 4
     if kind == format_kind_elfobj64 {

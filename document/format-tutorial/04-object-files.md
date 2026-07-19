@@ -124,16 +124,16 @@ For ELF32, use `format_elfobj32`. A common 32-bit relative call relocation is
 
 | Family | Function | Use |
 | --- | --- | --- |
-| COFF | `format_coff32(sections)` / `format_coff64(sections)` | create an object plan |
+| COFF | `format_coff32(sections)` / `format_coff64(sections)` | create an object configuration |
 | COFF | `format_coff_public(name, section_name, section_start, address, sym_type)` | define a public symbol |
 | COFF | `format_coff_extern(name, sym_type)` | declare an external symbol |
 | COFF | `format_coff_reloc(section_name, section_start, address, symbol_name, reloc_type)` | declare a relocation field |
-| COFF | `format_coff_tables_mut(plan, symbols, relocs)` | attach symbol and relocation tables |
-| ELF | `format_elfobj32(sections)` / `format_elfobj64(sections)` | create an object plan |
+| COFF | `format_coff_tables_mut(object, symbols, relocs)` | attach symbol and relocation tables |
+| ELF | `format_elfobj32(sections)` / `format_elfobj64(sections)` | create an object configuration |
 | ELF | `format_elfobj_public(name, section_name, section_start, address, symbol_size, symbol_type)` | define a public symbol |
 | ELF | `format_elfobj_extern(name, symbol_type)` | declare an external symbol |
 | ELF | `format_elfobj_reloc(section_name, section_start, address, symbol_name, reloc_type, addend)` | declare a relocation field |
-| ELF | `format_elfobj_tables_mut(plan, symbols, relocs)` | attach symbol and relocation tables |
+| ELF | `format_elfobj_tables_mut(object, symbols, relocs)` | attach symbol and relocation tables |
 
 The relocation field is the bytes the linker will patch. Emit a placeholder
 first, then describe that placeholder with `format_*_reloc`.

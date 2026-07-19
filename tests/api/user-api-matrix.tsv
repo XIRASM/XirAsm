@@ -48,7 +48,7 @@ api.origin	api	origin	call.callee, "origin"	origin(	Base address for labels and 
 api.virtual_begin	api	virtual.begin	call.callee, "virtual.begin"	virtual.begin(	Isolated virtual output region start.
 api.virtual_end	api	virtual.end	call.callee, "virtual.end"	virtual.end()	Isolated virtual output region end.
 api.region_begin	api	region.begin	call.callee, "region.begin"	region.begin(	Start a logical output region with explicit origin and raw file offset.
-api.region_file_align	api	region.file_align	call.callee, "region.file_align"	region.file_align(	Align the active region's physical file size without advancing logical addresses.
+api.region_file_align	api	region.file_align	call.callee, "region.file_align"	region.file_align(	Align the active region's raw size without advancing logical addresses.
 api.output_org	api	output.org	call.callee, "output.org"	output.org(	Start a new output area after the active potential file cursor.
 api.output_section	api	output.section	call.callee, "output.section"	output.section(	Start a new output area after the active real file cursor, trimming tail reserve.
 api.store_u8	api	store.u8	storeByteCount(call.callee)	store.u8(	Write one byte into module byte space or deferred final output image.
@@ -120,10 +120,10 @@ format.format_readable	format	format_readable	const format_readable	format_reada
 format.format_writeable	format	format_writeable	const format_writeable	format_writeable	Mark a declared section writeable.
 format.format_executable	format	format_executable	const format_executable	format_executable	Mark a declared section executable.
 format.format_discardable	format	format_discardable	const format_discardable	format_discardable	Mark a declared section discardable.
-format.format_pe_import_new	format	format_pe_import_new	fn format_pe_import_new	format_pe_import_new(	Create an empty ordinary PE import set.
+format.format_pe_import_new	format	format_pe_import_new	fn format_pe_import_new	format_pe_import_new(	Create an empty format.inc PE import set.
 format.format_pe_import_many_mut	format	format_pe_import_many_mut	fn format_pe_import_many_mut	format_pe_import_many_mut(	Add matching-name imports and select PE32 or PE64 from the plan.
 format.format_pe_import_pairs_mut	format	format_pe_import_pairs_mut	fn format_pe_import_pairs_mut	format_pe_import_pairs_mut(	Add local-slot and imported-name pairs and select PE32 or PE64 from the plan.
-format.format_pe_export_new	format	format_pe_export_new	fn format_pe_export_new	format_pe_export_new(	Create an empty ordinary PE export list.
+format.format_pe_export_new	format	format_pe_export_new	fn format_pe_export_new	format_pe_export_new(	Create an empty format.inc PE export list.
 format.format_pe_export_many_mut	format	format_pe_export_many_mut	fn format_pe_export_many_mut	format_pe_export_many_mut(	Add matching-name exports and select PE32 or PE64 from the plan.
 format.format_pe_export_pairs_mut	format	format_pe_export_pairs_mut	fn format_pe_export_pairs_mut	format_pe_export_pairs_mut(	Add target-label and public-name export pairs and select PE32 or PE64 from the plan.
 format.format_pe_import_section	format	format_pe_import_section	fn format_pe_import_section	format_pe_import_section(	Emit a declared PE import section and register directory backfill.
@@ -142,11 +142,11 @@ format.format_elf32	format	format_elf32	fn format_elf32	format_elf32(	Create an 
 format.format_elf64	format	format_elf64	fn format_elf64	format_elf64(	Create an ELF64 executable or PIE plan with automatic program-header count.
 format.format_segment	format	format_segment	fn format_segment	format_segment(	Declare a named ELF LOAD segment and permissions.
 format.format_segment_begin	format	format_segment_begin	fn format_segment_begin	format_segment_begin(	Open a declared ELF LOAD segment by name.
-format.format_segment_end	format	format_segment_end	fn format_segment_end	format_segment_end(	Close a declared ELF LOAD segment and commit its exact physical extent; PT_LOAD p_align remains 4096.
+format.format_segment_end	format	format_segment_end	fn format_segment_end	format_segment_end(	Close a declared ELF LOAD segment and commit its exact raw extent; PT_LOAD p_align remains 4096.
 format.format_elf_exec	format	format_elf_exec	const format_elf_exec	format_elf_exec	Select fixed-address ELF executable output.
 format.format_elf_pie	format	format_elf_pie	const format_elf_pie	format_elf_pie	Select ELF64 position-independent executable output.
 format.format_load	format	format_load	const format_load	format_load	Declare an ELF PT_LOAD segment purpose.
-format.format_elfexe_import_new	format	format_elfexe_import_new	fn format_elfexe_import_new	format_elfexe_import_new(	Create an empty ordinary ELF64 executable import list.
+format.format_elfexe_import_new	format	format_elfexe_import_new	fn format_elfexe_import_new	format_elfexe_import_new(	Create an empty format.inc ELF64 executable import list.
 format.format_elfexe_import_many_mut	format	format_elfexe_import_many_mut	fn format_elfexe_import_many_mut	format_elfexe_import_many_mut(	Add matching-name ELF64 executable PLT/GOT imports from one library.
 format.format_elfexe_import_pairs_mut	format	format_elfexe_import_pairs_mut	fn format_elfexe_import_pairs_mut	format_elfexe_import_pairs_mut(	Add local-name and imported-name ELF64 executable PLT/GOT pairs.
 format.format_elfexe_tables_mut	format	format_elfexe_tables_mut	fn format_elfexe_tables_mut	format_elfexe_tables_mut(	Attach ELF64 executable imports and generate dynamic metadata at finish.
@@ -157,10 +157,10 @@ format.format_elfobj_extern	format	format_elfobj_extern	fn format_elfobj_extern	
 format.format_elfobj_reloc	format	format_elfobj_reloc	fn format_elfobj_reloc	format_elfobj_reloc(	Declare an ELF object relocation by section and symbol name.
 format.format_elfobj_tables_mut	format	format_elfobj_tables_mut	fn format_elfobj_tables_mut	format_elfobj_tables_mut(	Attach ELF object symbols and relocations to a plan.
 format.format_elf64_so	format	format_elf64_so	fn format_elf64_so	format_elf64_so(	Create an ELF64 shared-object plan with automatic program and section tables.
-format.format_elfso_export_new	format	format_elfso_export_new	fn format_elfso_export_new	format_elfso_export_new(	Create an empty ordinary ELF64 shared-object export list.
+format.format_elfso_export_new	format	format_elfso_export_new	fn format_elfso_export_new	format_elfso_export_new(	Create an empty format.inc ELF64 shared-object export list.
 format.format_elfso_export_many_mut	format	format_elfso_export_many_mut	fn format_elfso_export_many_mut	format_elfso_export_many_mut(	Add matching-name ELF64 shared-object exports from one segment.
 format.format_elfso_export_pairs_mut	format	format_elfso_export_pairs_mut	fn format_elfso_export_pairs_mut	format_elfso_export_pairs_mut(	Add target-label and public-name ELF64 shared-object export pairs.
-format.format_elfso_import_new	format	format_elfso_import_new	fn format_elfso_import_new	format_elfso_import_new(	Create an empty ordinary ELF64 shared-object import list.
+format.format_elfso_import_new	format	format_elfso_import_new	fn format_elfso_import_new	format_elfso_import_new(	Create an empty format.inc ELF64 shared-object import list.
 format.format_elfso_import_many_mut	format	format_elfso_import_many_mut	fn format_elfso_import_many_mut	format_elfso_import_many_mut(	Add matching-name ELF64 shared-object PLT/GOT imports from one library.
 format.format_elfso_import_pairs_mut	format	format_elfso_import_pairs_mut	fn format_elfso_import_pairs_mut	format_elfso_import_pairs_mut(	Add local-name and imported-name ELF64 shared-object PLT/GOT pairs.
 format.format_elfso_tables_mut	format	format_elfso_tables_mut	fn format_elfso_tables_mut	format_elfso_tables_mut(	Attach ELF64 shared-object exports and imports to a plan.
@@ -203,16 +203,16 @@ format.pe_begin_section64	format	pe_begin_section	fn pe_begin_section	pe_begin_s
 format.pe_row64_foa	format	pe_row_foa	fn pe_row_foa	pe_row_foa(	Return PE64 section header row file offset for finalizer backfill.
 format.pe_end_section	format	pe_end_section	fn pe_end_section	pe_end_section(	Pad active PE section region to explicit raw size.
 format.pe_opt_checksum_foa	format	pe_opt_checksum_foa	const pe_opt_checksum_foa	pe_opt_checksum_foa	PE optional-header CheckSum field file offset shared by PE32 and PE32+.
-format.pe_checksum_begin	format	pe_checksum_begin	fn pe_checksum_begin	pe_checksum_begin(	Clear OptionalHeader.CheckSum and fold the final physical PE header region.
-format.pe_checksum_add_region	format	pe_checksum_add_region	fn pe_checksum_add_region	pe_checksum_add_region(	Fold one final physical PE section region into the checksum accumulator.
-format.pe_checksum_finish	format	pe_checksum_finish	fn pe_checksum_finish	pe_checksum_finish(	Add final physical file size and store OptionalHeader.CheckSum.
+format.pe_checksum_begin	format	pe_checksum_begin	fn pe_checksum_begin	pe_checksum_begin(	Clear OptionalHeader.CheckSum and fold the final raw PE header region.
+format.pe_checksum_add_region	format	pe_checksum_add_region	fn pe_checksum_add_region	pe_checksum_add_region(	Fold one final raw PE section region into the checksum accumulator.
+format.pe_checksum_finish	format	pe_checksum_finish	fn pe_checksum_finish	pe_checksum_finish(	Add final raw file size and store OptionalHeader.CheckSum.
 format.pe_finalize_u32	format	pe_finalize_u32	fn pe_finalize_u32	pe_finalize_u32(	Register a deferred PE u32 patch at a final output address.
 format.pe_finalize_section64	format	pe_finalize_section64	fn pe_finalize_section64	pe_finalize_section64(	Register deferred PE64 section row backfill for name, RVA, raw offset, sizes, and characteristics.
 format.pe_finalize_section32	format	pe_finalize_section32	fn pe_finalize_section32	pe_finalize_section32(	Register deferred PE32 section row backfill for name, RVA, raw offset, sizes, and characteristics.
 format.pe_finalize_entry	format	pe_finalize_entry	fn pe_finalize_entry	pe_finalize_entry(	Register deferred PE entry RVA backfill from a label and section base.
 format.pe_finalize_image_size	format	pe_finalize_image_size	fn pe_finalize_image_size	pe_finalize_image_size(	Register deferred PE SizeOfImage backfill from the last section RVA plus logical extent.
-format.pe_finalize_code_size	format	pe_finalize_code_size	fn pe_finalize_code_size	pe_finalize_code_size(	Register deferred PE SizeOfCode backfill from the physical region file size.
-format.pe_finalize_init_data_size	format	pe_finalize_init_data_size	fn pe_finalize_init_data_size	pe_finalize_init_data_size(	Register deferred PE SizeOfInitializedData backfill from the physical region file size.
+format.pe_finalize_code_size	format	pe_finalize_code_size	fn pe_finalize_code_size	pe_finalize_code_size(	Register deferred PE SizeOfCode backfill from the region raw size.
+format.pe_finalize_init_data_size	format	pe_finalize_init_data_size	fn pe_finalize_init_data_size	pe_finalize_init_data_size(	Register deferred PE SizeOfInitializedData backfill from the region raw size.
 format.pe_finalize_base_of_code	format	pe_finalize_base_of_code	fn pe_finalize_base_of_code	pe_finalize_base_of_code(	Register deferred PE BaseOfCode backfill.
 format.pe_finalize_base_of_data32	format	pe_finalize_base_of_data32	fn pe_finalize_base_of_data32	pe_finalize_base_of_data32(	Register deferred PE32 BaseOfData backfill.
 format.pe_finalize_data_dir64	format	pe_finalize_data_dir64	fn pe_finalize_data_dir64	pe_finalize_data_dir64(	Register deferred PE64 data-directory RVA and size backfill.
@@ -316,7 +316,7 @@ format.elfexe_finalize_region32	format	elfexe_finalize_region32	fn elfexe_finali
 format.elfexe_finalize_region64	format	elfexe_finalize_region64	fn elfexe_finalize_region64	elfexe_finalize_region64(	Register deferred ELF64 non-LOAD program-header backfill from file-backed region facts.
 format.elfexe_finalize_load32	format	elfexe_finalize_load32	fn elfexe_finalize_load32	elfexe_finalize_load32(	Register deferred ELF32 PT_LOAD row backfill from a segment extent.
 format.elfexe_finalize_load64	format	elfexe_finalize_load64	fn elfexe_finalize_load64	elfexe_finalize_load64(	Register deferred ELF64 PT_LOAD row backfill from a segment extent.
-format.elf32_exe	format	elf32_exe	fn elf32_exe	elf32_exe(	User-facing ELF32 executable facade that emits ELF header and program-header placeholders.
+format.elf32_exe	format	elf32_exe	fn elf32_exe	elf32_exe(	Width-specific ELF32 executable helper that emits ELF header and program-header placeholders.
 format.elf32_first_foa	format	elf32_first_foa	fn elf32_first_foa	elf32_first_foa(	User-facing ELF32 first load-segment file offset helper for a known segment count.
 format.elf32_segment	format	elf32_segment	fn elf32_segment	elf32_segment(	User-facing ELF32 PT_LOAD region opener at a file-offset-backed virtual address.
 format.elf32_end_segment	format	elf32_end_segment	fn elf32_end_segment	elf32_end_segment(	User-facing ELF32 segment closer that aligns file bytes automatically.
@@ -326,8 +326,8 @@ format.elf32_finish_gnu_stack	format	elf32_finish_gnu_stack	fn elf32_finish_gnu_
 format.elf32_finish_gnu_eh_frame	format	elf32_finish_gnu_eh_frame	fn elf32_finish_gnu_eh_frame	elf32_finish_gnu_eh_frame(	User-facing ELF32 PT_GNU_EH_FRAME finalizer from file-backed region facts.
 format.elf32_finish_gnu_relro	format	elf32_finish_gnu_relro	fn elf32_finish_gnu_relro	elf32_finish_gnu_relro(	User-facing ELF32 PT_GNU_RELRO finalizer from file-backed region facts.
 format.elf32_rx	format	elf32_rx	const elf32_rx	elf32_rx	User-facing ELF32 readable executable segment permission preset.
-format.elf64_exe	format	elf64_exe	fn elf64_exe	elf64_exe(	User-facing ELF64 executable facade that emits ELF header and program-header placeholders.
-format.elf64_pie	format	elf64_pie	fn elf64_pie	elf64_pie(	User-facing ELF64 position-independent executable facade using ET_DYN and base-relative virtual addresses.
+format.elf64_exe	format	elf64_exe	fn elf64_exe	elf64_exe(	Width-specific ELF64 executable helper that emits ELF header and program-header placeholders.
+format.elf64_pie	format	elf64_pie	fn elf64_pie	elf64_pie(	Width-specific ELF64 position-independent executable helper using ET_DYN and base-relative virtual addresses.
 format.elf64_pie_first_foa	format	elf64_pie_first_foa	fn elf64_pie_first_foa	elf64_pie_first_foa(	Return the first ELF64 PIE load-segment file offset for a known segment count.
 format.elf64_pie_segment	format	elf64_pie_segment	fn elf64_pie_segment	elf64_pie_segment(	Open an ELF64 PIE PT_LOAD region whose virtual address equals its file offset.
 format.elf64_pie_end_segment	format	elf64_pie_end_segment	fn elf64_pie_end_segment	elf64_pie_end_segment(	Close and file-align the active ELF64 PIE segment.
@@ -433,13 +433,13 @@ format.elfso_import_dynstr_size	format	elfso_import_dynstr_size	fn elfso_import_
 format.elfso_import_names_size	format	elfso_import_names_size	fn elfso_import_names_size	elfso_import_names_size(	Compute combined ELF64 SO import symbol-name string size.
 format.elfso_import_libraries	format	elfso_import_libraries	fn elfso_import_libraries	elfso_import_libraries(	Return the unique ELF64 SO needed-library list for an import set.
 format.coff_begin32	format	coff_begin32	fn coff_begin32	coff_begin32(	Emit a 32-bit MS COFF object header with section rows.
-format.coff32_obj	format	coff32_obj	fn coff32_obj	coff32_obj(	User-facing i386 COFF object facade that emits file header and section-row placeholders.
+format.coff32_obj	format	coff32_obj	fn coff32_obj	coff32_obj(	Width-specific i386 COFF object helper that emits file header and section-row placeholders.
 format.coff32_section	format	coff32_section	fn coff32_section	coff32_section(	User-facing i386 COFF section opener at the current file offset.
 format.coff32_end_section	format	coff32_end_section	fn coff32_end_section	coff32_end_section(	User-facing i386 COFF section closer that aligns file bytes automatically.
 format.coff32_finish_section	format	coff32_finish_section	fn coff32_finish_section	coff32_finish_section(	User-facing i386 COFF section-row finalizer.
 format.coff32_rx	format	coff32_rx	const coff32_rx	coff32_rx	User-facing i386 COFF readable executable section permission preset.
 format.coff_begin64	format	coff_begin64	fn coff_begin64	coff_begin64(	Emit an AMD64 MS COFF object header with section rows.
-format.coff64_obj	format	coff64_obj	fn coff64_obj	coff64_obj(	User-facing AMD64 COFF object facade that emits file header and section-row placeholders.
+format.coff64_obj	format	coff64_obj	fn coff64_obj	coff64_obj(	Width-specific AMD64 COFF object helper that emits file header and section-row placeholders.
 format.coff64_section	format	coff64_section	fn coff64_section	coff64_section(	User-facing AMD64 COFF section opener at the current file offset.
 format.coff64_end_section	format	coff64_end_section	fn coff64_end_section	coff64_end_section(	User-facing AMD64 COFF section closer that aligns file bytes automatically.
 format.coff64_finish_section	format	coff64_finish_section	fn coff64_finish_section	coff64_finish_section(	User-facing AMD64 COFF section-row finalizer.
@@ -538,11 +538,11 @@ expr.pack	expr	pack	call.name, "pack"	pack(	Pack compile-time struct value into 
 expr.here	expr	here	call.name, "here"	here()	Current address query.
 expr.region_base	expr	region_base	call.name, "region_base"	region_base()	Active output region origin query.
 expr.file_offset	expr	file_offset	call.name, "file_offset"	file_offset()	Active output file offset query.
-expr.file_cursor_real	expr	file_cursor_real	call.name, "file_cursor_real"	file_cursor_real()	Active file cursor after materialized output bytes.
+expr.file_cursor_real	expr	file_cursor_real	call.name, "file_cursor_real"	file_cursor_real()	Committed FOA after emitted raw bytes.
 expr.file_cursor_potential	expr	file_cursor_potential	call.name, "file_cursor_potential"	file_cursor_potential()	Active file cursor implied by the logical output position.
-expr.tail_reserve_size	expr	tail_reserve_size	call.name, "tail_reserve_size"	tail_reserve_size()	Active unmaterialized tail reserve size.
+expr.tail_reserve_size	expr	tail_reserve_size	call.name, "tail_reserve_size"	tail_reserve_size()	Active tail reserve with logical size but no raw bytes yet.
 expr.region_file_offset	expr	region_file_offset	call.name, "region_file_offset"	region_file_offset(	Finalizer-time raw file offset for the region containing an address.
-expr.region_file_size	expr	region_file_size	call.name, "region_file_size"	region_file_size(	Finalizer-time physical file size for the region containing an address.
+expr.region_file_size	expr	region_file_size	call.name, "region_file_size"	region_file_size(	Finalizer-time raw size for the region containing an address.
 expr.region_logical_size	expr	region_logical_size	call.name, "region_logical_size"	region_logical_size(	Finalizer-time logical size for the region containing an address.
 expr.label_addr	expr	label_addr	call.name, "label_addr"	label_addr(	Label address query.
 api.label_define	api	label.define	call.callee, "label.define"	label.define(	Define a dynamic label at the current output location.

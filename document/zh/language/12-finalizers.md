@@ -1,42 +1,38 @@
-﻿# 第 12 章：收尾处理
+# 第 12 章：收尾处理
 
-二进制文件中的许多字段在首次写入时尚无法获得最终值。例如：
+很多二进制字段第一次写出来时还不知道最终值：
 
-- 稍后才声明的数据区大小；
-- 另一区域的文件偏移；
-- 预留区域的最终逻辑大小；
-- 对已编码指令和已修补 fixup 的校验和；
-- 由头文件后方的源码累加得到的计数。
+- 文件头里的大小字段要等 payload 写完才知道；
+- PE/ELF/COFF 的 raw pointer、raw size、virtual size 要等区域布局稳定后才能写；
+- 校验和要等指令编码、fixup 修补、后期布局都完成后才能算；
+- 符号表、字符串表、重定位表可能要等主源码登记完后再生成。
 
-XIRASM 通过显式的收尾阶段处理这些情况，而不是反复执行整个源文件直到数值碰巧收敛。
+XIRASM 不会反复执行整份源码去“碰运气收敛”。它把后期工作分成两个阶段：
 
-该阶段提供两种工具：
+| 阶段 | 能做什么 | 不能做什么 |
+| --- | --- | --- |
+| `late_layout` | 在最终映像封存前，追加或创建仍会参与布局的真实输出。 | 不能当普通源码块用；不能声明局部变量、标号、函数、循环或写 ISA 指令。 |
+| `defer` | 在布局稳定后，读取最终字节、回填已有字段、断言和报错。 | 不能改变布局；不能 `emit`、`reserve`、`align`、切换区域或创建新字节。 |
 
-- `late_layout` 在映像封存前执行受限的布局变更步骤；
-- `defer` 读取并修补稳定后的最终映像，但不改变布局。
+一句话：**需要新增字节或新增区域，用 `late_layout`；只需要回填已有字节或检查最终结果，用 `defer`。**
 
-大多数用户编写的回填逻辑都应放在 `defer` 中。
+## `defer`：回填已经存在的字段
 
-## 为回填预留字段
+最常见流程是：
 
-标准流程如下：
-
-1. 写入固定宽度的占位值；
-2. 正常写入数据；
-3. 在 `defer` 中修补占位字段。
+1. 先写固定宽度的占位字段；
+2. 正常写 payload；
+3. 在 `defer` 里把最终值写回占位字段。
 
 ```asm
-// 先用两个字节为数据大小预留位置。
 size_field:
 emit.u16(0);
 
-// 写出实际数据，并用前后标号确定它的长度。
 payload:
 emit.bytes(b"ABC");
 payload_end:
 
 defer {
-    // 布局稳定后，把数据长度回填到预留字段。
     store.u16(size_field, payload_end - payload);
 }
 ```
@@ -47,44 +43,36 @@ defer {
 03 00 41 42 43
 ```
 
-占位字段已经占据两个字节，收尾处理只修改这两个字节的值，不插入新字节，也不移动 payload。
+`size_field` 的两个字节在普通写出阶段已经存在。`defer` 只是把这两个字节从 `00 00` 改成 `03 00`；它没有插入新字节，也没有移动后面的 payload。
 
-顶层的收尾处理块可在其引用的标签之前声明：
+`defer` 可以写在它引用的标号之前：
 
 ```asm
 defer {
-    // 这些标号可以在收尾块之后定义，最终执行时会得到稳定地址。
     store.u16(size_field, payload_end - payload);
 }
 
-// 为数据长度预留两个字节。
 size_field:
 emit.u16(0);
 
-// 随后写出实际数据。
 payload:
 emit.bytes(b"ABC");
 payload_end:
 ```
 
-稳定的最终映像可用时，这些标号已经解析完成。
+等 `defer` 执行时，标号已经解析，布局也已经稳定。
 
-## 读取最终映像
+## 在 `defer` 中读取和修改最终字节
 
-`load.u8`、`load.u16`、`load.u32` 和 `load.u64` 从已物理化的输出字节中读取小端整数。`load.bytes(address, count)` 返回字节范围。
-
-这些读取操作可与存储和断言组合使用：
+`load.u8`、`load.u16`、`load.u32`、`load.u64` 读取最终输出中的小端整数。`load.bytes(address, count)` 读取一段字节。
 
 ```asm
-// 让本区域的逻辑地址从 0x4000 开始。
 origin(0x4000);
 
-// 预留两个 32 位文件头字段。
 header:
 emit.u32(0);
 emit.u32(0);
 
-// 写出正文和一个稍后替换的尾部标记。
 body:
 emit.bytes(b"ABCD");
 tail:
@@ -92,47 +80,41 @@ emit.bytes(b"????");
 image_end:
 
 defer {
-    // 回填正文到输出末尾的长度，以及正文相对区域起点的位置。
     store.u32(header, image_end - body);
     store.u32(header + 4, body - region_base());
     store.bytes(tail, b"OK!!");
 
-    // 读取最终字节，确认回填结果符合预期。
     assert(load.u32(header) == 8);
     assert(load.u32(header + 4) == 8);
     assert(load.bytes(tail, 4) == b"OK!!");
 }
 ```
 
-完成后的字节：
+最终输出：
 
 ```text
 08 00 00 00 08 00 00 00 41 42 43 44 4f 4b 21 21
 ```
 
-`store.bytes` 接受字符串或 `bytes` 值。整数存储会拒绝超出目标宽度的值。
+所有 `load.*` 和 `store.*` 都会检查范围。`defer` 只能访问最终文件里真实存在的字节。第 11 章说过，尾部 `reserve` 可能只增加逻辑大小，不进入 raw 文件；这种被裁掉的尾部预留不能当成可写占位字段。
 
-所有加载和存储都会做范围检查。收尾处理只能访问物理映像中实际存在的字节。位于已裁掉预留尾部中的逻辑地址不是可写占位字段，会被拒绝。
+`store.bytes` 接受字符串或 `bytes` 值。整数写入会检查宽度，值放不进目标宽度时会报错。
 
 ## 计算校验和
 
-收尾处理可声明局部值、更新可变值并使用 `while`：
+`defer` 内可以声明 `const`、`let`，可以给局部 `let` 赋值，也可以用有界 `while`。
 
 ```asm
-// 使用固定逻辑起点，便于按标号读取数据。
 origin(0x5000);
 
-// 先为 16 位校验和预留位置。
 checksum:
 emit.u16(0);
 
-// 写出参与校验和计算的数据。
 payload:
 emit.bytes(b"ABCD");
 payload_end:
 
 defer {
-    // 逐字节读取最终数据并累加。
     let cursor = payload
     let sum = 0
 
@@ -141,144 +123,101 @@ defer {
         cursor = cursor + 1
     }
 
-    // 回填校验和，并立即检查写入结果。
     store.u16(checksum, sum);
     assert(load.u16(checksum) == 266);
 }
 ```
 
-校验和为 `266`（即 `0x010a`），输出：
+`266` 是 `0x010a`，最终输出：
 
 ```text
 0a 01 41 42 43 44
 ```
 
-收尾处理中的循环使用与普通 Meta 循环相同的编译期迭代限制。`for` 目前不允许出现在收尾处理中；逐字节扫描应使用有界的 `while` 循环。
+`while` 使用普通 Meta 循环的编译期迭代限制。`for` 目前不能放进 `defer`；需要扫描字节时，用边界清楚的 `while`。
 
-## 使用稳定的区域信息
+## 查询最终区域信息
 
-第 11 章介绍的最终区域查询可在 `defer` 中使用：
+第 11 章的区域最终信息只能在 `defer` 中查询，因为它们依赖最终布局：
 
 ```asm
-// 创建逻辑起点为 0x5000、文件起点为 0 的输出区域。
 region.begin("payload", 0x5000, 0);
 
-// 为区域的文件大小和逻辑大小预留字段。
 file_size_field:
 emit.u32(0);
 logical_size_field:
 emit.u32(0);
 
-// 写出一个实际字节，再追加三个只占逻辑空间的预留字节。
 body:
 emit.u8(0xaa);
 reserve(3);
 
 defer {
-    // 布局稳定后查询正文所在区域，并回填最终大小。
     store.u32(file_size_field, region_file_size(body));
     store.u32(logical_size_field, region_logical_size(body));
 
-    // 文件大小不包含未实际写出的预留尾部，逻辑大小包含它。
     assert(region_file_offset(body) == 0);
     assert(region_file_size(body) == 9);
     assert(region_logical_size(body) == 12);
 }
 ```
 
-预留尾部计入逻辑大小，但不计入物理文件大小：
+输出：
 
 ```text
 09 00 00 00 0c 00 00 00 aa
 ```
 
-这些查询返回包含指定逻辑地址的区域信息：
+这里文件大小是 9：两个 `u32` 字段占 8 字节，`body` 占 1 字节。尾部 `reserve(3)` 不写入 raw 文件，所以不计入 `region_file_size`。逻辑大小是 12，因为尾部 reserve 仍然占逻辑地址范围。
 
-- `region_file_offset(address)` 返回区域的物理基偏移；
-- `region_file_size(address)` 返回最终物理大小；
-- `region_logical_size(address)` 返回完整的地址空间大小。
+三个查询分别是：
 
-它们依赖稳定布局，因此不能在初始写出阶段当作实时光标查询使用。
+- `region_file_offset(address)`：包含该地址的区域最终从哪个 FOA 开始；
+- `region_file_size(address)`：该区域最终写入 raw 文件的字节数；
+- `region_logical_size(address)`：该区域最终占用的逻辑地址大小，包含尾部 reserve。
 
-## 调用值函数
+它们不是写出阶段的“当前 FOA”查询。需要当前 FOA 时用 `file_offset()` / `file_cursor_real()`；需要最终区域大小时，在 `defer` 里用 `region_file_*` / `region_logical_size`。
 
-返回值的 Meta 函数可用于纯粹的最终计算：
+## 用函数登记回填逻辑
 
-```asm
-// 计算不小于 value 且满足指定对齐要求的数值。
-fn align_up(value: u64, alignment: u64) -> u64 {
-    return ((value + alignment - 1) / alignment) * alignment;
-}
-
-// 为对齐后的数据大小预留字段。
-size_field:
-emit.u32(0);
-
-payload:
-emit.bytes(b"ABC");
-payload_end:
-
-defer {
-    // 把三字节数据向上对齐到八字节，并回填计算结果。
-    store.u32(size_field, align_up(payload_end - payload, 8));
-    assert(load.u32(size_field) == 8);
-}
-```
-
-最终输出：
-
-```text
-08 00 00 00 41 42 43
-```
-
-该函数只做表达式运算，不自行写出或修补字节。
-
-## 可复用的回填过程
-
-过程可以注册收尾处理块并捕获其参数：
+过程函数可以登记 `defer` 块，并捕获调用时传入的参数：
 
 ```asm
-// 登记一个稍后写入 16 位整数的收尾块。
 fn patch_u16(address: u64, value: u64) {
     defer {
-        // address 和 value 保存的是调用过程函数时传入的值。
         store.u16(address, value);
     }
 }
 
-// 先写出占位字段，再登记对应的回填操作。
 field:
 emit.u16(0);
 
 patch_u16(field, 0x1234);
 ```
 
-调用发生在普通源码处理阶段。传入的参数值会冻结到登记的收尾处理块中，后者随后写出：
+最终输出：
 
 ```text
 34 12
 ```
 
-这种模式适合小型、带类型的回填辅助过程。过程作用域内的参数会按值冻结；顶层收尾处理表达式则可以一直保持符号状态，直到最终求值。
+注意执行时机：`patch_u16(...)` 在普通源码阶段调用；调用时的 `address` 和 `value` 被保存到登记的 `defer` 块里。真正写字节发生在最终布局稳定之后。
 
-过程并不是在 `defer` 内部调用。过程调用发生得更早，它只是登记了稍后执行的收尾处理块。
+这种写法适合做类型明确的小型回填工具，比如 `patch_u32`、`patch_size_field`、`patch_checksum_field`。
 
-## 收尾处理的控制流
+## `defer` 的允许范围
 
-`defer` 体内可包含：
+`defer` 适合最终检查和回填。它可以使用：
 
-- `const` 和 `let` 声明；
-- 对局部 `let` 值的赋值；
-- `if` 和 `else`；
-- `while`；
-- `store.u8`、`store.u16`、`store.u32`、`store.u64` 和 `store.bytes`；
-- `assert`、`print`、`warn` 和 `err`。
+- `const`、`let` 和局部赋值；
+- `if` / `else`；
+- `while`、`break`、`continue`；
+- `load.*`、`store.u8/u16/u32/u64`、`store.bytes`；
+- `assert`、`print`、`warn`、`err`；
+- 纯表达式和值函数；
+- 标签、最终区域信息、已稳定的输出字节。
 
-上述语句中的表达式可使用普通的纯运算符和值函数、标签、`load.*` 以及稳定的区域信息。
-
-每个收尾处理块拥有独立的局部作用域。在一个块中声明的局部变量在另一个块中不可见。
-
-以下操作因会改变布局而被拒绝：
+它不能做任何会改变布局的事。例如：
 
 ```text
 defer {
@@ -286,56 +225,64 @@ defer {
 }
 ```
 
-相同的限制适用于 ISA 指令、标签、区域切换、对齐、预留、嵌套的收尾处理块、函数声明和源文件加载。
+会被拒绝。下列操作也不允许放在 `defer` 中：
 
-## 收尾处理的执行顺序
+- 写 ISA 指令；
+- 定义标号；
+- `emit.*`、`db/dw/dd/...`；
+- `reserve`、`align`、`pad`、`pad_to`；
+- `origin`、`region.begin`、`output.section`、`output.org`、`virtual.begin`；
+- 嵌套 `defer` 或 `late_layout`；
+- 声明函数、结构体或加载源文件；
+- 读外部文件。
 
-`defer` 块按注册顺序执行：
+需要空间就提前写占位或在 `late_layout` 里创建；`defer` 只能修改已经存在的字节。
+
+## 多个 `defer` 的执行顺序
+
+`defer` 按登记顺序执行：
 
 ```asm
-// 先写出一个稍后会被连续修改的字节。
 emit.u8(0);
 
 defer {
-    // 第一个收尾块把初始值改为 1。
     store.u8(0, 1);
 }
 
 defer {
-    // 第二个收尾块能看到前一次修改，因此最终写入 2。
     store.u8(0, load.u8(0) + 1);
 }
 ```
 
-第二个块可观察到第一个块的修补结果，输出：
+第二个块能看到第一个块的修改，所以最终输出是：
 
 ```text
 02
 ```
 
-应有意识地使用这个顺序。当两个收尾处理块修改相同字节时，后执行的块会看到前一个块的结果。
+如果多个 `defer` 修改同一地址，后执行的块会看到前面的结果。不要把同一个字段分散到多个互相依赖的 `defer`，除非顺序就是你想要的格式规则。
 
-收尾处理块在以下步骤之后执行：
+`defer` 运行在这些步骤之后：
 
 1. 普通源码处理；
-2. 指令编码；
-3. 后期布局；
+2. `late_layout`；
+3. 指令编码和布局松弛；
 4. fixup 解析；
-5. 最终布局和字节物理化；
+5. 最终文件字节生成；
 6. fixup 修补。
 
-因此，它们看到的是将被实际写入的精确映像，包括已编码的指令和已解析的引用。
+因此 `defer` 看到的是即将写出的最终映像：指令已经编码，引用已经解析，后期布局创建的字节也已经进入最终布局。
 
-## 必须延后运行的布局工作
+## `late_layout`：封存前新增真实布局
 
-有时源文件必须等主源码完成内容登记后，才创建真实字节或放置真实区域。这正是 `late_layout` 的职责：
+`late_layout` 用于“主源码已经登记完，但最终布局还没封存”时创建真实输出。
+
+最简单的形式是追加字节：
 
 ```asm
-// 正常源代码先写出第一个字节。
 emit.u8(0x10);
 
 late_layout {
-    // 后期布局块按照登记顺序追加实际字节。
     emit.u8(0x20);
 }
 
@@ -344,65 +291,55 @@ late_layout {
 }
 ```
 
-`late_layout` 块按注册顺序执行一次，从默认输出区域的末尾开始。示例输出：
+`late_layout` 块按登记顺序执行一次，默认从默认输出区域的尾部继续。输出是：
 
 ```text
 10 20 30
 ```
 
-后期布局会在 fixup 解析和最终布局之前完成。它写出的字节会参与最终布局和物理化。
+这说明默认行为是“接在当前默认输出尾部”。但 `late_layout` **不是只能追加到整个文件末尾**。它允许调用输出区域 API，所以你可以在块中显式打开一个真实区域，把晚生成的数据放到你指定的 FOA。
 
-默认行为确实是从当前默认输出尾部继续写。但 `late_layout` 不是“只能追加到整个文件末尾”的 API：块体允许使用输出区域 API，因此可以在块中 `region.begin(...)`，把晚生成的表、字符串池或重定位记录放到调用者明确选择的真实文件偏移处。
-
-关键边界是：`late_layout` 创建的是尚未封存的布局内容，不是在最终映像中随机插入字节。若只写 `emit.*`，它就沿默认输出尾部继续；若要把字节放入某个自定义区域，必须显式开始那个区域，并保证文件偏移、逻辑地址、大小字段和后续回填一致。
-
-典型的直接构造流程是：
+例如，先在虚拟区域里生成表，再在后期布局阶段把表放到指定 raw 文件偏移：
 
 ```asm
-// 普通源码先写出固定头字段和主体。
-table_offset_field:
+table_foa_field:
 emit.u32(0);
 emit.bytes(b"HDR");
 
-// 先在虚拟区域里组装并测量晚生成表。
 const table_origin: u64 = 0x8000
-virtual.begin(table_origin);
-table:
+const table_foa: u64 = 0x10
+
+virtual.begin(0);
+table_tmp:
 emit.bytes(b"TAB");
-const table_bytes: bytes = load.bytes(table, 3)
-const table_size: u64 = here() - table
+table_tmp_end:
 virtual.end();
 
-// 主输出已经写完固定头和主体，记录表最终要落到的文件偏移。
-const table_foa: u64 = file_cursor_real()
-
 late_layout {
-    // 在后期布局阶段打开真实文件区域，并把虚拟字节复制进去。
     region.begin("late-table", table_origin, table_foa);
-    emit.bytes(table_bytes);
+    emit.bytes(load.bytes(table_tmp, table_tmp_end - table_tmp));
 }
 
 defer {
-    // 稳定后再回填并验证头字段。
-    store.u32(table_offset_field, table_foa);
-    assert(load.u32(table_offset_field) == table_foa);
-    assert(table_size == 3);
+    store.u32(table_foa_field, table_foa);
 }
 ```
 
-这个模式不只适用于 flat binary。COFF/ELF 之类的表也可以先用虚拟区域生成，再在 `late_layout` 中放进真实文件区域；只是标准 PE/COFF/ELF 通常应优先使用第 14 章的格式接口，让它维护 section、segment、表项和回填关系。
+这里 `late_layout` 没有“往最终文件里插入字节”。它是在最终映像生成前创建了一个真实区域：逻辑地址从 `0x8000` 开始，raw 文件偏移从 `0x10` 开始。最终文件怎么补洞、是否重叠、头字段是否一致，都由调用者的区域布局负责。
 
-## 后期布局可物理化预留尾部
+如果你已经用 `region.begin` / `output.section` / `output.org` 构造了类似 PE 的多段布局，那么 `late_layout` 中的晚生成表也可以放进某个明确的自定义区域；前提是你显式切到那个区域或给出正确 FOA。只写 `emit.*` 时才是沿默认输出尾部继续。
 
-由于 `late_layout` 仍然会改变布局，追加的已初始化字节可能把先前的预留尾部转化为文件中间的间隙：
+标准 PE/COFF/ELF 优先用第 14 章的 `format.inc` 接口。直接写 `late_layout + region.begin` 更适合自定义格式，或者实现格式库内部的符号表、字符串表、重定位表等晚生成内容。
+
+## `late_layout` 会影响尾部 reserve
+
+因为 `late_layout` 发生在最终布局之前，它新增的真实字节会参与 raw 文件布局。追加在尾部 reserve 后面时，前面的 reserve 会变成文件中间的零填充：
 
 ```asm
-// 写出一个字节，并在逻辑地址中预留三个字节。
 emit.u8(0xaa);
 reserve(3);
 
 late_layout {
-    // 在预留空间之后追加实际字节，使中间空隙进入输出文件。
     emit.u8(0xbb);
 }
 ```
@@ -413,80 +350,66 @@ late_layout {
 aa 00 00 00 bb
 ```
 
-只有预留范围确实应该变成物理文件字节时才使用这种行为。如果尾部应该保持 file-free，应在登记后续已初始化输出之前切换到另一个区域。
+如果这不是你想要的行为，不要在同一个区域尾部 reserve 后直接追加真实字节。先用 `output.section` 裁掉尾部 reserve，或用 `region.begin` 切到明确的目标区域。
 
-## 组合后期布局与最终回填
+## `late_layout` 的限制
 
-收尾处理块可看到后期布局期间追加的字节：
+`late_layout` 比普通源码窄得多。它只接受 API 调用和 `if` 分支；没有普通局部作用域。
 
-```asm
-// 为整个区域的最终逻辑大小预留字段。
-size_field:
-emit.u32(0);
+允许的方向包括：
 
-// 正常源代码先写出前两个数据字节。
-emit.bytes(b"AB");
+- `emit.*`、`emit.bytes`、`emit.struct`、`db/dw/dd/...`；
+- `reserve`、`pad`、`pad_to`、`align`；
+- `origin`、`region.begin`、`region.file_align`；
+- `output.section`、`output.org`；
+- `virtual.begin`、`virtual.end`；
+- `store.u8/u16/u32/u64`、`store.bytes`；
+- `assert`、`print`、`warn`、`err`；
+- `if` / `else`。
 
-late_layout {
-    // 后期布局再追加两个会参与最终大小计算的字节。
-    emit.bytes(b"CD");
-}
+不允许：
 
-defer {
-    // 根据稳定后的区域大小回填字段，并检查实际文件大小。
-    store.u32(size_field, region_logical_size(size_field));
-    assert(region_file_size(size_field) == 8);
-}
-```
+- `let` / `const` 声明；
+- 赋值；
+- `while` / `for`；
+- 标号；
+- ISA 指令文本；
+- 函数、结构体、嵌套 `late_layout` 或 `defer`；
+- 读外部文件或加载源模块。
 
-稳定后的区域包含四字节字段加四字节数据：
+需要计算的值、字节数组、表大小、目标 FOA，应在普通源码阶段先算好，再作为 API 参数用于 `late_layout`。需要读文件时，也应在普通阶段读取成 `bytes`，不要在 `late_layout` 或 `defer` 里读。
 
-```text
-08 00 00 00 41 42 43 44
-```
+`late_layout` 只执行一次。它不是依赖反复执行源码来收敛不稳定值的多遍模型。
 
-这正是两者的职责划分：
+## 选择阶段
 
-- `late_layout` 创建必须参与布局的字节；
-- `defer` 观察最终布局并修补已有字段。
+用普通源码：
 
-## 后期布局的限制
+- 字节可以按正常顺序写出；
+- 标号、局部变量、函数、循环、文件读取都需要正常语言能力。
 
-`late_layout` 比普通源码的范围窄。它接受布局和输出 API 调用、诊断和 `if` 选择。它可以：
+用 `late_layout`：
 
-- 写出整数、字节和结构体；
-- 预留、填充和对齐；
-- 切换或对齐输出区域；
-- 打开和关闭虚拟区域；
-- 存储到既有输出字节中。
+- 必须等主源码登记完后才知道要写哪些真实字节；
+- 晚生成表、字符串池、重定位记录需要进入最终文件；
+- 需要显式放到某个 FOA 或沿默认输出尾部继续；
+- 这些字节必须影响最终 raw size、logical size、偏移和回填。
 
-这里的“存储到既有输出字节”仍然要求目标字节已经存在；它不是创建新空间的替代品。需要新增字节、预留空间、对齐或切换区域时，必须使用 `late_layout` 允许的布局 API 明确创建。
+用 `defer`：
 
-它不能声明标号、写出 ISA 指令文本、声明局部值、循环、定义函数、加载源模块，或注册嵌套的后期/收尾处理块。
+- 固定宽度占位字段需要最终值；
+- 校验和需要完整最终字节；
+- 需要最终 `region_file_offset` / `region_file_size` / `region_logical_size`；
+- 只修补已有字节，不创建空间。
 
-后期布局只执行一次。它不是隐式多遍机制，不应用来反复让不稳定的值收敛。
+常见安全规则：
 
-## 选择正确的阶段
+- 不要用 `defer` 创建缺失空间；
+- 不要在 `late_layout` 里写需要普通局部变量和循环的逻辑；
+- 不要把尾部 reserve 是否进入文件交给猜测，明确选择 `output.section` 或 `output.org`；
+- 构造标准 PE/COFF/ELF 时优先使用 `format.inc`，不要手写重复的布局关系。
 
-字节能够按正常源码顺序写出时，就使用普通源码。
-
-使用 `late_layout` 的场景：
-
-- 必须在主源码之后创建真实字节或真实区域；
-- 晚生成表需要进入调用者明确选择的文件偏移；
-- 这些字节必须影响最终的偏移和大小；
-- 受限的一次性后期布局步骤已足够。
-
-使用 `defer` 的场景：
-
-- 固定宽度的占位字段需要最终值；
-- 校验和或验证需要完整的字节映像；
-- 需要最终的区域大小或偏移；
-- 必须修补现有字节且不改布局。
-
-切勿用 `defer` 创建缺失的空间。应在收尾处理之前预留或写出所需存储，然后只修补这个既有范围。
-
-下一章进入第三部分，介绍 flat 和自定义二进制文件：将标签、结构体、区域、后期布局和收尾处理组合为完整的文件格式。
+下一章进入第三部分，介绍 flat 和自定义二进制文件：如何把标签、结构体、区域、后期布局和收尾回填组合成完整文件格式。
 
 ## 第三部分：构建程序
 

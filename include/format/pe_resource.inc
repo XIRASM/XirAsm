@@ -1,7 +1,7 @@
 // PE resource directory helpers for XIRASM.
 //
 // The explicit numeric helper remains available for small hand-authored trees.
-// The compiled-resource facade parses one standard .res file, sorts and groups
+// The compiled-resource helper parses one standard .res file, sorts and groups
 // its records deterministically, and emits the PE type/name/language tree.
 
 import("pe.inc");

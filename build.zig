@@ -2287,7 +2287,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/format_elf32_pie_unsupported.asm",
         "x86",
         &.{"include/format/format.inc"},
-        "ELF32 user facade currently supports executable mode",
+        "format.inc ELF32 layer currently supports executable mode",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -2318,7 +2318,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/format_elfobj_invalid_section_purpose.asm",
         "x64",
         &.{"include/format/format.inc"},
-        "ELF object user facade supports code, data, and uninitialized-data sections",
+        "ELF object format API supports code, data, and uninitialized-data sections",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -2327,7 +2327,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/format_elfobj_discardable_section.asm",
         "x64",
         &.{"include/format/format.inc"},
-        "ELF object user facade does not expose discardable sections",
+        "ELF object format API does not expose discardable sections",
     );
     addFailingAsmFixtureWithInputs(
         b,

@@ -1,7 +1,7 @@
 // ELF64 shared-object export helpers for XIRASM.
 //
 // Export sets use explicit value-style Meta APIs. Including a large catalog
-// should define metadata and helper wrappers only; nothing is emitted until
+// should define metadata and helper functions only; nothing is emitted until
 // elf_export_* emitters are called at the chosen .dynsym/.dynstr/.hash/.dynamic
 // placement points. This keeps export generation deterministic and avoids a
 // hidden global state machine.

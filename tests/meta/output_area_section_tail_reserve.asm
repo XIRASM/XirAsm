@@ -1,5 +1,5 @@
-// output.section follows section-tail semantics: the previous tail reserve is
-// not materialized before the next initialized output area.
+// output.section follows section-tail semantics: the previous tail reserve does
+// not become raw bytes before the next initialized output area.
 
 emit.u8(0x41);
 reserve(3);

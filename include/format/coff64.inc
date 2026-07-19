@@ -1,6 +1,6 @@
-// User-facing AMD64 COFF object facade.
+// Width-specific AMD64 COFF object compatibility include.
 //
-// This facade remains as a source-level compatibility layer over coff.inc.
+// This include remains as a source-level compatibility layer over coff.inc.
 
 import("coff.inc");
 

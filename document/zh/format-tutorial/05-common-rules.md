@@ -1,16 +1,16 @@
 # 5. 通用规则和常见错误
 
-格式文件出错时，先检查配置、名称、权限和调用顺序，再去怀疑 PE/ELF 细节。普通格式层会替你处理大部分头部和表项，错误通常来自输入描述不一致。
+格式文件出错时，先检查配置、名称、权限和调用顺序，再去怀疑 PE/ELF 细节。`format.inc` 会处理大部分头部和表项，错误通常来自声明不一致或调用顺序不对。
 
 ## 只使用一层接口
 
-普通程序只导入：
+通常只导入：
 
 ```asm
 import("format/format.inc");
 ```
 
-不要在同一个输出文件里一边使用 `format_begin`、`format_section_begin`、`format_finish`，一边手写底层 PE/ELF 头部或表项。需要完整控制格式字段时，改用高级格式构造，不要混搭两套模型。
+不要在同一个输出文件里一边使用 `format_begin`、`format_section_begin`、`format_finish`，一边手写 PE/ELF 头部或表项。需要完整控制格式字段时，就整份文件改用高级格式构造；不要让两套写法同时负责同一张表。
 
 ## 可变配置必须是 `let`
 
@@ -33,10 +33,10 @@ format_entry_mut(image, start)
 
 format_entry_mut(format_pe64(options, sections), start)
 
-format_entry_mut(map.get(wrapper, "image"), start)
+format_entry_mut(map.get(holder, "image"), start)
 ```
 
-普通构造函数仍然可以返回值，例如 `format_section(...)`、`format_segment(...)`、`format_coff_public(...)`。区别在于：描述值可以放进 `const`，会被后续更新的配置或集合要用 `let`。
+构造函数仍然可以返回值，例如 `format_section(...)`、`format_segment(...)`、`format_coff_public(...)`。区别在于：描述值可以放进 `const`，后续要被 `_mut` 函数更新的配置或集合要用 `let`。
 
 ## 先声明，再写内容
 
@@ -79,7 +79,7 @@ format_section(".mixed", format_code | format_data | format_readable)
 
 ## BSS 是内存大小，不是初始化文件内容
 
-`format_uninitialized_data` 表示运行时需要的零初始化内存。里面应使用 `rb(...)` 或 `reserve(...)` 之类预留操作，而不是写入真实初始化字节。普通层会把内存大小记录进格式表，同时保持对应文件内容为空或不占初始化数据。
+`format_uninitialized_data` 表示运行时需要的零初始化内存。里面应使用 `rb(...)` 或 `reserve(...)` 之类预留操作，而不是写入真实初始化字节。`format.inc` 会把内存大小记录进格式表，同时保持对应文件内容为空或不占初始化数据。
 
 ## 重定位不是指针本身
 
@@ -108,7 +108,7 @@ PE 可执行文件、PE DLL、ELF 可执行文件需要 `format_entry_mut(plan, 
 
 ## 导入导出表要在 `format_begin` 前挂到配置上
 
-需要把表项元数据挂到配置上的函数，例如 `format_elfexe_tables_mut`、`format_elfso_tables_mut`、`format_coff_tables_mut`、`format_elfobj_tables_mut`，应在 `format_begin` 前调用。这样格式层才能在开始输出时预留正确的头部、程序头、节表或动态表空间。
+需要把表项元数据挂到配置上的函数，例如 `format_elfexe_tables_mut`、`format_elfso_tables_mut`、`format_coff_tables_mut`、`format_elfobj_tables_mut`，应在 `format_begin` 前调用。这样 `format.inc` 才能在开始输出时预留正确的头部、程序头、节表或动态表空间。
 
 PE 的 `format_pe_import_section`、`format_pe_export_section`、`format_pe_resource_section`、`format_pe_reloc_section` 是实际生成节内容的函数，应在 `format_begin` 之后、`format_finish` 之前调用，并且不要手动包一层同名 `format_section_begin`。
 

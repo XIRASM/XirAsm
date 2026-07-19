@@ -879,9 +879,9 @@ Do not use the two forms interchangeably.
 | Ordinary source | Declare labels, emit content, reserve space, and register late blocks. |
 | Instruction encoding | Encode ordinary ISA fragments. |
 | `late_layout` | Append or reorganize restricted layout content once. |
-| Fixup and layout | Resolve references and compute final logical and physical placement. |
-| Materialization | Create the final byte image and patch resolved fixups. |
-| `defer` | Load, validate, and patch existing materialized bytes. |
+| Fixup and layout | Resolve references and compute final logical addresses and raw file placement. |
+| Output image | Create the final byte image and patch resolved fixups. |
+| `defer` | Load, validate, and patch existing final bytes. |
 
 Blocks of each kind execute in registration order.
 
@@ -922,8 +922,8 @@ Late layout is a one-time phase. It is not an implicit repeated-pass mechanism.
 
 #### Reserved Tails and Late Layout
 
-Appending initialized data in the same region after a reserved tail makes the
-reserved gap physical:
+Appending initialized data in the same region after a reserved tail turns that
+tail into a raw file gap:
 
 ```asm
 emit.u8(0xaa)
@@ -934,8 +934,8 @@ late_layout {
 }
 ```
 
-The output is `aa 00 00 bb`. Use a different output area when the reserved tail
-must remain logical-only.
+The output is `aa 00 00 bb`. Use `output.section` or an explicit region switch
+when the reserved tail must remain logical-only.
 
 #### `defer`
 
@@ -1061,8 +1061,8 @@ defer {
 ```
 
 Reserve or emit every patch target before finalization. A store may address
-only materialized bytes. A trimmed reserved tail has logical extent but no
-physical byte to patch:
+only bytes that exist in the final file image. A trimmed reserved tail has
+logical extent but no raw file byte to patch:
 
 ```text
 origin(0)
@@ -1074,7 +1074,7 @@ defer {
 }
 ```
 
-This store is rejected instead of writing beyond the materialized region.
+This store is rejected instead of writing beyond the final raw bytes.
 
 #### Complete Example
 
@@ -1411,7 +1411,7 @@ text ending in a semicolon is invalid.
 #### Logical Origins and the Current Address
 
 `origin(address)` changes the logical base of the active output region. It does
-not emit bytes, insert padding, or change the physical file position.
+not emit bytes, insert padding, or change the raw file offset.
 
 `here()` returns:
 
@@ -1653,7 +1653,7 @@ db(0x33)
 `pad(count, fill)` writes exactly `count` bytes.
 
 `pad_to(position, fill)` treats `position` as a file position relative to the
-active output region. Its starting point is the next materialized output
+active output region. Its starting point is the next committed raw file
 position, so a preceding reserve is accounted for exactly once. The target
 cannot be behind that position.
 
@@ -1670,42 +1670,43 @@ the fill bytes are part of the file format.
 
 | Form | Syntax | Result |
 | --- | --- | --- |
-| Explicit region | `region.begin(name, origin, file_offset)` | Starts a main output region at an explicit logical and physical position. |
-| File-size alignment | `region.file_align(boundary)` | Aligns and closes the active region's physical size. |
-| Potential continuation | `output.org(name, origin)` | Starts a main output area at the previous potential file cursor. |
-| Real continuation | `output.section(name, origin)` | Starts a main output area at the previous real file cursor. |
+| Explicit region | `region.begin(name, origin, file_offset)` | Starts a main output region with explicit logical address basis and FOA. |
+| File-size alignment | `region.file_align(boundary)` | Aligns and closes the active region's raw file size. |
+| Preserve tail reserve | `output.org(name, origin)` | Starts a main output area after the active tail reserve. |
+| Trim tail reserve | `output.section(name, origin)` | Starts a main output area at the committed raw file tail. |
 | Virtual area | `virtual.begin([origin])` | Starts a nested area that has logical addresses but no file bytes. |
 | End virtual area | `virtual.end()` | Returns to the output area active before `virtual.begin`. |
 | Region origin | `region_base()` | Returns the active region's logical base address. |
-| Current file position | `file_offset()` | Returns the active region's absolute real file cursor. |
-| Real file cursor | `file_cursor_real()` | Returns the next absolute position after materialized file bytes. |
-| Potential file cursor | `file_cursor_potential()` | Returns the absolute position implied by the logical cursor. |
-| Tail reserve | `tail_reserve_size()` | Returns the unmaterialized logical tail in the active region. |
+| Current file position | `file_offset()` | Returns the committed absolute FOA for the active region. |
+| Real file cursor | `file_cursor_real()` | Returns the next committed FOA. |
+| Potential file cursor | `file_cursor_potential()` | Returns the FOA if the active tail reserve were kept as file zeros. |
+| Tail reserve | `tail_reserve_size()` | Returns active tail reserve bytes not yet in the raw file. |
 
-#### Coordinate Model
+#### Logical Address and Raw File Offset
 
-Main output regions maintain independent logical and physical coordinates:
+Main output regions maintain independent logical address and raw file offset
+facts:
 
-| Coordinate | Meaning |
+| Fact | Meaning |
 | --- | --- |
 | Logical address | The address used by labels, `here()`, instructions, and fixups. |
-| Real file cursor | The absolute file position after bytes that currently exist in the output. |
-| Potential file cursor | The absolute file position implied by all logical output, including a trailing reserve. |
+| Committed FOA | The raw file position after bytes currently known to enter the output. |
+| Tail-reserve FOA | The raw file position that would result if the active tail reserve were kept as file zeros. |
 
 For an active main region:
 
 ```text
 here()                  = region_base() + logical offset
-file_cursor_real()      = region file offset + real relative cursor
+file_cursor_real()      = region FOA + committed relative offset
 file_cursor_potential() = region file offset + logical offset
-tail_reserve_size()     = logical bytes beyond the real relative cursor
+tail_reserve_size()     = logical bytes beyond the committed relative offset
 ```
 
-`file_offset()` is the ordinary name for the current real file cursor. It
-returns the same value as `file_cursor_real()`.
+`file_offset()` is the ordinary name for the current committed FOA. It returns
+the same value as `file_cursor_real()`.
 
-Initialized bytes advance both cursors. A trailing reserve advances only the
-logical and potential cursors:
+Initialized bytes advance both logical address and committed FOA. A trailing
+reserve advances only logical address:
 
 ```asm
 region.begin("payload", 0x4000, 0x20)
@@ -1722,8 +1723,8 @@ assert(tail_reserve_size() == 3)
 ```
 
 If initialized output follows the reserve in the same region, the intervening
-gap becomes part of the file. The real cursor then catches up with the
-potential position before advancing past the new bytes.
+gap becomes raw file zeros. The committed FOA then catches up before advancing
+past the new bytes.
 
 #### Starting an Explicit Region
 
@@ -1741,7 +1742,7 @@ different virtual address.
 cursor queries before the call when the new region must continue an existing
 layout.
 
-#### Real and Potential Continuations
+#### Choosing the Next FOA
 
 `output.section(name, origin)` and `output.org(name, origin)` both start a new
 main output area and assign it a new logical origin. They differ in the file
@@ -1749,8 +1750,8 @@ position selected from the previous area:
 
 | Procedure | New file position | Effect on a trailing reserve |
 | --- | --- | --- |
-| `output.section` | Previous real cursor | Discards the unmaterialized tail from the file layout. |
-| `output.org` | Previous potential cursor | Preserves the tail as a file gap when later bytes are emitted. |
+| `output.section` | Previous committed FOA | Keeps the tail reserve out of the raw file. |
+| `output.org` | FOA after the reserve | Preserves the tail as raw file zeros when later bytes are emitted. |
 
 ```asm
 region.begin("header", 0x4000, 0x20)
@@ -1768,16 +1769,16 @@ emit.u8(0x33)
 ```
 
 The first switch places `trimmed` immediately after byte `0x11`; the
-three-byte trailing reserve is not written. The second switch starts at the
-potential position, so the two reserved bytes between `0x22` and `0x33`
-become a middle file gap.
+three-byte trailing reserve is not written. The second switch starts after the
+reserve, so the two reserved bytes between `0x22` and `0x33` become a middle
+file gap.
 
 Both procedures require an open main output region. They are invalid inside a
 virtual area.
 
-#### Closing a Physical Region
+#### Aligning Raw Size
 
-`region.file_align(boundary)` rounds the active region's physical size up to a
+`region.file_align(boundary)` rounds the active region's raw file size up to a
 non-zero power-of-two boundary and closes that region for further output:
 
 ```asm
@@ -1789,9 +1790,9 @@ assert(file_cursor_real() == 8)
 assert(file_cursor_potential() == 1)
 ```
 
-The aligned physical tail is part of the file and is zero-filled. Alignment
-can therefore move the real cursor beyond the potential cursor. Once the call
-succeeds, emitting, reserving, or aligning more data in that region is
+The aligned raw tail is part of the file and is zero-filled. Alignment can
+therefore move the committed FOA beyond the logical-position-derived FOA. Once
+the call succeeds, emitting, reserving, or aligning more data in that region is
 invalid. Start another region or output area to continue.
 
 #### Virtual Output Areas
@@ -1821,9 +1822,9 @@ The final file contains only `aa bb`. `virtual.end()` restores the previous
 output area and its cursors. Virtual areas may be nested, but every
 `virtual.begin` must have a matching `virtual.end`.
 
-File-cursor queries describe main file output and should not be used to infer
-storage for a virtual area. Use logical addresses and labels while the virtual
-area is active.
+File-cursor queries describe real output, not final placement for a virtual
+area. Use logical addresses and labels while the virtual area is active, then
+explicitly copy virtual bytes into a real region if they should enter the file.
 
 #### Error Conditions
 
@@ -1851,8 +1852,8 @@ The region APIs reject:
 | Store integer | `store.u32(address, value)` | Writes a little-endian 32-bit integer. |
 | Store integer | `store.u64(address, value)` | Writes a little-endian 64-bit integer. |
 | Store bytes | `store.bytes(address, value)` | Writes a string or byte sequence. |
-| Region file offset | `region_file_offset(address)` | Returns the final physical file offset of a region. |
-| Region file size | `region_file_size(address)` | Returns the final materialized size of a region. |
+| Region file offset | `region_file_offset(address)` | Returns the final FOA of a region. |
+| Region file size | `region_file_size(address)` | Returns the final raw file size of a region. |
 | Region logical size | `region_logical_size(address)` | Returns the final logical size of a region. |
 
 #### Ordinary and Final Output Access
@@ -1906,18 +1907,18 @@ defer {
 ```
 
 The integer forms accept only values representable by their stated width.
-Loads and stores must remain within materialized bytes. They do not allocate
-storage, extend a region, or change layout.
+Loads and stores must remain within bytes that exist in the current or final
+output image. They do not allocate storage, extend a region, or change layout.
 
 #### Labels and Output-Area Identity
 
 A logical address is not always enough to identify file bytes. Two output
-areas may use overlapping logical ranges while occupying different physical
-file ranges.
+areas may use overlapping logical ranges while occupying different raw file
+ranges.
 
 When a load, store, or region-fact expression directly contains a label,
 XIRASM preserves the label's output-area identity and combines it with the
-logical address. This selects the correct physical file range even when another
+logical address. This selects the correct raw file range even when another
 area uses the same address.
 
 ```asm
@@ -1962,8 +1963,8 @@ materialization are stable, normally inside `defer`:
 
 | Expression | Meaning |
 | --- | --- |
-| `region_file_offset(label)` | Absolute physical position where the region begins in the file. |
-| `region_file_size(label)` | Number of materialized file bytes owned by the region, including physical file alignment. |
+| `region_file_offset(label)` | Absolute FOA where the region begins in the file. |
+| `region_file_size(label)` | Number of raw file bytes owned by the region, including file-size alignment. |
 | `region_logical_size(label)` | Logical address span of the region, including a trailing reserve. |
 
 The distinction is important for uninitialized storage. In the preceding
@@ -1973,15 +1974,15 @@ trailing reserve is not written to the file.
 
 The reserved addresses remain part of the logical span, but they are not
 loadable or writable final-image bytes. A finalizer cannot use load or store to
-turn a trimmed tail into physical output.
+turn a trimmed tail into raw file output.
 
 #### Address and Range Errors
 
 These APIs reject:
 
 - an integer store value that does not fit the selected width;
-- a load or store that extends beyond materialized file bytes;
-- access to a trailing reserve removed from the physical file layout;
+- a load or store that extends beyond existing raw file bytes;
+- access to a trailing reserve removed from the raw file layout;
 - a region-fact query before final output is stable;
 - a region-fact query whose address does not belong to a final logical region;
 - a label expression that combines labels from different output areas.
@@ -2283,10 +2284,11 @@ The byte helpers reject:
 
 ### Chapter 12: Lists and Maps
 
-Lists and maps are compile-time value collections. Expression helpers that add,
-replace, or combine values return a new collection and leave every input
-unchanged. Explicit mutation statements are available for direct `let`
-bindings when an algorithm needs incremental construction.
+Lists and maps are compile-time value collections. For incremental
+construction, prefer the explicit mutation statements on direct `let`
+bindings. Expression helpers that add, replace, or combine values still return
+a new collection and leave every input unchanged; use them when a value-style
+transform is clearer than step-by-step construction.
 
 #### List Functions
 
@@ -2314,15 +2316,15 @@ the selected range must remain inside the list. A zero-length slice at the end
 is valid.
 
 ```asm
-const base: list = list.of(1, 2, 3)
-const extended: list = list.push(base, 4)
-const patched: list = list.set(extended, 1, 0xaa)
-const middle: list = list.slice(patched, 1, 2)
+let items: list = list.of(1, 2, 3)
+list.push_mut(items, 4);
+list.set_mut(items, 1, 0xaa);
+
+const middle: list = list.slice(items, 1, 2)
 const combined: list = list.concat(list.of(0x10, 0x11), middle)
 
-assert(list.get(base, 1) == 2)
-assert(list.eq(base, list.of(1, 2, 3)))
-assert(list.eq(patched, list.of(1, 0xaa, 3, 4)))
+assert(list.get(items, 1) == 0xaa)
+assert(list.eq(items, list.of(1, 0xaa, 3, 4)))
 assert(list.eq(middle, list.of(0xaa, 3)))
 
 for value in combined {
@@ -2356,29 +2358,24 @@ Replacing an existing key keeps its position. Consequently, `map.keys` and
 
 ```asm
 const empty: map = map.new()
-const first: map = map.set(empty, "arch", "x64")
-const configured: map = map.set(first, "mode", 64)
-const updated: map = map.set(configured, "arch", "rv64")
-const complete: map = map.set(updated, "tags", list.of("asm", "dsl"))
+let complete: map = map.new()
+map.set_mut(complete, "arch", "x64");
+map.set_mut(complete, "mode", 64);
+map.set_mut(complete, "arch", "rv64");
+map.set_mut(complete, "tags", list.of("asm", "dsl"));
 
 assert(len(empty) == 0)
 assert(map.has(complete, "arch"))
 assert(!map.has(complete, "missing"))
-assert(map.get(first, "arch") == "x64")
-assert(map.get(updated, "arch") == "rv64")
+assert(map.get(complete, "arch") == "rv64")
 assert(map.get_or(complete, "missing", "default") == "default")
 assert(list.eq(map.keys(complete), list.of("arch", "mode", "tags")))
 assert(list.eq(map.get(complete, "tags"), list.of("asm", "dsl")))
 
-const reordered: map = map.set(
-    map.set(
-        map.set(map.new(), "tags", list.of("asm", "dsl")),
-        "mode",
-        64
-    ),
-    "arch",
-    "rv64"
-)
+let reordered: map = map.new()
+map.set_mut(reordered, "tags", list.of("asm", "dsl"));
+map.set_mut(reordered, "mode", 64);
+map.set_mut(reordered, "arch", "rv64");
 
 assert(map.eq(complete, reordered))
 emit.u8(map.get(complete, "mode"))

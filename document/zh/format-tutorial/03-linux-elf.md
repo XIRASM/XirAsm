@@ -1,6 +1,6 @@
 # 3. Linux ELF 可执行文件和共享库
 
-ELF 可执行文件和共享库按“装载段”描述运行时映射。一个装载段包含文件偏移、虚拟地址、文件大小、内存大小和权限。普通格式层根据 `format_segment(...)` 推导程序头和对齐。
+ELF 可执行文件和共享库按“装载段”描述运行时映射。一个装载段包含文件偏移、虚拟地址、文件大小、内存大小和权限。`format.inc` 会根据 `format_segment(...)` 生成程序头并处理对齐。
 
 ## ELF 可执行文件
 
@@ -40,11 +40,11 @@ format_entry_mut(image, start)
 format_finish(image);
 ```
 
-BSS 段只增加内存大小，不增加初始化文件内容。普通层会让程序头里的 `filesz` 和 `memsz` 表达这个差异。
+BSS 段只增加内存大小，不增加初始化文件内容。`format.inc` 会让程序头里的 `filesz` 和 `memsz` 表达这个差异。
 
 ## ELF64 PIE
 
-PIE 使用 `format_elf64(format_elf_pie, segments)`。当前普通层只支持 ELF64 PIE；ELF32 PIE 不在普通封装范围内。
+PIE 使用 `format_elf64(format_elf_pie, segments)`。`format.inc` 目前只支持 ELF64 PIE；ELF32 PIE 需要走更专门的格式构造路线。
 
 ```asm
 import("format/format.inc");
@@ -67,11 +67,11 @@ format_entry_mut(image, start)
 format_finish(image);
 ```
 
-普通层的 ELF 可执行导入只支持 ELF64 固定地址 `format_elf_exec`。不要把 `format_elfexe_tables_mut` 挂到 PIE 配置上。
+ELF 可执行文件导入目前只支持 ELF64 固定地址 `format_elf_exec`。不要把 `format_elfexe_tables_mut` 挂到 PIE 配置上。
 
 ## ELF64 可执行文件导入
 
-ELF64 固定地址可执行文件可以通过普通层生成 PLT、GOT、动态段和相关重定位。导入集合是 `list`，可以按库名分组追加。
+ELF64 固定地址可执行文件可以通过 `format.inc` 生成 PLT、GOT、动态段和相关重定位。导入集合是 `list`，可以按库名分组追加。
 
 ```asm
 import("format/format.inc");
@@ -146,7 +146,7 @@ format_segment_end(image, ".data");
 format_finish(image);
 ```
 
-导出函数需要说明所在装载段和符号大小。普通层会生成动态符号、字符串表、hash、dynamic、GOT/PLT 等必要元数据。
+导出函数需要说明所在装载段和符号大小。`format.inc` 会生成动态符号、字符串表、hash、dynamic、GOT/PLT 等必要元数据。
 
 ## ELF64 共享库导入
 

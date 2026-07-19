@@ -1,6 +1,6 @@
 # 2. Windows PE 和 DLL
 
-Windows 可执行文件和 DLL 都使用 PE。普通格式层的 PE 配置要说明文件角色、子系统、安全选项、ASLR 策略，以及要映射哪些节。
+Windows 可执行文件和 DLL 都使用 PE。用 `format.inc` 生成 PE 时，配置里要写清文件角色、子系统、安全选项、ASLR 策略，以及文件包含哪些节。
 
 ## PE 选项
 
@@ -64,7 +64,7 @@ format_finish(image);
 
 ## 导入 Windows API
 
-导入表描述加载器需要填充的外部函数地址。先创建导入集合，再让格式层生成 `.idata`，不要自己打开 `.idata` 写表项。
+导入表描述加载器需要填充的外部函数地址。先创建导入集合，再调用 `format_pe_import_section` 生成 `.idata`；不要自己打开 `.idata` 手写导入表项。
 
 ```asm
 import("format/format.inc");

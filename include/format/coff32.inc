@@ -1,6 +1,6 @@
-// User-facing i386 COFF object facade.
+// Width-specific i386 COFF object compatibility include.
 //
-// This facade remains as a source-level compatibility layer over coff.inc.
+// This include remains as a source-level compatibility layer over coff.inc.
 
 import("coff.inc");
 
