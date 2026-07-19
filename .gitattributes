@@ -12,3 +12,10 @@ include/**/*.inc linguist-language=Assembly
 
 # Generated Win32 SDK catalogs must not dominate repository language statistics.
 include/os/win32/** linguist-generated=true
+*.bin binary
+*.exe binary
+*.dll binary
+*.lib binary
+*.obj binary
+*.pdf binary
+*.spv binary

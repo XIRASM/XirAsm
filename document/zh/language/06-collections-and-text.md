@@ -1,23 +1,23 @@
-# 第6章：集合和文本
+# 第 6 章：集合与文本
 
-## 集合是编译时值
+## 集合是编译期值
 
-XIRASM 有四种编译时值类型：
+XIRASM 有四种编译期值类型：
 
 | 类型       | 表示什么         | 常见用途                       |
 | ---------- | ---------------- | ------------------------------ |
-| `string` | 源文件中的文本   | 名字、路径、错误信息、文本字段 |
-| `bytes`  | 确切的二进制数据 | 签名、魔数、编码指令、打包记录 |
+| `string` | 编译期文本       | 名字、路径、错误信息、文本字段 |
+| `bytes`  | 确切的二进制数据 | 签名、魔数、已编码指令字节、打包记录 |
 | `list`   | 有序的值序列     | 重复表项、参数列表、配置条目   |
 | `map`    | 字符串到值的映射 | 配置选项、记录字段、查找表     |
 
-这些类型不写数据。只有传给输出接口，数据才会写入输出文件。
+这些类型本身不会写出数据。只有把它们传给输出接口，数据才会进入输出文件。
 
-字符串、字节序列、列表、映射都提供产生新值的 API。`list.push`、`map.set` 等操作返回新值，不修改原值。列表和映射还有可变接口，给 `let` 绑定的集合逐步添加内容。值在传递时复制，不共享内存。
+字符串、字节序列、列表和映射都是编译期值。普通 API 会产生新值；当局部算法需要逐步构建 `list` 或 `map` 时，应把集合放在 `let` 绑定中，并使用 `list.push_mut`、`list.set_mut`、`map.set_mut` 这类语句 API 直接更新它。值在传递时会复制，调用者之间不会共享可变内存。
 
 ## 字符串表示源文本
 
-字符串存放编译时用的文本：
+字符串存放编译期使用的文本：
 
 ```asm
 // 先清除名称两端的空白，再把 ASCII 字母统一转换为小写。
@@ -65,7 +65,7 @@ assert(path == "text/data/bss");
 emit.bytes(path);
 ```
 
-索引从零开始。用于处理小配置列表、格式选项中的文本、动态生成的名字。
+索引从零开始。这种写法适合处理小配置列表、格式选项中的文本，以及动态生成的名字。
 
 ## 用字节序列表示二进制值
 
@@ -87,11 +87,11 @@ emit.bytes(header);
 
 输出 `58 49 52 00 03 00`。
 
-`bytes.from_hex` 把十六进制文本转二进制。`bytes.le(value, width)` 用指定位数小端序编码整数。`bytes.concat` 拼接字节序列。`bytes.eq` 比较两个序列。`bytes.hex` 把二进制显示为小写十六进制文本。
+`bytes.from_hex` 把十六进制文本转二进制。`bytes.le(value, width)` 用指定字节数按小端序编码整数。`bytes.concat` 拼接字节序列。`bytes.eq` 比较两个序列。`bytes.hex` 把二进制显示为小写十六进制文本。
 
 ## 构建字节序列
 
-字节操作 API 都返回新值，可以链式调用：
+字节序列操作会返回新值，原值不变：
 
 ```asm
 // 从 ABC 的字节表示开始，在索引 1 处插入连字符。
@@ -125,28 +125,27 @@ emit.bytes(result);
 
 ```asm
 // 先追加一个元素，再替换索引 1 处的值。
-const base: list = list.of(1, 2, 3)
-const extended: list = list.push(base, 4)
-const patched: list = list.set(extended, 1, 0xaa)
+let items: list = list.of(1, 2, 3)
+list.push_mut(items, 4);
+list.set_mut(items, 1, 0xaa);
 // 从索引 1 开始截取两个元素，原列表不会被修改。
-const middle: list = list.slice(patched, 1, 2)
+const middle: list = list.slice(items, 1, 2)
 
-assert(list.eq(base, list.of(1, 2, 3)));
-assert(list.eq(patched, list.of(1, 0xaa, 3, 4)));
+assert(list.eq(items, list.of(1, 0xaa, 3, 4)));
 assert(list.eq(middle, list.of(0xaa, 3)));
 
-for value in patched { db(value); }
+for value in items { db(value); }
 ```
 
 输出 `01 aa 03 04`。
 
-`list.set` 返回替换元素后的新列表。`list.slice` 返回从起始索引开始的指定个元素。都不改原列表。
+`list.push_mut` 和 `list.set_mut` 直接更新 `items` 这个 `let` 绑定。`list.slice` 返回从起始索引开始的指定个元素，不修改原列表。
 
 其他：`list.new()`、`list.get()`、`list.concat()`、`list.eq()`、`len()`。
 
-## 用可变绑定的API版本的集合
+## 更新 `let` 绑定的集合
 
-局部算法需要逐步构建列表或映射时用可变接口：
+一个局部算法需要逐步构建列表或映射时，使用可变语句 API：
 
 ```asm
 let items: list = list.of(1, 2)
@@ -158,7 +157,9 @@ map.set_mut(options, "arch", "x64");
 map.set_mut(options, "items", items);
 ```
 
-第一个参数必须是 `let` 绑定的标识符。传 `const` 会报错。类型不匹配也会报错。`defer` 块只能更新它内部的局部 `let`。
+第一个参数必须是直接的 `let` 绑定标识符。目标不能是 `const`、临时表达式、函数返回值、字段访问、缺失名称，或类型不匹配的集合。词法查找会使用最近的绑定，因此块内 `let` 会遮蔽外层同名绑定。顶层 `let` 可以在普通源码处理阶段更新；返回值函数只能更新本次调用内部的局部 `let`。
+
+`list.push_mut` 追加一个复制后的元素。`list.set_mut` 替换已有的零基索引。`map.set_mut` 插入或替换字符串键对应的值；替换已有键时保留原有插入位置。这些语句不会产生表达式值，也不能出现在 `defer` 或 `late_layout` 块中。
 
 值复制有明确边界：
 
@@ -171,9 +172,9 @@ assert(list.eq(snapshot, list.of(1)));
 assert(list.eq(items, list.of(1, 2)));
 ```
 
-## 列表可以放各种值
+## 列表可以保存更大的值
 
-列表元素不限整数，可以放字符串、字节序列、映射等：
+列表元素不限于整数，也可以是字符串、字节序列、映射等更大的编译期值：
 
 ```asm
 // 把文本标记和一个双字节小端整数组织成有序字节块。
@@ -187,41 +188,39 @@ for chunk in chunks { emit.bytes(chunk); }
 
 输出 `58 52 34 12`。
 
-## 映射保存键值对
+## 映射保存命名值
 
-映射把字符串键关联到值：
+映射把字符串键关联到值。逐步构建映射时，直接使用 `map.set_mut` 更新 `let` 绑定：
 
 ```asm
 // 逐步加入命名属性，并用新值替换已有的 arch 属性。
-const base: map = map.set(map.new(), "arch", "x64")
-const configured: map = map.set(base, "mode", "release")
-const changed: map = map.set(configured, "arch", "rv64")
+let complete: map = map.new()
+map.set_mut(complete, "arch", "x64");
+map.set_mut(complete, "mode", "release");
+map.set_mut(complete, "arch", "rv64");
 // 映射中的值也可以是列表等更大的编译期值。
-const complete: map = map.set(changed, "tags", list.of("asm", "dsl"))
+map.set_mut(complete, "tags", list.of("asm", "dsl"));
 
 // 检查键是否存在，并读取必需或带默认值的属性。
 assert(len(complete) == 3);
 assert(map.has(complete, "arch"));
 assert(!map.has(complete, "missing"));
-assert(map.get(base, "arch") == "x64");
-assert(map.get(changed, "arch") == "rv64");
+assert(map.get(complete, "arch") == "rv64");
 assert(map.get_or(complete, "missing", "default") == "default");
 assert(list.eq(map.get(complete, "tags"), list.of("asm", "dsl")));
 ```
 
-`map.set` 返回新映射。键已存在则替换值。改 `changed` 不影响 `base`。
+映射键必须是字符串。添加新键会追加一个条目；替换已有键会更新值，但保留这个键原来的位置。`map.keys` 和 `map.values` 因此会返回互相对应的并行列表。
 
-## 遍历映射要先把键或值转列表
+## 遍历映射内容
 
 映射用于按键查找。需要遍历时先用 `map.keys` 或 `map.values` 转列表：
 
 ```asm
 // 用映射保存两个带名称的二进制字段。
-const fields: map = map.set(
-    map.set(map.new(), "magic", b"XR"),
-    "version",
-    bytes.le(3, 2)
-)
+let fields: map = map.new()
+map.set_mut(fields, "magic", b"XR");
+map.set_mut(fields, "version", bytes.le(3, 2));
 // 键和值分别转换为列表，便于检查数量或逐项处理。
 const keys: list = map.keys(fields)
 const values: list = map.values(fields)
@@ -233,11 +232,11 @@ for value in values {
 }
 ```
 
-文件格式规定了确切顺序的，用列表存。映射只负责查找。
+文件格式规定了确切顺序时，用列表保存顺序。映射主要负责按名称查找。
 
 ## 在函数中组合集合
 
-集合转换用函数封装：
+集合转换可以封装为函数：
 
 ```asm
 // 把列表中的每个数值编码为两个小端字节。
@@ -255,13 +254,13 @@ const words: list = list.of(0x1234, 0xabcd)
 emit.bytes(encode_u16(words));
 ```
 
-输出 `34 12 cd ab`。函数逐步构建不可变字节值，调用者控制何时写输出。
+输出 `34 12 cd ab`。函数逐步构建字节序列，调用者决定何时把结果写入输出。
 
-职责划分：字符串存名字和文本，映射存命名配置，列表存有序值，字节序列存最终二进制表示，过程函数控制何时写输出。
+职责划分：字符串保存名字和文本，映射保存命名配置，列表保存有序值，字节序列保存最终二进制表示，过程函数负责决定何时写出。
 
 ## 选哪种集合
 
-| 需求                   | 用这个                |
+| 需求                   | 使用                  |
 | ---------------------- | --------------------- |
 | 面向人的源文本         | `string`            |
 | 确切的二进制表示       | `bytes`             |

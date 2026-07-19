@@ -1,8 +1,8 @@
 # XIRASM 语言指南
 
-XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指令保持熟悉的汇编写法；值、函数、控制流、集合、数据布局和输出格式则由结构化的编译期语言表达。
+XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。ISA 指令保持熟悉的汇编写法；值、函数、控制流、集合、数据布局和输出格式则由结构化的编译期语言表达。
 
-本指南按照实际编程顺序介绍 XIRASM：先学习值、表达式和函数，再进入标号、数据布局、输出区域与收尾处理，最后构建裸二进制文件和标准可执行格式。需要查询精确签名时使用[语言 API 参考](api-reference.md)；需要构建 PE、COFF 或 ELF 文件时使用[格式教程](format-tutorial.md)。
+本指南按照实际编程顺序介绍 XIRASM：先学习值、表达式和函数，再进入标号、数据布局、输出区域与收尾处理，最后构建 flat binary 和标准可执行格式。需要查询精确签名时使用[语言 API 参考](api-reference.md)；需要构建 PE、COFF 或 ELF 文件时使用[格式教程](format-tutorial.md)。
 
 ## 指南结构
 
@@ -10,7 +10,7 @@ XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指
 
 1. **[认识 XIRASM](language/01-introducing-xirasm.md)**
    - 汇编第一个 x86-64 程序。
-   - 理解处理器指令与编译期代码如何配合。
+   - 理解 ISA 文本与编译期代码如何配合。
    - 掌握基本源代码规则。
 2. **[值与绑定](language/02-values-and-bindings.md)**
    - 声明常量和可变的局部绑定。
@@ -19,7 +19,7 @@ XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指
 3. **[表达式](language/03-expressions.md)**
    - 使用算术、比较、逻辑、位运算和字段表达式。
    - 调用函数并组合编译期计算。
-4. **[流程控制](language/04-control-flow.md)**
+4. **[控制流](language/04-control-flow.md)**
    - 使用 `if` 选择需要生成的内容。
    - 使用 `while` 和 `for` 重复执行操作。
    - 根据编译期条件生成数据和指令。
@@ -35,7 +35,7 @@ XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指
 
 ### 第二部分：汇编器模型
 
-8. **[目标平台、处理器指令与标号](language/08-targets-isa-text-and-labels.md)**
+8. **[目标、ISA 文本与标号](language/08-targets-isa-text-and-labels.md)**
    - 选择指令集和指令模式。
    - 定义标号，并在指令中使用编译期值。
    - 理解地址引用与回填。
@@ -47,9 +47,9 @@ XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指
     - 通过包含和导入复用源代码。
     - 从普通文件以及 JSON、TOML 格式中读取源数据。
 11. **[输出区域与虚拟数据](language/11-output-regions-and-virtual-data.md)**
-    - 区分逻辑地址和文件中的实际位置。
-    - 构建输出区域、预留一段空间，并使用虚拟数据作为临时工作区。
-    - 读取并修改已经生成的字节。
+    - 区分逻辑地址、文件偏移和最终物理字节。
+    - 构建输出区域，表达预留空间、物理间隙和不占文件空间的尾部。
+    - 使用虚拟输出作为临时组装、测量和转换区域。
 12. **[收尾处理](language/12-finalizers.md)**
     - 等布局稳定后再执行检查和回填。
     - 计算校验和与最终字段值。
@@ -57,11 +57,12 @@ XIRASM 是一款面向 x86、RISC-V 和 SPIR-V 的现代汇编器。处理器指
 
 ### 第三部分：构建程序
 
-13. **[裸二进制文件与自定义格式](language/13-flat-and-custom-binaries.md)**
-    - 构建紧凑的裸二进制文件和应用专用文件格式。
+13. **[Flat Binary 与自定义格式](language/13-flat-and-custom-binaries.md)**
+    - 构建紧凑的 flat binary 和项目专用文件格式。
+    - 用标号、区域、`defer` 和 `late_layout` 推导文件头字段。
 14. **[可执行文件与目标文件格式](language/14-executable-and-object-formats.md)**
-    - 理解格式接口负责完成哪些工作。
-    - 无需手工计算文件头，即可构建一个最小可执行文件。
+    - 理解普通格式接口负责完成哪些工作。
+    - 使用新版 `let` / `*_mut` 调用方式构建最小可执行文件。
     - 通过格式教程继续学习 PE、COFF、ELF、导入、导出、BSS（未初始化数据区）和重定位。
 15. **[诊断信息与实用约定](language/15-diagnostics-and-practical-conventions.md)**
     - 报告无效输入，并检查布局是否符合预期。
