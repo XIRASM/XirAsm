@@ -37,9 +37,14 @@ pub fn cloneBlockFromAst(
 pub fn freezeBlockFromAst(
     allocator: Allocator,
     context: *LowerContext,
+    here_address: u64,
     meta_defer: ast.MetaDeferStatement,
     callbacks: Callbacks,
 ) LowerError!output_mod.DeferredBlock {
+    const previous_defer_here = context.defer_here;
+    context.defer_here = here_address;
+    defer context.defer_here = previous_defer_here;
+
     const body = try freezeStatementSlice(allocator, context, meta_defer.body, callbacks);
     return .{
         .body = body,
@@ -443,6 +448,13 @@ fn renderFrozenExpression(
         .symbol => |name| {
             if (lookupLocalValue(context, name)) |value| {
                 return renderFrozenValue(allocator, value.*);
+            }
+        },
+        .builtin_call => |call| {
+            if (call.args.len == 0 and std.mem.eql(u8, call.name, "here")) {
+                if (context.defer_here) |address| {
+                    return std.fmt.allocPrint(allocator, "{}", .{address});
+                }
             }
         },
         else => {},

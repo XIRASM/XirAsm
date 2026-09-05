@@ -3,6 +3,7 @@ const std = @import("std");
 const ast = @import("../ast.zig");
 const expr = @import("../expr.zig");
 const module_mod = @import("../module.zig");
+const output_mod = @import("../output/root.zig");
 const typecheck = @import("../typecheck.zig");
 const value_mod = @import("../value.zig");
 const contracts = @import("contracts.zig");
@@ -144,6 +145,7 @@ pub fn evalValueFunctionAt(
     module: *module_mod.Module,
     context: *LowerContext,
     active: ActiveOutput,
+    output_image: ?output_mod.Image,
     output_stack: *std.ArrayList(ActiveOutput),
     function_index: usize,
     args: []const expr.BuiltinArgument,
@@ -178,6 +180,7 @@ pub fn evalValueFunctionAt(
         .active_section = active.section_id,
         .active_offset = active.offset,
         .active_file_offset = active.file_offset,
+        .output_image = output_image,
         .file_resolver = expression_bridge.fileResolver(context),
         .source_path = context_mod.currentSourcePath(context),
         .local_context = context,
@@ -186,6 +189,9 @@ pub fn evalValueFunctionAt(
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,
     };
+    const previous_output_image = context.output_image;
+    context.output_image = output_image;
+    defer context.output_image = previous_output_image;
     const values = try allocator.alloc(value_mod.Value, function.params.len);
     var initialized: usize = 0;
     defer {

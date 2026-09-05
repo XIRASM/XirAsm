@@ -310,7 +310,13 @@ fn lowerStatement(
             var block = if (context.scopes.items.len == 0)
                 try deferred.cloneBlockFromAst(allocator, meta_defer, deferredCallbacks())
             else
-                try deferred.freezeBlockFromAst(allocator, context, meta_defer, deferredCallbacks());
+                try deferred.freezeBlockFromAst(
+                    allocator,
+                    context,
+                    try activeAddress(module, active.*),
+                    meta_defer,
+                    deferredCallbacks(),
+                );
             errdefer block.deinit(allocator);
             try module.appendDeferredBlock(block);
         },
@@ -497,7 +503,7 @@ pub fn evalModuleValueFunction(
     };
     var output_stack: std.ArrayList(ActiveOutput) = .empty;
     defer output_stack.deinit(allocator);
-    return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, &output_stack, function_index, args, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
+    return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, eval_ctx.output_image, &output_stack, function_index, args, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
 }
 
 pub fn evalModuleStructLiteralValue(
@@ -605,7 +611,7 @@ fn evalBooleanAtContext(
     return expression_bridge.evalBooleanAtContext(
         module,
         context,
-        activeExpressionContext(active),
+        activeExpressionContext(context, active),
         expressionCallbacks(),
         node,
     );
@@ -625,7 +631,7 @@ fn evalIntegerAtContext(
     return expression_bridge.evalIntegerAtContext(
         module,
         context,
-        activeExpressionContext(active),
+        activeExpressionContext(context, active),
         expressionCallbacks(),
         node,
     );
@@ -643,18 +649,19 @@ fn evalValueAtContext(
         allocator,
         module,
         context,
-        activeExpressionContext(active),
+        activeExpressionContext(context, active),
         expressionCallbacks(),
         node,
     );
 }
 
-fn activeExpressionContext(active: ActiveOutput) ActiveExpressionContext {
+fn activeExpressionContext(context: *LowerContext, active: ActiveOutput) ActiveExpressionContext {
     return .{
         .target = active.target,
         .section_id = active.section_id,
         .offset = active.offset,
         .file_offset = active.file_offset,
+        .output_image = context.output_image,
     };
 }
 

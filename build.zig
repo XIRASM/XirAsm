@@ -4634,6 +4634,16 @@ pub fn build(b: *std.Build) void {
         "x64",
         "0201151f1d1f1d",
     );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/deferred_value_function_image.asm",
+        "meta-deferred-value-function-image.bin",
+        "x64",
+        "785634124433221188776655",
+    );
     for ([_][]const u8{
         "tests/meta/negative/parenthesized_postfix.asm",
         "tests/meta/negative/split_if_header.asm",

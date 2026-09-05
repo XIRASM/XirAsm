@@ -505,7 +505,7 @@ const ExpressionParser = struct {
     fn parseNumber(self: *ExpressionParser) ExpressionError!Node {
         const start = self.pos;
         const is_prefixed_integer = self.input[start] == '0' and start + 1 < self.input.len and
-            std.mem.indexOfScalar(u8, "xXbBoO", self.input[start + 1]) != null;
+            std.mem.indexOfScalar(u8, "xXhHbBoO", self.input[start + 1]) != null;
         while (self.peekByte()) |byte| {
             if (std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '\'') {
                 self.pos += 1;
@@ -1760,6 +1760,8 @@ test "hex arithmetic signs are not decimal exponent signs" {
         .{ .text = "0x1e-1", .expected = 29 },
         .{ .text = "0X1E+1", .expected = 31 },
         .{ .text = "0X1E-1", .expected = 29 },
+        .{ .text = "0h1e+1", .expected = 31 },
+        .{ .text = "0H1E-1", .expected = 29 },
         .{ .text = "0x1e + 1", .expected = 31 },
         .{ .text = "0x1f+1", .expected = 32 },
     };

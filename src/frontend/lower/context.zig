@@ -2,6 +2,7 @@ const std = @import("std");
 
 const expr = @import("../expr.zig");
 const meta_function = @import("../meta_function.zig");
+const output_mod = @import("../output/root.zig");
 const value_mod = @import("../value.zig");
 const contracts = @import("contracts.zig");
 
@@ -9,6 +10,8 @@ const Allocator = std.mem.Allocator;
 
 pub const LowerContext = struct {
     include_resolver: ?contracts.IncludeResolver = null,
+    output_image: ?output_mod.Image = null,
+    defer_here: ?u64 = null,
     source_stack: std.ArrayList(SourceFrame) = .empty,
     functions: meta_function.Store = .{},
     scopes: std.ArrayList(MetaScope) = .empty,

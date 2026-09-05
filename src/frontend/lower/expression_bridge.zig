@@ -3,6 +3,7 @@ const std = @import("std");
 const expr = @import("../expr.zig");
 const meta_io = @import("../meta_io.zig");
 const module_mod = @import("../module.zig");
+const output_mod = @import("../output/root.zig");
 const value_mod = @import("../value.zig");
 const contracts = @import("contracts.zig");
 const context_mod = @import("context.zig");
@@ -15,6 +16,7 @@ pub const ActiveExpressionContext = struct {
     section_id: @import("../fragment.zig").SectionId,
     offset: u64,
     file_offset: u64,
+    output_image: ?output_mod.Image = null,
 };
 
 pub const Callbacks = struct {
@@ -85,6 +87,7 @@ fn evalContext(
         .active_section = active.section_id,
         .active_offset = active.offset,
         .active_file_offset = active.file_offset,
+        .output_image = active.output_image,
         .file_resolver = fileResolver(context),
         .source_path = context_mod.currentSourcePath(context),
         .local_context = context,
