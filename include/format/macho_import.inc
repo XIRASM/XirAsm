@@ -13,12 +13,13 @@ const macho_import_first_library_ordinal: u64 = 1
 
 fn macho_import_header64_arm64(command_count: u64, command_size: u64) {
     macho_header64_arm64(macho_mh_execute, command_count, command_size,
-        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_pie);
+        macho_exe_dynamic_flags);
 }
 
 fn macho_import_header64_x86_64(command_count: u64, command_size: u64) {
-    macho_header64_x86_64(macho_mh_execute, command_count, command_size,
-        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_pie);
+    macho_header64(macho_mh_execute, macho_cpu_type_x86_64,
+        macho_cpu_subtype_x86_64_all | macho_cpu_subtype_lib64,
+        command_count, command_size, macho_exe_dynamic_flags);
 }
 
 fn macho_import_new() -> list {
@@ -36,11 +37,18 @@ fn macho_import_use64_as(imports: list, library: string, name: string, stub: str
     assert(len(slot) > 0, "Mach-O import slot label is empty");
 
     for entry in imports {
-        if (map.get(entry, "name") == name || map.get(entry, "stub") == stub || map.get(entry, "slot") == slot) {
-            assert(map.get(entry, "name") == name, "Mach-O import label already maps to a different symbol");
-            assert(map.get(entry, "stub") == stub, "Mach-O import symbol already maps to a different stub label");
-            assert(map.get(entry, "slot") == slot, "Mach-O import symbol already maps to a different slot label");
-            return imports;
+        if map.get(entry, "name") == name {
+            if map.get(entry, "library") == library {
+                assert(map.get(entry, "stub") == stub, "Mach-O import symbol already maps to a different stub label");
+                assert(map.get(entry, "slot") == slot, "Mach-O import symbol already maps to a different slot label");
+                return imports;
+            }
+        }
+        if map.get(entry, "stub") == stub {
+            assert(false, "Mach-O import stub label is duplicated");
+        }
+        if map.get(entry, "slot") == slot {
+            assert(false, "Mach-O import slot label is duplicated");
         }
     }
 
@@ -127,19 +135,28 @@ fn macho_import_emit_uleb(value: u64) {
     emit.u8(remaining);
 }
 
-fn macho_import_bind_size64(imports: list) -> u64 {
+fn macho_import_bind_raw_size64_at(imports: list, segment_offset: u64) -> u64 {
     assert(len(imports) > 0, "Mach-O import table is empty");
     let size: u64 = 2
     for i in range(0, len(imports)) {
         const entry: map = list.get(imports, i)
-        size = size + 1 + 1 + len(map.get(entry, "name")) + 1 + 1 + macho_import_uleb_size(i * macho_import_pointer_size64) + 1;
+        size = size + 1 + 1 + len(map.get(entry, "name")) + 1 + 1 + macho_import_uleb_size(segment_offset + i * macho_import_pointer_size64) + 1;
     }
     return size;
 }
 
-fn macho_import_emit_bind64(imports: list, data_segment_index: u64) {
+fn macho_import_bind_size64_at(imports: list, segment_offset: u64) -> u64 {
+    return macho_align_up(macho_import_bind_raw_size64_at(imports, segment_offset), 8);
+}
+
+fn macho_import_bind_size64(imports: list) -> u64 {
+    return macho_import_bind_size64_at(imports, 0);
+}
+
+fn macho_import_emit_bind64_at(imports: list, data_segment_index: u64, segment_offset: u64) {
     assert(len(imports) > 0, "Mach-O import table is empty");
     assert(data_segment_index < 16, "Mach-O bind segment index exceeds immediate range");
+    const raw_size: u64 = macho_import_bind_raw_size64_at(imports, segment_offset);
     emit.u8(macho_bind_opcode_set_type_imm | macho_bind_type_pointer);
     for i in range(0, len(imports)) {
         const entry: map = list.get(imports, i)
@@ -148,18 +165,27 @@ fn macho_import_emit_bind64(imports: list, data_segment_index: u64) {
         emit.u8(macho_bind_opcode_set_symbol_trailing_flags_imm);
         db(map.get(entry, "name"), 0);
         emit.u8(macho_bind_opcode_set_segment_and_offset_uleb | data_segment_index);
-        macho_import_emit_uleb(i * macho_import_pointer_size64);
+        macho_import_emit_uleb(segment_offset + i * macho_import_pointer_size64);
         emit.u8(macho_bind_opcode_do_bind);
     }
     emit.u8(macho_bind_opcode_done);
+    pad(macho_align_up(raw_size, 8) - raw_size, 0);
 }
 
-fn macho_import_names_size64(imports: list) -> u64 {
+fn macho_import_emit_bind64(imports: list, data_segment_index: u64) {
+    macho_import_emit_bind64_at(imports, data_segment_index, 0);
+}
+
+fn macho_import_names_raw_size64(imports: list) -> u64 {
     let size: u64 = 1
     for entry in imports {
         size = size + len(map.get(entry, "name")) + 1;
     }
     return size;
+}
+
+fn macho_import_names_size64(imports: list) -> u64 {
+    return macho_align_up(macho_import_names_raw_size64(imports), 8);
 }
 
 fn macho_import_name_offset64(imports: list, target_index: u64) -> u64 {
@@ -182,10 +208,12 @@ fn macho_import_emit_symbols64(imports: list) {
 }
 
 fn macho_import_emit_strings64(imports: list) {
+    const raw_size: u64 = macho_import_names_raw_size64(imports);
     db(0);
     for entry in imports {
         db(map.get(entry, "name"), 0);
     }
+    pad(macho_align_up(raw_size, 8) - raw_size, 0);
 }
 
 fn macho_import_emit_indirect64(imports: list) {

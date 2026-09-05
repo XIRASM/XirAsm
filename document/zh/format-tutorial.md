@@ -1,6 +1,6 @@
 # XIRASM 格式教程
 
-这份教程讲如何用 XIRASM 直接生成 PE、ELF、COFF 等常见文件。日常写这些格式时，从 `format/format.inc` 开始：你声明文件类型、节或装载段、入口、导入导出和重定位；`format.inc` 负责生成文件头、表项、文件偏移、RVA、对齐和最终回填。
+这份教程讲如何用 XIRASM 直接生成 PE、ELF、COFF 和 macOS Mach-O 等常见文件。日常写这些格式时，从 `format/format.inc` 开始：你声明文件类型、节或装载段、入口、导入导出和重定位；`format.inc` 负责生成文件头、表项、文件偏移、RVA、对齐和最终回填。
 
 如果你过去主要在 C、C++、Rust 或其他语言里写内联汇编，文件格式通常由编译器、链接器和运行时处理。XIRASM 直接生成输出文件，所以你需要明确回答这些问题：
 
@@ -33,6 +33,7 @@ import("format/format.inc");
 3. [Linux ELF 可执行文件和共享库](format-tutorial/03-linux-elf.md)
 4. [COFF 和 ELF 目标文件](format-tutorial/04-object-files.md)
 5. [通用规则和常见错误](format-tutorial/05-common-rules.md)
+6. [macOS Mach-O](format-tutorial/06-macos-macho.md)
 
 ## 快速选择
 
@@ -45,6 +46,9 @@ import("format/format.inc");
 | Linux 共享库 | `format_elf64_so` | `format_elfso_tables_mut`、`format_segment_begin`、`format_finish` |
 | COFF 目标文件 | `format_coff32` 或 `format_coff64` | `format_coff_tables_mut`、`format_section_begin`、`format_finish` |
 | ELF 目标文件 | `format_elfobj32` 或 `format_elfobj64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |
+| macOS Mach-O 目标文件 | `format_macho64_object` | `format_macho64_target_arm64` 或 `format_macho64_target_x86_64`、`format_section_begin`、`format_finish` |
+| macOS Mach-O 可执行文件 | `format_macho64_exe` | `format_macho64_segment`、`format_entry_mut`、`format_finish` |
+| macOS Mach-O 动态库 | `format_macho64_dylib` | `format_macho64_segment`、`format_macho64_exports_mut`、`format_finish` |
 
 ## 基本生命周期
 

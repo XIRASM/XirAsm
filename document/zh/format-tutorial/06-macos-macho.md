@@ -17,6 +17,25 @@ dyld 导入时才加入 `macho_import.inc`。`tests/format/macho64_*` 是 `arm64
 
 ```asm
 import("format/format.inc");
+
+// facade 支持 arm64（16 KiB 页）和 x86_64（4 KiB 页）。
+const version: u64 = macho_exe_macos_version(14, 0, 0)
+let image: map = format_macho64_exe(
+    format_macho64_target_x86_64(version, version),
+    list.of(format_macho64_segment(
+        "__TEXT",
+        format_load | format_readable | format_executable,
+        list.of(format_section("__text", format_code | format_readable | format_executable))
+    ))
+)
+
+format_begin(image);
+format_section_begin(image, "__text");
+entry:
+db(0x31, 0xc0, 0xc3);
+format_section_end(image, "__text");
+format_entry_mut(image, entry);
+format_finish(image);
 ```
 
 也可以直接导入 Mach-O 层：
@@ -32,6 +51,13 @@ import("format/macho_obj.inc");
 | 可重定位目标文件 | `macho_obj.inc` | `ld64` 或 `ld64.lld` |
 | 可执行文件 | `macho_exe.inc` | macOS loader；签名由外部工具完成 |
 | 共享库 | `macho_dylib.inc` | dyld；导入和签名由外部工具完成 |
+
+高层 `format_macho64_object`、`format_macho64_exe` 和
+`format_macho64_dylib` 使用相同的节生命周期。节的身份是
+`(segment_name, section_name)`；如果两个段包含同名节，请使用同时指定两个名称的
+`format_macho64_section_begin/end`。`MH_OBJECT` facade 只有一个隐含段，因此要求节名唯一。
+这一层生成普通代码、数据和 zerofill 节；导入、
+重定位、代码签名和 chained fixups 仍由更底层 helper 或 linker 负责。
 
 ## 能力矩阵
 

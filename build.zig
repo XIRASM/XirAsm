@@ -441,6 +441,24 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/format/elf64_so_import.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_exe_import.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_exe_import.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_dylib.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_dylib_exports.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_exe.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_exe_dylinker.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_format_entry.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_callee_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_data_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_dylib_exports.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_exe.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_exe_dylinker.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_ffi_ref_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_unsigned_obj.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/format_macho64_arm64_duplicate_sections.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/format_macho64_arm64_dylib_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/format_macho64_arm64_obj_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/format_macho64_x86_64_exe_user_facade.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/diagnostics.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/err_negative.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/assignment.asm"));
@@ -1663,7 +1681,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/macho64_arm64_exe_import.asm",
         "format-macho64-arm64-exe-import",
         "x64",
-        "32864",
+        "32904",
         &.{
             "include/format/macho_import.inc",
             "include/format/macho_exe.inc",
@@ -1680,7 +1698,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/macho64_x86_64_exe_import.asm",
         "format-macho64-x86-64-exe-import",
         "x64",
-        "8277",
+        "8328",
         &.{
             "include/format/macho_import.inc",
             "include/format/macho_exe.inc",

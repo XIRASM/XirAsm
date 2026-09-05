@@ -15,8 +15,7 @@ import("elfexe_import.inc");
 import("elfobj.inc");
 import("elf_export.inc");
 import("elfso_import.inc");
-// Mach-O AArch64 helpers are direct DSL records, matching the advanced
-// row-level APIs above. They do not add a generic plan object.
+// Mach-O record helpers back both the generic plan API and direct layouts.
 import("macho_obj.inc");
 import("macho_exe.inc");
 import("macho_dylib.inc");
@@ -79,6 +78,10 @@ const format_pe_aslr_mask: u64 = format_pe_aslr_auto | format_pe_aslr_required |
 const format_pe_option_mask: u64 = format_pe_kind_mask | format_pe_subsystem_mask | format_pe_nx | format_pe_aslr_mask
 const format_elf_option_mask: u64 = format_elf_exec | format_elf_pie
 
+const format_macho64_image_base: u64 = 0x100000000
+const format_macho64_header_label: string = "__xirasm_macho64_header"
+const format_macho64_linkedit_region: string = ".xirasm.macho.__LINKEDIT"
+
 const format_pe_opt_subsystem_foa: u64 = pe_optional_header_foa + 68
 
 fn format_section(name: string, attributes: u64) -> map {
@@ -132,6 +135,203 @@ fn format_validate_short_section_names(sections: list) -> bool {
         );
     }
     return true;
+}
+
+fn format_macho64_target(cpu_type: u64, cpu_subtype: u64, minos: u64, sdk: u64) -> map {
+    if cpu_type == macho_cpu_type_arm64 {
+        assert(
+            cpu_subtype == macho_cpu_subtype_arm64_all ||
+            cpu_subtype == macho_cpu_subtype_arm64_v8 ||
+            cpu_subtype == macho_cpu_subtype_arm64e,
+            "unsupported Mach-O arm64 CPU subtype"
+        );
+    } else {
+        assert(cpu_type == macho_cpu_type_x86_64, "unsupported Mach-O 64 CPU type");
+        assert(
+            cpu_subtype == macho_cpu_subtype_x86_64_all ||
+            cpu_subtype == macho_cpu_subtype_x86_64_h,
+            "unsupported Mach-O x86_64 CPU subtype"
+        );
+    }
+    assert(minos > 0, "Mach-O minimum macOS version is zero");
+    assert(minos <= 0xffffffff && sdk <= 0xffffffff, "Mach-O version exceeds 32 bits");
+    assert(sdk >= minos, "Mach-O SDK version precedes minimum macOS version");
+
+    let target: map = map.new()
+    map.set_mut(target, "cpu_type", cpu_type);
+    map.set_mut(target, "cpu_subtype", cpu_subtype);
+    map.set_mut(target, "page_size", macho_target_page_size64(cpu_type));
+    map.set_mut(target, "minos", minos);
+    map.set_mut(target, "sdk", sdk);
+    return target;
+}
+
+fn format_macho64_target_arm64(minos: u64, sdk: u64) -> map {
+    return format_macho64_target(macho_cpu_type_arm64, macho_cpu_subtype_arm64_all, minos, sdk);
+}
+
+fn format_macho64_target_x86_64(minos: u64, sdk: u64) -> map {
+    return format_macho64_target(macho_cpu_type_x86_64, macho_cpu_subtype_x86_64_all, minos, sdk);
+}
+
+fn format_validate_macho64_sections(sections: list) -> bool {
+    assert(len(sections) > 0, "Mach-O format plan requires at least one section");
+    assert(len(sections) < 256, "Mach-O format plan has too many sections");
+    let has_zerofill: bool = false
+
+    for i in range(0, len(sections)) {
+        const section: map = list.get(sections, i)
+        const name: string = map.get(section, "name")
+        const attributes: u64 = map.get(section, "attributes")
+        const purpose: u64 = attributes & format_section_purpose_mask
+        assert(len(name) <= 16, "Mach-O section name exceeds 16 bytes");
+        assert(purpose == format_code || purpose == format_data || purpose == format_uninitialized_data, "unsupported Mach-O section purpose");
+        assert((attributes & format_discardable) == 0, "Mach-O sections do not support the discardable attribute");
+        if purpose == format_uninitialized_data {
+            has_zerofill = true;
+        } else {
+            assert(!has_zerofill, "Mach-O zerofill sections must be last in their segment");
+        }
+        for j in range(i + 1, len(sections)) {
+            const other: map = list.get(sections, j)
+            assert(map.get(other, "name") != name, "Mach-O section name is duplicated");
+        }
+    }
+    return true;
+}
+
+fn format_macho64_segment(name: string, attributes: u64, sections: list) -> map {
+    assert(len(name) > 0, "Mach-O segment name is empty");
+    assert(len(name) <= 16, "Mach-O segment name exceeds 16 bytes");
+    assert(name != "__PAGEZERO" && name != "__LINKEDIT", "Mach-O segment name is reserved by the facade");
+    assert((attributes & ~(format_load | format_segment_permission_mask)) == 0, "unknown Mach-O segment attribute");
+    assert((attributes & format_load) != 0, "Mach-O segment requires the load attribute");
+    assert((attributes & format_segment_permission_mask) != 0, "Mach-O segment requires permissions");
+    assert(format_validate_macho64_sections(sections), "invalid Mach-O segment section list");
+
+    let segment: map = map.new()
+    map.set_mut(segment, "name", name);
+    map.set_mut(segment, "attributes", attributes);
+    map.set_mut(segment, "sections", sections);
+    return segment;
+}
+
+fn format_validate_macho64_segments(segments: list) -> bool {
+    assert(len(segments) > 0, "Mach-O executable or dylib requires at least one segment");
+    const first: map = list.get(segments, 0)
+    assert(map.get(first, "name") == "__TEXT", "Mach-O first segment must be __TEXT");
+    assert((map.get(first, "attributes") & format_readable) != 0, "Mach-O __TEXT segment must be readable");
+    let has_code: bool = false
+    for i in range(0, len(segments)) {
+        const segment: map = list.get(segments, i)
+        const segment_name: string = map.get(segment, "name")
+        const segment_attributes: u64 = map.get(segment, "attributes")
+        const segment_permissions: u64 = segment_attributes & format_segment_permission_mask
+        const sections: list = map.get(segment, "sections")
+        let has_zerofill: bool = false
+        let section_names: list = list.new()
+        for j in range(i + 1, len(segments)) {
+            assert(map.get(list.get(segments, j), "name") != segment_name, "Mach-O segment name is duplicated");
+        }
+        for section in sections {
+            const section_attributes: u64 = map.get(section, "attributes")
+            const section_permissions: u64 = section_attributes & format_segment_permission_mask
+            const purpose: u64 = section_attributes & format_section_purpose_mask
+            assert((section_permissions & ~segment_permissions) == 0, "Mach-O section permissions exceed its segment permissions");
+            if purpose == format_code {
+                has_code = true;
+                assert((segment_permissions & format_executable) != 0, "Mach-O code section requires an executable segment");
+            }
+            if purpose == format_uninitialized_data {
+                has_zerofill = true;
+            } else {
+                assert(!has_zerofill, "Mach-O zerofill sections must be last in their segment");
+            }
+            for existing_name in section_names {
+                assert(existing_name != map.get(section, "name"), "Mach-O section name is duplicated within a segment");
+            }
+            list.push_mut(section_names, map.get(section, "name"));
+        }
+    }
+    assert(has_code, "Mach-O executable or dylib requires a code section");
+    return true;
+}
+
+fn format_macho64_clone_section(section: map, segment_name: string, segment_row: u64) -> map {
+    let clone: map = map.new()
+    map.set_mut(clone, "name", map.get(section, "name"));
+    map.set_mut(clone, "attributes", map.get(section, "attributes"));
+    map.set_mut(clone, "segment", segment_name);
+    map.set_mut(clone, "segment_row", segment_row);
+    map.set_mut(clone, "key", sym.unique("__xirasm_macho64_section_"));
+    return clone;
+}
+
+fn format_macho64_plan(kind: u64, target: map, items: list) -> map {
+    assert(kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib, "unsupported Mach-O format plan kind");
+
+    let plan: map = map.new()
+    map.set_mut(plan, "kind", kind);
+    map.set_mut(plan, "target", target);
+    map.set_mut(plan, "entry", 0);
+    map.set_mut(plan, "exports", macho_export_new());
+    map.set_mut(plan, "next_address", 0);
+    map.set_mut(plan, "next_section_row", 0);
+    map.set_mut(plan, "section_open", false);
+    if kind == format_kind_macho64_object {
+        assert(format_validate_macho64_sections(items), "invalid Mach-O object section list");
+        let sections: list = list.new()
+        for section in items {
+            list.push_mut(sections, format_macho64_clone_section(section, format_macho64_section_segment_name(map.get(section, "attributes")), 0));
+        }
+        map.set_mut(plan, "sections", sections);
+        map.set_mut(plan, "segments", list.new());
+    } else {
+        assert(format_validate_macho64_segments(items), "invalid Mach-O segment list");
+        let segments: list = list.new()
+        let sections: list = list.new()
+        for i in range(0, len(items)) {
+            const source_segment: map = list.get(items, i)
+            let segment: map = map.new()
+            let segment_sections: list = list.new()
+            map.set_mut(segment, "name", map.get(source_segment, "name"));
+            map.set_mut(segment, "attributes", map.get(source_segment, "attributes"));
+            for source_section in map.get(source_segment, "sections") {
+                const section: map = format_macho64_clone_section(source_section, map.get(source_segment, "name"), i)
+                list.push_mut(segment_sections, section);
+                list.push_mut(sections, section);
+            }
+            map.set_mut(segment, "sections", segment_sections);
+            list.push_mut(segments, segment);
+        }
+        map.set_mut(plan, "sections", sections);
+        map.set_mut(plan, "segments", segments);
+        assert(len(sections) < 256, "Mach-O format plan has too many sections");
+        map.set_mut(plan, "current_segment_row", len(segments));
+    }
+    return plan;
+}
+
+fn format_macho64_object(target: map, sections: list) -> map {
+    return format_macho64_plan(format_kind_macho64_object, target, sections);
+}
+
+fn format_macho64_exe(target: map, segments: list) -> map {
+    return format_macho64_plan(format_kind_macho64_execute, target, segments);
+}
+
+fn format_macho64_dylib(target: map, install_name: string, segments: list) -> map {
+    assert(len(install_name) > 0, "Mach-O dylib install name is empty");
+    let plan: map = format_macho64_plan(format_kind_macho64_dylib, target, segments)
+    map.set_mut(plan, "install_name", install_name);
+    return plan;
+}
+
+fn format_macho64_exports_mut(let plan: map, exports: list) {
+    assert(map.get(plan, "kind") == format_kind_macho64_dylib, "Mach-O exports require a dylib plan");
+    assert(len(exports) > 0, "Mach-O dylib export table is empty");
+    assert(len(exports) < 256, "Mach-O dylib has too many root exports");
+    map.set_mut(plan, "exports", exports);
 }
 
 fn format_validate_pe_options(options: u64) -> bool {
@@ -688,7 +888,8 @@ fn format_entry_mut(let plan: map, address: u64) {
         kind == format_kind_pe32 ||
         kind == format_kind_pe64 ||
         kind == format_kind_elf32 ||
-        kind == format_kind_elf64,
+        kind == format_kind_elf64 ||
+        kind == format_kind_macho64_execute,
         "format plan does not use an executable entry"
     );
     assert(address != 0, "format entry address is zero");
@@ -696,6 +897,10 @@ fn format_entry_mut(let plan: map, address: u64) {
 }
 
 fn format_section_row(plan: map, name: string) -> u64 {
+    const kind: u64 = map.get(plan, "kind")
+    if kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+        return format_macho64_section_row(plan, "", name);
+    }
     const sections: list = map.get(plan, "sections")
     for i in range(0, len(sections)) {
         const section: map = list.get(sections, i)
@@ -705,6 +910,22 @@ fn format_section_row(plan: map, name: string) -> u64 {
     }
     assert(false, "format section is not declared");
     return 0;
+}
+
+fn format_macho64_section_row(plan: map, segment_name: string, name: string) -> u64 {
+    const kind: u64 = map.get(plan, "kind")
+    assert(kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib, "Mach-O section lookup requires a Mach-O plan");
+    const sections: list = map.get(plan, "sections")
+    let row: u64 = len(sections)
+    for i in range(0, len(sections)) {
+        const section: map = list.get(sections, i)
+        if map.get(section, "name") == name && (segment_name == "" || map.get(section, "segment") == segment_name) {
+            assert(row == len(sections), "Mach-O section name is ambiguous; specify its segment");
+            row = i;
+        }
+    }
+    assert(row < len(sections), "Mach-O section is not declared");
+    return row;
 }
 
 fn format_section_purpose(plan: map, name: string) -> u64 {
@@ -821,6 +1042,63 @@ fn format_elfobj_section_start_label(name: string) -> string {
 
 fn format_pe_section_start_label(name: string) -> string {
     return sym.join("__xirasm_pe_start", name);
+}
+
+fn format_macho64_section_start_label(section: map) -> string {
+    return sym.join(map.get(section, "key"), "_start");
+}
+
+fn format_macho64_section_end_label(section: map) -> string {
+    return sym.join(map.get(section, "key"), "_end");
+}
+
+fn format_macho64_segment_command_label(name: string) -> string {
+    return sym.join("__xirasm_macho64_segment_command", name);
+}
+
+fn format_macho64_section_command_label(section: map) -> string {
+    return sym.join(map.get(section, "key"), "_command");
+}
+
+fn format_macho64_section_segment_name(attributes: u64) -> string {
+    if (attributes & format_code) != 0 {
+        return "__TEXT";
+    }
+    return "__DATA";
+}
+
+fn format_macho64_section_flags(attributes: u64) -> u64 {
+    if (attributes & format_code) != 0 {
+        return macho_s_regular | macho_s_attr_pure_instructions | macho_s_attr_some_instructions;
+    }
+    if (attributes & format_uninitialized_data) != 0 {
+        return macho_s_zerofill;
+    }
+    return macho_s_regular;
+}
+
+fn format_macho64_segment_prot(attributes: u64) -> u64 {
+    let prot: u64 = 0
+    if (attributes & format_readable) != 0 {
+        prot = prot | macho_vm_prot_read;
+    }
+    if (attributes & format_writeable) != 0 {
+        prot = prot | macho_vm_prot_write;
+    }
+    if (attributes & format_executable) != 0 {
+        prot = prot | macho_vm_prot_execute;
+    }
+    return prot;
+}
+
+fn format_macho64_section_align_power(target: map, attributes: u64) -> u64 {
+    if (attributes & format_code) != 0 {
+        if map.get(target, "cpu_type") == macho_cpu_type_arm64 {
+            return 2;
+        }
+        return 4;
+    }
+    return 3;
 }
 
 fn format_elfobj_section_end_label(name: string) -> string {
@@ -1176,7 +1454,165 @@ fn format_elfso_begin64(plan: map) {
     align(16);
 }
 
-fn format_begin(plan: map) {
+fn format_macho64_header_subtype(plan: map) -> u64 {
+    const kind: u64 = map.get(plan, "kind")
+    const target: map = map.get(plan, "target")
+    const cpu_type: u64 = map.get(target, "cpu_type")
+    let cpu_subtype: u64 = map.get(target, "cpu_subtype")
+    if kind == format_kind_macho64_execute && cpu_type == macho_cpu_type_x86_64 {
+        if cpu_subtype == macho_cpu_subtype_x86_64_all {
+            if map.get(target, "minos") >= macho_exe_macos_version(10, 5, 0) {
+                cpu_subtype = cpu_subtype | macho_cpu_subtype_lib64;
+            }
+        }
+    }
+    return cpu_subtype;
+}
+
+fn format_macho64_segments_command_size(segments: list) -> u64 {
+    let size: u64 = 0
+    for segment in segments {
+        size = size + macho_segment_command64_size_for(len(map.get(segment, "sections")));
+    }
+    return size;
+}
+
+fn format_macho64_emit_segments(let plan: map) {
+    const target: map = map.get(plan, "target")
+    const segments: list = map.get(plan, "segments")
+    for i in range(0, len(segments)) {
+        let segment: map = list.get(segments, i)
+        const attributes: u64 = map.get(segment, "attributes")
+        const prot: u64 = format_macho64_segment_prot(attributes)
+        const sections: list = map.get(segment, "sections")
+        label.define(format_macho64_segment_command_label(map.get(segment, "name")));
+        macho_segment64(map.get(segment, "name"), 0, 0, 0, 0, prot, prot, len(sections), 0);
+        for j in range(0, len(sections)) {
+            let section: map = list.get(sections, j)
+            const section_attributes: u64 = map.get(section, "attributes")
+            label.define(format_macho64_section_command_label(section));
+            macho_section64(
+                map.get(section, "name"), map.get(segment, "name"), 0, 0, 0,
+                format_macho64_section_align_power(target, section_attributes),
+                0, 0, format_macho64_section_flags(section_attributes), 0, 0, 0
+            );
+        }
+    }
+}
+
+fn format_macho64_begin_object(let plan: map) {
+    const target: map = map.get(plan, "target")
+    const sections: list = map.get(plan, "sections")
+    const command_count: u64 = 2
+    const command_size: u64 = macho_segment_command64_size_for(len(sections)) + macho_exe_build_version_command_size
+    const content_foa: u64 = macho_header64_size + command_size
+
+    region.begin(".xirasm.macho.header", 0, 0);
+    label.define(format_macho64_header_label);
+    macho_header64(
+        macho_mh_object,
+        map.get(target, "cpu_type"),
+        format_macho64_header_subtype(plan),
+        command_count,
+        command_size,
+        macho_mh_subsections_via_symbols
+    );
+    map.set_mut(plan, "segment_command", here());
+    macho_segment64("", 0, 0, content_foa, 0,
+        macho_vm_prot_read | macho_vm_prot_write | macho_vm_prot_execute,
+        macho_vm_prot_read | macho_vm_prot_write | macho_vm_prot_execute,
+        len(sections), 0);
+    for i in range(0, len(sections)) {
+        let section: map = list.get(sections, i)
+        const attributes: u64 = map.get(section, "attributes")
+        label.define(format_macho64_section_command_label(section));
+        macho_section64(
+            map.get(section, "name"),
+            format_macho64_section_segment_name(attributes),
+            0, 0, 0,
+            format_macho64_section_align_power(target, attributes),
+            0, 0,
+            format_macho64_section_flags(attributes),
+            0, 0, 0
+        );
+    }
+    macho_exe_build_version64(map.get(target, "minos"), map.get(target, "sdk"));
+    map.set_mut(plan, "content_foa", content_foa);
+}
+
+fn format_macho64_begin_execute(let plan: map) {
+    const target: map = map.get(plan, "target")
+    const segments: list = map.get(plan, "segments")
+    const dylinker_size: u64 = macho_align_up(macho_exe_dylinker_command_base_size + len("/usr/lib/dyld") + 1, 8)
+    const command_count: u64 = len(segments) + 5
+    const command_size: u64 = macho_exe_pagezero_command_size + format_macho64_segments_command_size(segments) + macho_segment_command64_size + dylinker_size + macho_exe_build_version_command_size + macho_exe_main_command_size
+
+    region.begin(".xirasm.macho.header", format_macho64_image_base, 0);
+    label.define(format_macho64_header_label);
+    macho_header64(
+        macho_mh_execute,
+        map.get(target, "cpu_type"),
+        format_macho64_header_subtype(plan),
+        command_count,
+        command_size,
+        macho_exe_dynamic_flags
+    );
+    macho_exe_pagezero64(format_macho64_image_base);
+    format_macho64_emit_segments(plan);
+    map.set_mut(plan, "linkedit_command", here());
+    // dyld requires this segment even when there is no link-edit payload.
+    macho_segment64("__LINKEDIT", 0, 0, 0, 0, macho_vm_prot_read, macho_vm_prot_read, 0, 0);
+    macho_exe_load_dylinker64("/usr/lib/dyld");
+    macho_exe_build_version64(map.get(target, "minos"), map.get(target, "sdk"));
+    map.set_mut(plan, "main_command", here());
+    macho_exe_main64(0, 0);
+    align(16);
+    map.set_mut(plan, "next_vmaddr", format_macho64_image_base + file_cursor_real());
+}
+
+fn format_macho64_begin_dylib(let plan: map) {
+    const target: map = map.get(plan, "target")
+    const segments: list = map.get(plan, "segments")
+    const install_name: string = map.get(plan, "install_name")
+    const id_size: u64 = macho_align_up(macho_dylib_id_command_base_size + len(install_name) + 1, 8)
+    const command_count: u64 = len(segments) + 4
+    const command_size: u64 = format_macho64_segments_command_size(segments) + macho_segment_command64_size + id_size + macho_dylib_build_version_command_size + macho_dylib_export_command_size
+
+    region.begin(".xirasm.macho.header", 0, 0);
+    label.define(format_macho64_header_label);
+    macho_header64(
+        macho_mh_dylib,
+        map.get(target, "cpu_type"),
+        format_macho64_header_subtype(plan),
+        command_count,
+        command_size,
+        macho_mh_noundefs | macho_mh_dyldlink | macho_mh_twolevel | macho_mh_no_reexported_dylibs
+    );
+    format_macho64_emit_segments(plan);
+    map.set_mut(plan, "linkedit_command", here());
+    macho_segment64("__LINKEDIT", 0, 0, 0, 0, macho_vm_prot_read, macho_vm_prot_read, 0, 0);
+    macho_dylib_id64(install_name, 0x00010000, 0x00010000);
+    macho_dylib_build_version64(map.get(target, "minos"), map.get(target, "sdk"));
+    map.set_mut(plan, "export_command", here());
+    macho_dylib_exports_trie64(0, 0);
+    align(16);
+    map.set_mut(plan, "next_vmaddr", file_cursor_real());
+}
+
+fn format_macho64_begin(let plan: map) {
+    const kind: u64 = map.get(plan, "kind")
+    if kind == format_kind_macho64_object {
+        format_macho64_begin_object(plan);
+    }
+    if kind == format_kind_macho64_execute {
+        format_macho64_begin_execute(plan);
+    }
+    if kind == format_kind_macho64_dylib {
+        format_macho64_begin_dylib(plan);
+    }
+}
+
+fn format_begin(let plan: map) {
     const kind: u64 = map.get(plan, "kind")
 
     if kind == format_kind_pe32 {
@@ -1213,6 +1649,9 @@ fn format_begin(plan: map) {
     if kind == format_kind_elfso64 {
         format_elfso_begin64(plan);
     }
+    if kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+        format_macho64_begin(plan);
+    }
     assert(
         kind == format_kind_pe32 ||
         kind == format_kind_pe64 ||
@@ -1222,16 +1661,27 @@ fn format_begin(plan: map) {
         kind == format_kind_coff64 ||
         kind == format_kind_elfobj32 ||
         kind == format_kind_elfobj64 ||
-        kind == format_kind_elfso64,
+        kind == format_kind_elfso64 ||
+        kind == format_kind_macho64_object ||
+        kind == format_kind_macho64_execute ||
+        kind == format_kind_macho64_dylib,
         "unsupported format plan kind"
     );
 }
 
-fn format_section_begin(plan: map, name: string) {
-    const row: u64 = format_section_row(plan, name)
+fn format_section_begin(let plan: map, name: string) {
+    format_section_begin_row(plan, format_section_row(plan, name));
+}
+
+fn format_macho64_section_begin(let plan: map, segment_name: string, name: string) {
+    format_section_begin_row(plan, format_macho64_section_row(plan, segment_name, name));
+}
+
+fn format_section_begin_row(let plan: map, row: u64) {
     const kind: u64 = map.get(plan, "kind")
     const sections: list = map.get(plan, "sections")
     const section: map = list.get(sections, row)
+    const name: string = map.get(section, "name")
     const attributes: u64 = map.get(section, "attributes")
     const purpose: u64 = attributes & format_section_purpose_mask
 
@@ -1256,20 +1706,63 @@ fn format_section_begin(plan: map, name: string) {
         region.begin(name, file_offset(), file_offset());
         label.define(format_elfobj_section_start_label(name));
     }
+    if kind == format_kind_macho64_object {
+        const target: map = map.get(plan, "target")
+        const alignment: u64 = 1 << format_macho64_section_align_power(target, attributes)
+        const logical_offset: u64 = macho_align_up(map.get(plan, "next_address"), alignment)
+        const file_offset: u64 = macho_align_up(file_cursor_real(), alignment)
+        assert(row == map.get(plan, "next_section_row"), "Mach-O sections must be emitted in declaration order");
+        assert(!map.get(plan, "section_open"), "Mach-O previous section is still open");
+        map.set_mut(plan, "section_open", true);
+        region.begin(map.get(section, "key"), logical_offset, file_offset);
+        label.define(format_macho64_section_start_label(section));
+    }
+    if kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+        const target: map = map.get(plan, "target")
+        const segment_row: u64 = map.get(section, "segment_row")
+        const alignment: u64 = 1 << format_macho64_section_align_power(target, attributes)
+        let next_vmaddr: u64 = map.get(plan, "next_vmaddr")
+        let file_offset: u64 = file_cursor_real()
+        assert(row == map.get(plan, "next_section_row"), "Mach-O sections must be emitted in declaration order");
+        if segment_row != map.get(plan, "current_segment_row") {
+            if segment_row > 0 {
+                next_vmaddr = macho_align_up(next_vmaddr, map.get(target, "page_size"));
+                file_offset = macho_align_up(file_offset, map.get(target, "page_size"));
+            }
+            map.set_mut(plan, "current_segment_row", segment_row);
+        }
+        next_vmaddr = macho_align_up(next_vmaddr, alignment);
+        file_offset = macho_align_up(file_offset, alignment);
+        assert(!map.get(plan, "section_open"), "Mach-O previous section is still open");
+        map.set_mut(plan, "section_open", true);
+        region.begin(map.get(section, "key"), next_vmaddr, file_offset);
+        label.define(format_macho64_section_start_label(section));
+    }
     assert(
         kind == format_kind_pe32 ||
         kind == format_kind_pe64 ||
         kind == format_kind_coff32 ||
         kind == format_kind_coff64 ||
         kind == format_kind_elfobj32 ||
-        kind == format_kind_elfobj64,
+        kind == format_kind_elfobj64 ||
+        kind == format_kind_macho64_object ||
+        kind == format_kind_macho64_execute ||
+        kind == format_kind_macho64_dylib,
         "unsupported format plan kind"
     );
 }
 
-fn format_section_end(plan: map, name: string) {
-    const row: u64 = format_section_row(plan, name)
+fn format_section_end(let plan: map, name: string) {
+    format_section_end_row(plan, format_section_row(plan, name));
+}
+
+fn format_macho64_section_end(let plan: map, segment_name: string, name: string) {
+    format_section_end_row(plan, format_macho64_section_row(plan, segment_name, name));
+}
+
+fn format_section_end_row(let plan: map, row: u64) {
     const kind: u64 = map.get(plan, "kind")
+    const name: string = map.get(list.get(map.get(plan, "sections"), row), "name")
 
     if kind == format_kind_pe32 {
         pe32_end_section(row);
@@ -1288,13 +1781,29 @@ fn format_section_end(plan: map, name: string) {
         label.define(format_elfobj_section_end_label(name));
         region.file_align(16);
     }
+    if kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+        const sections: list = map.get(plan, "sections")
+        const section: map = list.get(sections, row)
+        assert(map.get(plan, "section_open"), "Mach-O section is not open");
+        assert(row == map.get(plan, "next_section_row"), "Mach-O section end does not match its begin");
+        map.set_mut(plan, "section_open", false);
+        label.define(format_macho64_section_end_label(section));
+        map.set_mut(plan, "next_address", here());
+        map.set_mut(plan, "next_section_row", row + 1);
+        if kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+            map.set_mut(plan, "next_vmaddr", here());
+        }
+    }
     assert(
         kind == format_kind_pe32 ||
         kind == format_kind_pe64 ||
         kind == format_kind_coff32 ||
         kind == format_kind_coff64 ||
         kind == format_kind_elfobj32 ||
-        kind == format_kind_elfobj64,
+        kind == format_kind_elfobj64 ||
+        kind == format_kind_macho64_object ||
+        kind == format_kind_macho64_execute ||
+        kind == format_kind_macho64_dylib,
         "unsupported format plan kind"
     );
 }
@@ -1309,7 +1818,7 @@ fn format_pe_reloc_add_mut(plan: map, let relocs: list, address: u64) {
     }
 }
 
-fn format_pe_import_section32(plan: map, name: string, imports: map) {
+fn format_pe_import_section32(let plan: map, name: string, imports: map) {
     assert(format_section_purpose(plan, name) == format_imports, "format PE import section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1319,7 +1828,7 @@ fn format_pe_import_section32(plan: map, name: string, imports: map) {
     pe_finalize_import_dir32(rva, start, pe_import_descriptors, pe_import_descriptors_end);
 }
 
-fn format_pe_import_section64(plan: map, name: string, imports: map) {
+fn format_pe_import_section64(let plan: map, name: string, imports: map) {
     assert(format_section_purpose(plan, name) == format_imports, "format PE import section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1329,7 +1838,7 @@ fn format_pe_import_section64(plan: map, name: string, imports: map) {
     pe_finalize_import_dir64(rva, start, pe_import_descriptors, pe_import_descriptors_end);
 }
 
-fn format_pe_import_section(plan: map, name: string, imports: map) {
+fn format_pe_import_section(let plan: map, name: string, imports: map) {
     const kind: u64 = map.get(plan, "kind")
     if kind == format_kind_pe32 {
         format_pe_import_section32(plan, name, imports);
@@ -1340,7 +1849,7 @@ fn format_pe_import_section(plan: map, name: string, imports: map) {
     assert(kind == format_kind_pe32 || kind == format_kind_pe64, "format plan is not a PE image");
 }
 
-fn format_pe_export_section32(plan: map, name: string, exports: list, dll_name: string) {
+fn format_pe_export_section32(let plan: map, name: string, exports: list, dll_name: string) {
     assert(format_section_purpose(plan, name) == format_exports, "format PE export section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1350,7 +1859,7 @@ fn format_pe_export_section32(plan: map, name: string, exports: list, dll_name: 
     pe_finalize_export_dir32(rva, start, pe_export_directory, pe_export_directory_end);
 }
 
-fn format_pe_export_section64(plan: map, name: string, exports: list, dll_name: string) {
+fn format_pe_export_section64(let plan: map, name: string, exports: list, dll_name: string) {
     assert(format_section_purpose(plan, name) == format_exports, "format PE export section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1360,7 +1869,7 @@ fn format_pe_export_section64(plan: map, name: string, exports: list, dll_name: 
     pe_finalize_export_dir64(rva, start, pe_export_directory, pe_export_directory_end);
 }
 
-fn format_pe_export_section(plan: map, name: string, exports: list, dll_name: string) {
+fn format_pe_export_section(let plan: map, name: string, exports: list, dll_name: string) {
     const kind: u64 = map.get(plan, "kind")
     if kind == format_kind_pe32 {
         format_pe_export_section32(plan, name, exports, dll_name);
@@ -1371,7 +1880,7 @@ fn format_pe_export_section(plan: map, name: string, exports: list, dll_name: st
     assert(kind == format_kind_pe32 || kind == format_kind_pe64, "format plan is not a PE image");
 }
 
-fn format_pe_resource_section32(plan: map, name: string, path: string) {
+fn format_pe_resource_section32(let plan: map, name: string, path: string) {
     assert(format_section_purpose(plan, name) == format_resources, "format PE resource section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1381,7 +1890,7 @@ fn format_pe_resource_section32(plan: map, name: string, path: string) {
     pe_finalize_resource_dir32(rva, start, pe_resource_root, pe_resource_end);
 }
 
-fn format_pe_resource_section64(plan: map, name: string, path: string) {
+fn format_pe_resource_section64(let plan: map, name: string, path: string) {
     assert(format_section_purpose(plan, name) == format_resources, "format PE resource section has the wrong purpose");
     format_section_begin(plan, name);
     const start: u64 = here()
@@ -1391,7 +1900,7 @@ fn format_pe_resource_section64(plan: map, name: string, path: string) {
     pe_finalize_resource_dir64(rva, start, pe_resource_root, pe_resource_end);
 }
 
-fn format_pe_resource_section(plan: map, name: string, path: string) {
+fn format_pe_resource_section(let plan: map, name: string, path: string) {
     const kind: u64 = map.get(plan, "kind")
     if kind == format_kind_pe32 {
         format_pe_resource_section32(plan, name, path);
@@ -1402,7 +1911,7 @@ fn format_pe_resource_section(plan: map, name: string, path: string) {
     assert(kind == format_kind_pe32 || kind == format_kind_pe64, "format plan is not a PE image");
 }
 
-fn format_pe_reloc_section32(plan: map, name: string, relocs: list) {
+fn format_pe_reloc_section32(let plan: map, name: string, relocs: list) {
     assert(format_section_purpose(plan, name) == format_fixups, "format PE relocation section has the wrong purpose");
     assert(len(relocs) > 0, "format PE relocation section requires at least one relocation");
     format_section_begin(plan, name);
@@ -1413,7 +1922,7 @@ fn format_pe_reloc_section32(plan: map, name: string, relocs: list) {
     pe_finalize_reloc_dir32(rva, start, pe_reloc_grouped_start, pe_reloc_grouped_end);
 }
 
-fn format_pe_reloc_section64(plan: map, name: string, relocs: list) {
+fn format_pe_reloc_section64(let plan: map, name: string, relocs: list) {
     assert(format_section_purpose(plan, name) == format_fixups, "format PE relocation section has the wrong purpose");
     assert(len(relocs) > 0, "format PE relocation section requires at least one relocation");
     format_section_begin(plan, name);
@@ -1424,7 +1933,7 @@ fn format_pe_reloc_section64(plan: map, name: string, relocs: list) {
     pe_finalize_reloc_dir64(rva, start, pe_reloc_grouped_start, pe_reloc_grouped_end);
 }
 
-fn format_pe_reloc_section(plan: map, name: string, relocs: list) {
+fn format_pe_reloc_section(let plan: map, name: string, relocs: list) {
     const kind: u64 = map.get(plan, "kind")
     if kind == format_kind_pe32 {
         format_pe_reloc_section32(plan, name, relocs);
@@ -2696,7 +3205,172 @@ fn format_elfexe_finish_tables(plan: map) {
     elfexe_finalize_phdr64(metadata_row + 2, elf_pt_dynamic, elf_pf_r | elf_pf_w, dynamic_foa, dynamic_vaddr, dynamic_size, dynamic_size, 8);
 }
 
-fn format_finish(plan: map) {
+fn format_macho64_finalize_section(section: map) {
+    const attributes: u64 = map.get(section, "attributes")
+    const command: u64 = label_addr(format_macho64_section_command_label(section))
+    const start: u64 = label_addr(format_macho64_section_start_label(section))
+    const end: u64 = label_addr(format_macho64_section_end_label(section))
+    defer {
+        let file_offset: u64 = region_file_offset(start)
+        assert(end >= start, "Mach-O section end precedes its start");
+        if (attributes & format_uninitialized_data) != 0 {
+            assert(region_file_size(start) == 0, "Mach-O zerofill section emitted file bytes");
+            file_offset = 0;
+        }
+        assert(file_offset < 0x100000000, "Mach-O section file offset exceeds 32 bits");
+        store.u64(command + 32, start);
+        store.u64(command + 40, end - start);
+        store.u32(command + 48, file_offset);
+    }
+}
+
+fn format_macho64_finalize_segment(command: u64, vmaddr: u64, start: u64, first: bool, next_vmaddr: u64, next_start: u64, last: bool, linkedit_foa: u64) {
+    defer {
+        let fileoff: u64 = region_file_offset(start)
+        let next_fileoff: u64 = region_file_offset(next_start)
+        if first {
+            fileoff = 0;
+        }
+        if last {
+            next_fileoff = linkedit_foa;
+        }
+        assert(next_vmaddr >= vmaddr, "Mach-O segment VM ranges are not ordered");
+        assert(next_fileoff >= fileoff, "Mach-O segment file ranges are not ordered");
+        store.u64(command + 24, vmaddr);
+        store.u64(command + 32, next_vmaddr - vmaddr);
+        store.u64(command + 40, fileoff);
+        store.u64(command + 48, next_fileoff - fileoff);
+    }
+}
+
+fn format_macho64_finish_object(plan: map) {
+    const sections: list = map.get(plan, "sections")
+    const segment_command: u64 = map.get(plan, "segment_command")
+    const content_foa: u64 = map.get(plan, "content_foa")
+    const last_section: map = list.get(sections, len(sections) - 1)
+    const image_size: u64 = label_addr(format_macho64_section_end_label(last_section))
+    const file_size: u64 = file_cursor_real() - content_foa
+
+    assert(map.get(plan, "next_section_row") == len(sections), "Mach-O object has un-emitted sections");
+    defer {
+        store.u64(segment_command + 32, image_size);
+        store.u64(segment_command + 48, file_size);
+    }
+    for section in sections {
+        format_macho64_finalize_section(section);
+    }
+}
+
+fn format_macho64_finish_segments(let plan: map) {
+    const kind: u64 = map.get(plan, "kind")
+    const target: map = map.get(plan, "target")
+    const segments: list = map.get(plan, "segments")
+    const sections: list = map.get(plan, "sections")
+    const page_size: u64 = map.get(target, "page_size")
+    assert(map.get(plan, "next_section_row") == len(sections), "Mach-O image has un-emitted sections");
+
+    const linkedit_foa: u64 = macho_align_up(file_cursor_real(), page_size)
+    const linkedit_vmaddr: u64 = macho_align_up(map.get(plan, "next_vmaddr"), page_size)
+    map.set_mut(plan, "linkedit_foa", linkedit_foa);
+    map.set_mut(plan, "linkedit_vmaddr", linkedit_vmaddr);
+
+    for i in range(0, len(segments)) {
+        const segment: map = list.get(segments, i)
+        const segment_name: string = map.get(segment, "name")
+        const segment_sections: list = map.get(segment, "sections")
+        const first_section: map = list.get(segment_sections, 0)
+        const first_section_start: u64 = label_addr(format_macho64_section_start_label(first_section))
+        const command: u64 = label_addr(format_macho64_segment_command_label(segment_name))
+        let vmaddr: u64 = first_section_start
+        if i == 0 {
+            vmaddr = 0;
+            if kind == format_kind_macho64_execute {
+                vmaddr = format_macho64_image_base;
+            }
+        }
+        let next_vmaddr: u64 = linkedit_vmaddr
+        let next_start: u64 = first_section_start
+        let last: bool = true
+        if i + 1 < len(segments) {
+            const next_segment: map = list.get(segments, i + 1)
+            const next_sections: list = map.get(next_segment, "sections")
+            const next_section: map = list.get(next_sections, 0)
+            next_start = label_addr(format_macho64_section_start_label(next_section));
+            next_vmaddr = next_start;
+            last = false;
+        }
+        format_macho64_finalize_segment(command, vmaddr, first_section_start, i == 0, next_vmaddr, next_start, last, linkedit_foa);
+    }
+    for section in sections {
+        format_macho64_finalize_section(section);
+    }
+    region.begin(format_macho64_linkedit_region, linkedit_vmaddr, linkedit_foa);
+}
+
+fn format_macho64_finish_execute(let plan: map) {
+    const sections: list = map.get(plan, "sections")
+    const main_command: u64 = map.get(plan, "main_command")
+    const linkedit_command: u64 = map.get(plan, "linkedit_command")
+    const entry_address: u64 = map.get(plan, "entry")
+    let entry_is_code: bool = false
+    for section in sections {
+        const attributes: u64 = map.get(section, "attributes")
+        const start: u64 = label_addr(format_macho64_section_start_label(section))
+        const end: u64 = label_addr(format_macho64_section_end_label(section))
+        if (attributes & format_code) != 0 && entry_address >= start && entry_address < end {
+            entry_is_code = true;
+        }
+    }
+    assert(entry_is_code, "Mach-O executable entry is outside its code sections");
+    format_macho64_finish_segments(plan);
+    const linkedit_vmaddr: u64 = map.get(plan, "linkedit_vmaddr")
+    const linkedit_foa: u64 = map.get(plan, "linkedit_foa")
+    defer {
+        store.u64(main_command + 8, entry_address - format_macho64_image_base);
+        store.u64(linkedit_command + 24, linkedit_vmaddr);
+        store.u64(linkedit_command + 40, linkedit_foa);
+    }
+}
+
+fn format_macho64_finish_dylib(let plan: map) {
+    const export_command: u64 = map.get(plan, "export_command")
+    const linkedit_command: u64 = map.get(plan, "linkedit_command")
+    const exports: list = map.get(plan, "exports")
+    assert(len(exports) > 0, "Mach-O dylib facade requires at least one export");
+    format_macho64_finish_segments(plan);
+    const linkedit_foa: u64 = map.get(plan, "linkedit_foa")
+    const linkedit_vmaddr: u64 = map.get(plan, "linkedit_vmaddr")
+    const export_size: u64 = macho_export_trie_size64(exports, 0)
+    assert(linkedit_foa < 0x100000000, "Mach-O export file offset exceeds 32 bits");
+
+    macho_export_trie_emit64(exports, 0);
+
+    defer {
+        store.u32(export_command + 8, linkedit_foa);
+        store.u32(export_command + 12, export_size);
+        store.u64(linkedit_command + 24, linkedit_vmaddr);
+        store.u64(linkedit_command + 32, export_size);
+        store.u64(linkedit_command + 40, linkedit_foa);
+        store.u64(linkedit_command + 48, export_size);
+    }
+}
+
+fn format_macho64_finish(let plan: map) {
+    const kind: u64 = map.get(plan, "kind")
+    assert(!map.get(plan, "section_open"), "Mach-O final section is still open");
+    if kind == format_kind_macho64_object {
+        format_macho64_finish_object(plan);
+    }
+    if kind == format_kind_macho64_execute {
+        assert(map.get(plan, "entry") != 0, "Mach-O executable requires an entry address");
+        format_macho64_finish_execute(plan);
+    }
+    if kind == format_kind_macho64_dylib {
+        format_macho64_finish_dylib(plan);
+    }
+}
+
+fn format_finish(let plan: map) {
     const kind: u64 = map.get(plan, "kind")
     const entry_address: u64 = map.get(plan, "entry")
 
@@ -2729,6 +3403,9 @@ fn format_finish(plan: map) {
     if kind == format_kind_elfso64 {
         format_elfso_finish_tables(plan);
     }
+    if kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
+        format_macho64_finish(plan);
+    }
     assert(
         kind == format_kind_pe32 ||
         kind == format_kind_pe64 ||
@@ -2738,7 +3415,10 @@ fn format_finish(plan: map) {
         kind == format_kind_coff64 ||
         kind == format_kind_elfobj32 ||
         kind == format_kind_elfobj64 ||
-        kind == format_kind_elfso64,
+        kind == format_kind_elfso64 ||
+        kind == format_kind_macho64_object ||
+        kind == format_kind_macho64_execute ||
+        kind == format_kind_macho64_dylib,
         "unsupported format plan kind"
     );
 }

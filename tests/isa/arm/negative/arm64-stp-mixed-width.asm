@@ -1,0 +1,5 @@
+// STP pair registers must be the same width (both W or both X).
+// Expected failure: load/store pair: mixed W/X registers
+import("arm/arm64.inc");
+
+arm64_stp(arm64_x0, arm64_w1, arm64_x2, 0)

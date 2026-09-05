@@ -5,21 +5,22 @@
 
 import("macho_obj.inc");
 
-const macho_platform_macos: u64 = 1
-const macho_exe_page_size: u64 = 0x1000
 const macho_exe_pagezero_command_size: u64 = macho_segment_command64_size
 const macho_exe_text_command_size: u64 = macho_segment_command64_size_for(1)
 const macho_exe_main_command_size: u64 = 24
 const macho_exe_build_version_command_size: u64 = 24
 const macho_exe_dylinker_command_base_size: u64 = 12
 const macho_exe_dyld_info_command_size: u64 = 48
+const macho_exe_dynamic_flags: u64 = macho_mh_noundefs | macho_mh_dyldlink | macho_mh_twolevel | macho_mh_pie
 
 fn macho_exe_header64_arm64(command_count: u64, command_size: u64) {
-    macho_header64_arm64(macho_mh_execute, command_count, command_size, macho_mh_noundefs);
+    macho_header64_arm64(macho_mh_execute, command_count, command_size, macho_exe_dynamic_flags);
 }
 
 fn macho_exe_header64_x86_64(command_count: u64, command_size: u64) {
-    macho_header64_x86_64(macho_mh_execute, command_count, command_size, macho_mh_noundefs);
+    macho_header64(macho_mh_execute, macho_cpu_type_x86_64,
+        macho_cpu_subtype_x86_64_all | macho_cpu_subtype_lib64,
+        command_count, command_size, macho_exe_dynamic_flags);
 }
 
 fn macho_exe_pagezero64(vmsize: u64) {

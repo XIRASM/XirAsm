@@ -12,6 +12,12 @@ const macho_cpu_subtype_x86_64_h: u32 = 8
 const macho_cpu_subtype_arm64_all: u32 = 0
 const macho_cpu_subtype_arm64_v8: u32 = 1
 const macho_cpu_subtype_arm64e: u32 = 2
+const macho_cpu_subtype_lib64: u32 = 0x80000000
+
+const macho_page_size_x86_64: u64 = 0x1000
+const macho_page_size_arm64: u64 = 0x4000
+
+const macho_platform_macos: u32 = 1
 
 const macho_mh_object: u32 = 1
 const macho_mh_execute: u32 = 2
@@ -21,6 +27,7 @@ const macho_mh_noundefs: u32 = 0x00000001
 const macho_mh_dyldlink: u32 = 0x00000004
 const macho_mh_twolevel: u32 = 0x00000080
 const macho_mh_subsections_via_symbols: u32 = 0x00002000
+const macho_mh_no_reexported_dylibs: u32 = 0x00100000
 const macho_mh_pie: u32 = 0x00200000
 
 const macho_lc_segment_64: u32 = 0x19

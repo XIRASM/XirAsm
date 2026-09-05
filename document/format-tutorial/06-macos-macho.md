@@ -19,6 +19,25 @@ Import the normal format entry point when you want all format helpers:
 
 ```asm
 import("format/format.inc");
+
+// The facade accepts arm64 (16 KiB pages) and x86_64 (4 KiB pages).
+const version: u64 = macho_exe_macos_version(14, 0, 0)
+let image: map = format_macho64_exe(
+    format_macho64_target_x86_64(version, version),
+    list.of(format_macho64_segment(
+        "__TEXT",
+        format_load | format_readable | format_executable,
+        list.of(format_section("__text", format_code | format_readable | format_executable))
+    ))
+)
+
+format_begin(image);
+format_section_begin(image, "__text");
+entry:
+db(0x31, 0xc0, 0xc3);
+format_section_end(image, "__text");
+format_entry_mut(image, entry);
+format_finish(image);
 ```
 
 The Mach-O helpers are also available directly:
@@ -34,6 +53,16 @@ import("format/macho_obj.inc");
 | Relocatable object | `macho_obj.inc` | `ld64` or `ld64.lld` |
 | Executable | `macho_exe.inc` | macOS loader; signing is external |
 | Shared library | `macho_dylib.inc` | dyld; imports and signing are external |
+
+The higher-level `format_macho64_object`, `format_macho64_exe`, and
+`format_macho64_dylib` constructors use the same section lifecycle. A section
+is identified by `(segment_name, section_name)`; when two segments contain the
+same section name, use `format_macho64_section_begin/end` with both names.
+The facade's `MH_OBJECT` form has one implicit segment and therefore requires
+unique section names.
+The facade emits ordinary code, data, and zerofill sections. Imports,
+relocations, code signatures, and chained fixups remain explicit lower-level
+helpers or linker responsibilities.
 
 ## Capability Matrix
 

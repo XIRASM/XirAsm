@@ -1,7 +1,7 @@
 # XIRASM Format Tutorial
 
 This tutorial is the practical starting point for building executable files,
-dynamic libraries, and object files with XIRASM.
+dynamic libraries, and object files with XIRASM, including macOS Mach-O.
 
 If you have mostly written inline assembly inside C, C++, Rust, or another
 language, the surrounding toolchain has usually handled the file format for you.
@@ -44,6 +44,7 @@ configuration cannot express the file you need.
 3. [Linux ELF Executables and Shared Objects](format-tutorial/03-linux-elf.md)
 4. [COFF and ELF Object Files](format-tutorial/04-object-files.md)
 5. [Common Rules and Mistakes](format-tutorial/05-common-rules.md)
+6. [macOS Mach-O](format-tutorial/06-macos-macho.md)
 
 ## Quick Choice Table
 
@@ -56,6 +57,9 @@ configuration cannot express the file you need.
 | Linux shared object | `format_elf64_so` | `format_elfso_tables_mut`, `format_segment_begin`, `format_finish` |
 | COFF object | `format_coff32` or `format_coff64` | `format_coff_tables_mut`, `format_section_begin`, `format_finish` |
 | ELF object | `format_elfobj32` or `format_elfobj64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |
+| macOS Mach-O object | `format_macho64_object` | `format_macho64_target_arm64` or `format_macho64_target_x86_64`, `format_section_begin`, `format_finish` |
+| macOS Mach-O executable | `format_macho64_exe` | `format_macho64_segment`, `format_entry_mut`, `format_finish` |
+| macOS Mach-O dylib | `format_macho64_dylib` | `format_macho64_segment`, `format_macho64_exports_mut`, `format_finish` |
 
 ## Lifecycle
 

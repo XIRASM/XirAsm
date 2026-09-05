@@ -17,7 +17,17 @@ const macho_relocation_size: u64 = 8
 fn macho_align_up(value: u64, alignment: u64) -> u64 {
     assert(alignment > 0, "Mach-O alignment is zero");
     assert((alignment & (alignment - 1)) == 0, "Mach-O alignment is not a power of two");
-    return (value + alignment - 1) & ~(alignment - 1);
+    const mask: u64 = alignment - 1
+    assert(value <= 0xffffffffffffffff - mask, "Mach-O alignment overflows 64 bits");
+    return (value + mask) & ~mask;
+}
+
+fn macho_target_page_size64(cpu_type: u64) -> u64 {
+    if cpu_type == macho_cpu_type_arm64 {
+        return macho_page_size_arm64;
+    }
+    assert(cpu_type == macho_cpu_type_x86_64, "unsupported Mach-O 64 CPU type");
+    return macho_page_size_x86_64;
 }
 
 fn macho_segment_command64_size_for(section_count: u64) -> u64 {

@@ -52,10 +52,11 @@ fn macho_export_child_size(exports: list, index: u64, image_base: u64) -> u64 {
 }
 
 fn macho_export_root_size_fixpoint(exports: list, image_base: u64) -> u64 {
+    assert(len(exports) < 256, "Mach-O export root has too many children");
     let root_size: u64 = 2
-    let next_root_size: u64 = 0
-    while (root_size != next_root_size) {
-        next_root_size = 2;
+    let converged: bool = false
+    while (!converged) {
+        let next_root_size: u64 = 2
         let child_offset: u64 = root_size
         let index: u64 = 0
         while (index < len(exports)) {
@@ -64,7 +65,11 @@ fn macho_export_root_size_fixpoint(exports: list, image_base: u64) -> u64 {
             child_offset = child_offset + macho_export_child_size(exports, index, image_base);
             index = index + 1;
         }
-        root_size = next_root_size;
+        if next_root_size == root_size {
+            converged = true;
+        } else {
+            root_size = next_root_size;
+        }
     }
     return root_size;
 }
@@ -78,7 +83,7 @@ fn macho_export_emit_uleb(value: u64) {
     emit.u8(remaining);
 }
 
-fn macho_export_trie_size64(exports: list, image_base: u64) -> u64 {
+fn macho_export_trie_raw_size64(exports: list, image_base: u64) -> u64 {
     if (len(exports) == 0) {
         return 0;
     }
@@ -92,8 +97,18 @@ fn macho_export_trie_size64(exports: list, image_base: u64) -> u64 {
     return size;
 }
 
+fn macho_export_trie_size64(exports: list, image_base: u64) -> u64 {
+    const raw_size: u64 = macho_export_trie_raw_size64(exports, image_base);
+    if raw_size == 0 {
+        return 0;
+    }
+    return macho_align_up(raw_size, 8);
+}
+
 fn macho_export_trie_emit64(exports: list, image_base: u64) {
     assert(len(exports) > 0, "Mach-O export trie requires at least one export");
+    assert(len(exports) < 256, "Mach-O export root has too many children");
+    const raw_size: u64 = macho_export_trie_raw_size64(exports, image_base);
     const root_size: u64 = macho_export_root_size_fixpoint(exports, image_base);
     emit.u8(0);
     emit.u8(len(exports));
@@ -119,4 +134,5 @@ fn macho_export_trie_emit64(exports: list, image_base: u64) {
         emit.u8(0);
         index = index + 1;
     }
+    pad(macho_align_up(raw_size, 8) - raw_size, 0);
 }

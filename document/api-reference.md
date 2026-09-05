@@ -7,7 +7,7 @@ examples.
 
 Executable and object format APIs are documented separately:
 
-- [Format Tutorial](format-tutorial.md) for ordinary PE, COFF, and ELF
+- [Format Tutorial](format-tutorial.md) for ordinary PE, COFF, ELF, and macOS Mach-O
   workflows.
 - [Advanced Formats Guide](advanced-formats.md) for direct header, table,
   region, and relocation control.

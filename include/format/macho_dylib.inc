@@ -11,16 +11,18 @@ import("macho_export.inc");
 const macho_dylib_id_command_base_size: u64 = 24
 const macho_dylib_export_command_size: u64 = 16
 const macho_dylib_build_version_command_size: u64 = 24
-const macho_dylib_export_entry_trie_size: u64 = 14
+const macho_dylib_export_entry_trie_size: u64 = 16
 
 fn macho_dylib_header64_arm64(command_count: u64, command_size: u64) {
     macho_header64_arm64(macho_mh_dylib, command_count, command_size,
-        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_noundefs);
+        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_noundefs |
+        macho_mh_no_reexported_dylibs);
 }
 
 fn macho_dylib_header64_x86_64(command_count: u64, command_size: u64) {
     macho_header64_x86_64(macho_mh_dylib, command_count, command_size,
-        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_noundefs);
+        macho_mh_dyldlink | macho_mh_twolevel | macho_mh_noundefs |
+        macho_mh_no_reexported_dylibs);
 }
 
 fn macho_dylib_id64(name: string, current_version: u64, compatibility_version: u64) {
@@ -71,7 +73,7 @@ fn macho_dylib_exports_trie64(file_offset: u64, size: u64) {
 
 // Export trie for exactly one `_entry` symbol at address 0x80:
 // root(0, one child, edge "_entry", child offset 10), then terminal
-// (flags 0, address 0x80) and no children.
+// (flags 0, address 0x80), no children, and one alignment byte.
 fn macho_dylib_export_entry_0x80() {
     emit.u8(0);
     emit.u8(1);
@@ -82,4 +84,6 @@ fn macho_dylib_export_entry_0x80() {
     emit.u8(0);
     emit.u8(0x80);
     emit.u8(1);
+    emit.u8(0);
+    emit.u8(0);
 }
