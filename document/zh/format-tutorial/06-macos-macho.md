@@ -56,14 +56,102 @@ import("format/macho_obj.inc");
 `format_macho64_dylib` 使用相同的节生命周期。节的身份是
 `(segment_name, section_name)`；如果两个段包含同名节，请使用同时指定两个名称的
 `format_macho64_section_begin/end`。`MH_OBJECT` facade 只有一个隐含段，因此要求节名唯一。
-这一层生成普通代码、数据和 zerofill 节；导入、
-重定位、代码签名和 chained fixups 仍由更底层 helper 或 linker 负责。
+这一层生成普通代码、数据和 zerofill 节。对目标文件而言，符号表、重定位和
+`LC_SYMTAB` 也由 facade 端到端管理——见下文
+[目标文件符号与重定位](#目标文件符号与重定位)。dyld 导入、代码签名和
+chained fixups 仍由更底层 helper 或 linker 负责。
+
+## 目标文件符号与重定位
+
+`format_macho64_object` 在发射头部时预留 `LC_SYMTAB` load command，并在
+`format_finish` 时回填其中的偏移。你不需要计算符号下标或字符串表偏移；只要按
+名称声明符号和重定位，再用 `format_macho64_tables_mut` 挂上去：
+
+```asm
+import("format/format.inc");
+
+const version: u64 = macho_exe_macos_version(14, 0, 0)
+let object: map = format_macho64_object(
+    format_macho64_target_arm64(version, version),
+    list.of(
+        format_section("__text", format_code | format_readable | format_executable),
+        format_section("__data", format_data | format_readable | format_writeable)
+    )
+)
+
+format_begin(object);
+
+// 占位字，其立即数字段由链接器回填。
+format_section_begin(object, "__text");
+text_start:
+call_site:
+    emit.u32(0x94000000);
+page_site:
+    emit.u32(0x90000000);
+lo12_site:
+    emit.u32(0x91000000);
+format_section_end(object, "__text");
+
+format_section_begin(object, "__data");
+data_start:
+answer:
+    emit.u64(42);
+pointer_slot:
+    emit.u64(0);
+format_section_end(object, "__data");
+
+const symbols: list = list.of(
+    format_macho64_public("_entry", "__text", text_start, call_site, macho_n_sect | macho_n_ext),
+    format_macho64_public("_answer", "__data", data_start, answer, macho_n_sect | macho_n_ext),
+    format_macho64_extern("_printf")
+)
+const relocs: list = list.of(
+    format_macho64_arm64_reloc("__text", text_start, call_site, "_printf", macho_arm64_reloc_branch26),
+    format_macho64_arm64_reloc("__text", text_start, page_site, "_answer", macho_arm64_reloc_page21),
+    format_macho64_arm64_reloc("__text", text_start, lo12_site, "_answer", macho_arm64_reloc_pageoff12),
+    format_macho64_arm64_reloc("__data", data_start, pointer_slot, "_printf", macho_arm64_reloc_unsigned)
+)
+format_macho64_tables_mut(object, symbols, relocs)
+format_finish(object);
+```
+
+符号语义：
+
+- `format_macho64_public(name, section_name, section_start, address, symbol_type)`
+  在某个节内定义符号。`symbol_type` 是完整的 `n_type`；普通全局符号写
+  `macho_n_sect | macho_n_ext`。发射的记录中
+  `n_value = address - section_start`，`n_sect` 是该节从 1 开始的下标。
+- `format_macho64_extern(name)` 声明未定义外部符号
+  （`N_UNDF | N_EXT`，值为 0），由链接器解析。
+- 名称会写进字符串表，每个 `n_strx` 都由 facade 计算。
+
+重定位语义：
+
+- 重定位地址是节内偏移（`address - section_start`），也就是目标文件中
+  `r_address` 的含义。
+- 目标符号按名称在挂载的符号列表中解析；`r_extern` 恒为 1，
+  `r_symbolnum` 是 nlist 下标。对上述用法，编码与 clang 为 arm64 目标文件
+  生成的结果逐位一致。
+- `format_macho64_reloc` 需要显式的 `pcrel` 标志、`length` 幂
+  （0 = 1 字节，1 = 2，2 = 4，3 = 8）和重定位类型。
+  `format_macho64_arm64_reloc` 会从 AArch64 类型自动推导两者：
+  `macho_arm64_reloc_unsigned` 是非 pcrel 的 8 字节字段，
+  `branch26`、`page21` 和 `got_load_page21`/`tlvp_load_page21` 是 pcrel 的
+  4 字节字段，`pageoff12`、`got_load_pageoff12` 和 `tlvp_load_pageoff12`
+  是非 pcrel 的 4 字节字段。
+- 配对记录（`ARM64_RELOC_SUBTRACTOR` 及其 `ADDEND` 后继）、`POINTER_TO_GOT`
+  和 arm64e 类型不在 facade 范围内；请用直接的 `macho_relocation_info`
+  helper 发射。
+
+`format_macho64_tables_mut` 会对两张表做校验——名称必须唯一，重定位涉及的节
+和符号都必须已声明。从不挂表的目标文件依然合法，只是带一张空符号表。
 
 ## 能力矩阵
 
 | 能力 | arm64 | x86_64 | 所属层 |
 | --- | --- | --- | --- |
 | Mach-O 64 头部/段/节 | 支持 | 支持 | `macho_obj.inc` |
+| facade 目标文件（符号、重定位、`LC_SYMTAB`） | 支持 | 支持 | `format.inc` |
 | 直接生成 `MH_EXECUTE` | 支持 | 支持 | `macho_exe.inc` |
 | `LC_LOAD_DYLINKER` | 支持 | 支持 | `macho_exe_load_dylinker64` |
 | `MH_DYLIB` install name | 支持 | 支持 | `macho_dylib.inc` |

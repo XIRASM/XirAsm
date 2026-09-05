@@ -45,8 +45,9 @@ import("format/format.inc");
 | Linux PIE | `format_elf64`，选项为 `format_elf_pie` | `format_segment_begin`、`format_entry_mut`、`format_finish` |
 | Linux 共享库 | `format_elf64_so` | `format_elfso_tables_mut`、`format_segment_begin`、`format_finish` |
 | COFF 目标文件 | `format_coff32` 或 `format_coff64` | `format_coff_tables_mut`、`format_section_begin`、`format_finish` |
-| ELF 目标文件 | `format_elfobj32` 或 `format_elfobj64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |
-| macOS Mach-O 目标文件 | `format_macho64_object` | `format_macho64_target_arm64` 或 `format_macho64_target_x86_64`、`format_section_begin`、`format_finish` |
+| ELF 目标文件（x86） | `format_elfobj32` 或 `format_elfobj64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |
+| ELF 目标文件（AArch64） | `format_elfobj64_aarch64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |
+| macOS Mach-O 目标文件 | `format_macho64_object` | `format_macho64_target_arm64` 或 `format_macho64_target_x86_64`、`format_macho64_tables_mut`、`format_section_begin`、`format_finish` |
 | macOS Mach-O 可执行文件 | `format_macho64_exe` | `format_macho64_segment`、`format_entry_mut`、`format_finish` |
 | macOS Mach-O 动态库 | `format_macho64_dylib` | `format_macho64_segment`、`format_macho64_exports_mut`、`format_finish` |
 

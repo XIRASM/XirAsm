@@ -141,3 +141,12 @@ fn arm64_msr_pstate(field: u64, imm: u64) {
     emit.u32(0xd5000000 | ((field >> 3) << 16) | (0x4 << 12) | (imm << 8)
         | ((field & 7) << 5) | 0x1f)
 }
+
+// ERET: exception return; PC from ELR_ELx, PSTATE from SPSR_ELx. LLVM
+// SpecialReturn<0b0100> (InstrInfo.td:3635) over BaseBranchReg: opc at
+// bits 24-21, Rn and Rd fields fixed to 11111. Takes no operands; the
+// PAC variants (ERETAA/ERETAB, FEAT_PAuth) are out of scope.
+// clang: eret -> 0xd69f03e0.
+fn arm64_eret() {
+    emit.u32(0xd69f03e0)
+}

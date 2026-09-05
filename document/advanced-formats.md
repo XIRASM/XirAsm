@@ -5738,6 +5738,7 @@ The direct layer also provides:
 
 ```text
 elfobj_begin64_deferred()
+elfobj_begin64_deferred_machine(machine)
 elfobj_patch_header64(...)
 
 elfobj_begin32_deferred()
@@ -5746,6 +5747,9 @@ elfobj_patch_header32(...)
 
 Use these when the final section-table FOA, section count, or section-name
 table index is not known when the ELF header is first emitted.
+`elfobj_begin64_deferred_machine` emits the header with an explicit
+`e_machine` value; `elf_const.inc` provides `elf_machine_x86_64` and
+`elf_machine_aarch64`.
 
 The deferred patch changes existing header fields only. It does not generate
 section rows, symbols, string tables, or relocation records.

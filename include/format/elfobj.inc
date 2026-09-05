@@ -213,7 +213,11 @@ fn elfobj_begin64(section_count: u16, section_table_foa: u64, shstrndx: u16) {
 }
 
 fn elfobj_begin64_deferred() {
-    emit.struct(ElfObjHeader64 { ident: ElfObjIdent { class: elf_class_64 }, shoff: 0, shnum: 0, shstrndx: 0 });
+    elfobj_begin64_deferred_machine(elf_machine_x86_64);
+}
+
+fn elfobj_begin64_deferred_machine(machine: u16) {
+    emit.struct(ElfObjHeader64 { ident: ElfObjIdent { class: elf_class_64 }, machine: machine, shoff: 0, shnum: 0, shstrndx: 0 });
 }
 
 fn elfobj_begin32(section_count: u16, section_table_foa: u64, shstrndx: u16) {

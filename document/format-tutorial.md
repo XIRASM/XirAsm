@@ -56,8 +56,9 @@ configuration cannot express the file you need.
 | Linux PIE | `format_elf64` with `format_elf_pie` | `format_segment_begin`, `format_entry_mut`, `format_finish` |
 | Linux shared object | `format_elf64_so` | `format_elfso_tables_mut`, `format_segment_begin`, `format_finish` |
 | COFF object | `format_coff32` or `format_coff64` | `format_coff_tables_mut`, `format_section_begin`, `format_finish` |
-| ELF object | `format_elfobj32` or `format_elfobj64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |
-| macOS Mach-O object | `format_macho64_object` | `format_macho64_target_arm64` or `format_macho64_target_x86_64`, `format_section_begin`, `format_finish` |
+| ELF object (x86) | `format_elfobj32` or `format_elfobj64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |
+| ELF object (AArch64) | `format_elfobj64_aarch64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |
+| macOS Mach-O object | `format_macho64_object` | `format_macho64_target_arm64` or `format_macho64_target_x86_64`, `format_macho64_tables_mut`, `format_section_begin`, `format_finish` |
 | macOS Mach-O executable | `format_macho64_exe` | `format_macho64_segment`, `format_entry_mut`, `format_finish` |
 | macOS Mach-O dylib | `format_macho64_dylib` | `format_macho64_segment`, `format_macho64_exports_mut`, `format_finish` |
 

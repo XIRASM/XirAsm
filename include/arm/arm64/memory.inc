@@ -194,6 +194,10 @@ fn arm64_emit_pair_ex(opc: u64, is_load: bool, scale: u64, no_alloc: bool, rt: u
     arm64_check_no_sp(rt, "load/store pair");
     arm64_check_no_sp(rt2, "load/store pair");
     arm64_check_same_width(rt, rt2, "load/store pair");
+    if is_load {
+        assert(arm64_reg_number(rt) != arm64_reg_number(rt2),
+            "load/store pair: Rt2==Rt is unpredictable for LDP");
+    }
     assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
         "load/store pair base must be an X register or SP");
     // The offset arrives as a two's-complement u64 (negative for backwards
@@ -217,7 +221,7 @@ fn arm64_emit_pair_ex(opc: u64, is_load: bool, scale: u64, no_alloc: bool, rt: u
     if no_alloc {
         na = 0
     }
-    // 25-23: 011 = signed-offset pair, 000 = no-allocate pair.
+    // 25-23: 010 = signed-offset pair, 000 = no-allocate pair.
     emit.u32((opc << 30) | (0x5 << 27) | (na << 23) | (l << 22) | ((imm7 & 0x7f) << 15)
         | (arm64_reg_number(rt2) << 10) | (arm64_reg_number(rn) << 5) | arm64_reg_number(rt))
 }

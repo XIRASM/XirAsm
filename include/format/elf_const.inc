@@ -125,6 +125,22 @@ const elf_r_386_32: u32 = 1
 const elf_r_386_pc32: u32 = 2
 const elf_r_386_relative: u32 = 8
 
+// AArch64 relocation type numbers verified against llvm-readobj output.
+const elf_r_aarch64_abs64: u32 = 257
+const elf_r_aarch64_abs32: u32 = 258
+const elf_r_aarch64_adr_prel_lo21: u32 = 274
+const elf_r_aarch64_adr_prel_pg_hi21: u32 = 275
+const elf_r_aarch64_add_abs_lo12_nc: u32 = 277
+const elf_r_aarch64_ldst8_abs_lo12_nc: u32 = 278
+const elf_r_aarch64_condbr19: u32 = 280
+const elf_r_aarch64_jump26: u32 = 282
+const elf_r_aarch64_call26: u32 = 283
+const elf_r_aarch64_ldst16_abs_lo12_nc: u32 = 284
+const elf_r_aarch64_ldst32_abs_lo12_nc: u32 = 285
+const elf_r_aarch64_ldst64_abs_lo12_nc: u32 = 286
+const elf_r_aarch64_adr_got_page: u32 = 311
+const elf_r_aarch64_ld64_got_lo12_nc: u32 = 312
+
 const elf_default_page_align: u64 = 0x1000
 const elf_default_base64: u64 = 0x400000
 const elf_default_base32: u64 = 0x08048000

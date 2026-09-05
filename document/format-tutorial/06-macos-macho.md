@@ -60,15 +60,108 @@ is identified by `(segment_name, section_name)`; when two segments contain the
 same section name, use `format_macho64_section_begin/end` with both names.
 The facade's `MH_OBJECT` form has one implicit segment and therefore requires
 unique section names.
-The facade emits ordinary code, data, and zerofill sections. Imports,
-relocations, code signatures, and chained fixups remain explicit lower-level
+The facade emits ordinary code, data, and zerofill sections. For objects it
+also owns the symbol table, relocations, and `LC_SYMTAB` end to end — see
+[Object Symbols And Relocations](#object-symbols-and-relocations) below. Dyld
+imports, code signatures, and chained fixups remain explicit lower-level
 helpers or linker responsibilities.
+
+## Object Symbols And Relocations
+
+`format_macho64_object` reserves the `LC_SYMTAB` load command when the header
+is emitted and backfills its offsets at `format_finish`. You never compute
+symbol indexes or string-table offsets; you declare symbols and relocations by
+name and attach them with `format_macho64_tables_mut`:
+
+```asm
+import("format/format.inc");
+
+const version: u64 = macho_exe_macos_version(14, 0, 0)
+let object: map = format_macho64_object(
+    format_macho64_target_arm64(version, version),
+    list.of(
+        format_section("__text", format_code | format_readable | format_executable),
+        format_section("__data", format_data | format_readable | format_writeable)
+    )
+)
+
+format_begin(object);
+
+// Placeholder words whose immediate fields the linker patches.
+format_section_begin(object, "__text");
+text_start:
+call_site:
+    emit.u32(0x94000000);
+page_site:
+    emit.u32(0x90000000);
+lo12_site:
+    emit.u32(0x91000000);
+format_section_end(object, "__text");
+
+format_section_begin(object, "__data");
+data_start:
+answer:
+    emit.u64(42);
+pointer_slot:
+    emit.u64(0);
+format_section_end(object, "__data");
+
+const symbols: list = list.of(
+    format_macho64_public("_entry", "__text", text_start, call_site, macho_n_sect | macho_n_ext),
+    format_macho64_public("_answer", "__data", data_start, answer, macho_n_sect | macho_n_ext),
+    format_macho64_extern("_printf")
+)
+const relocs: list = list.of(
+    format_macho64_arm64_reloc("__text", text_start, call_site, "_printf", macho_arm64_reloc_branch26),
+    format_macho64_arm64_reloc("__text", text_start, page_site, "_answer", macho_arm64_reloc_page21),
+    format_macho64_arm64_reloc("__text", text_start, lo12_site, "_answer", macho_arm64_reloc_pageoff12),
+    format_macho64_arm64_reloc("__data", data_start, pointer_slot, "_printf", macho_arm64_reloc_unsigned)
+)
+format_macho64_tables_mut(object, symbols, relocs)
+format_finish(object);
+```
+
+Symbol semantics:
+
+- `format_macho64_public(name, section_name, section_start, address, symbol_type)`
+  defines a symbol in a section. `symbol_type` is the complete `n_type`; a
+  normal global is `macho_n_sect | macho_n_ext`. The emitted record gets
+  `n_value = address - section_start` and `n_sect` set to the section's
+  1-based index.
+- `format_macho64_extern(name)` declares an undefined external
+  (`N_UNDF | N_EXT`, zero value) that the linker resolves.
+- Names go into the string table; the facade computes every `n_strx`.
+
+Relocation semantics:
+
+- A relocation address is an offset inside its section
+  (`address - section_start`), which is what `r_address` means in an object
+  file.
+- The target symbol is resolved by name against the attached symbol list, and
+  `r_extern` is always 1 with `r_symbolnum` set to the nlist index. For the
+  constructs above the encoding is bit-identical to what clang emits for
+  arm64 object files.
+- `format_macho64_reloc` takes the explicit `pcrel` flag, the `length` power
+  (0 = 1 byte, 1 = 2, 2 = 4, 3 = 8), and the relocation type.
+  `format_macho64_arm64_reloc` derives both from the AArch64 type:
+  `macho_arm64_reloc_unsigned` is a non-pcrel 8-byte field,
+  `branch26`, `page21`, and `got_load_page21`/`tlvp_load_page21` are pcrel
+  4-byte fields, and `pageoff12`, `got_load_pageoff12`, and
+  `tlvp_load_pageoff12` are non-pcrel 4-byte fields.
+- Paired records (`ARM64_RELOC_SUBTRACTOR` with its `ADDEND` follower),
+  `POINTER_TO_GOT`, and the arm64e types are outside the facade; emit them
+  with the direct `macho_relocation_info` helper.
+
+`format_macho64_tables_mut` validates both lists — names must be unique, and
+every relocation section and symbol must be declared. An object that never
+attaches tables is still valid; it simply carries an empty symbol table.
 
 ## Capability Matrix
 
 | Capability | arm64 | x86_64 | Owner |
 | --- | --- | --- | --- |
 | Mach-O 64 header/segments/sections | yes | yes | `macho_obj.inc` |
+| Facade object with symbols, relocations, and `LC_SYMTAB` | yes | yes | `format.inc` |
 | Direct `MH_EXECUTE` | yes | yes | `macho_exe.inc` |
 | `LC_LOAD_DYLINKER` | yes | yes | `macho_exe_load_dylinker64` |
 | `MH_DYLIB` install name | yes | yes | `macho_dylib.inc` |

@@ -1967,6 +1967,15 @@ pub fn build(b: *std.Build) void {
         b,
         fixture_step,
         exe,
+        "tests/format/format_elfobj64_invalid_machine.asm",
+        "x64",
+        &.{"include/format/format.inc"},
+        "unsupported ELF64 object machine",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
         "tests/format/format_pe_aslr_requires_fixups.asm",
         "x64",
         &.{
@@ -2189,6 +2198,33 @@ pub fn build(b: *std.Build) void {
             "2",
             "64",
             "1",
+        },
+    );
+    addElfObjFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        elf_obj_checker,
+        "tests/format/format_elf64_obj_aarch64_user_facade.asm",
+        "format-elf64-obj-aarch64-user-facade.o",
+        "x64",
+        "1016",
+        &.{
+            "include/format/format.inc",
+            "include/format/elfobj.inc",
+            "include/format/elf_const.inc",
+        },
+        &.{
+            "2",
+            "0xb7",
+            "0x1b8",
+            "9",
+            "7",
+            "3",
+            "4",
+            "0",
+            "0x50000011b",
         },
     );
     addElfFixtureWithInputs(

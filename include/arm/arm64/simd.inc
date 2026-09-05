@@ -560,3 +560,801 @@ fn arm64_zip1(vd: u64, vn: u64, vm: u64, arr: u64) {
 fn arm64_zip2(vd: u64, vn: u64, vm: u64, arr: u64) {
     arm64_emit_permute(7, vd, vn, vm, arr, "zip2")
 }
+
+// --- SIMD pair load/store (LDP/STP/LDNP/STNP, S/D/Q) --------------------------
+// Layout (LLVM BaseLoadStorePairOffset/NoAlloc with V = 1; InstrInfo.td:3830-
+// 3832 LDNPS/D/Q and the matching STP/LDP FP defs; same shapes as the integer
+// pairs in memory.inc):
+//   opc(31-30) 101(29-27) V=1(26) 010(25-23) L(22) imm7(21-15) Rt2(14-10)
+//   Rn(9-5) Rt(4-0); no-allocate LDNP/STNP use 000 at 25-23. opc 00/01/10
+//   selects S/D/Q; imm7 is signed and scaled by the element size (S 4,
+//   D 8, Q 16), range -64..63. Rn is GPR64sp (X register or SP).
+//   There is no FP pair pre/post-index writeback form in this batch.
+fn arm64_emit_pair_v(opc: u64, scale: u64, is_load: bool, no_alloc: bool,
+        vt: u64, vt2: u64, rn: u64, offset: u64, what: string) {
+    let na: u64 = 2
+    if no_alloc {
+        na = 0
+    }
+    arm64_emit_pair_vf(opc, scale, is_load, na, vt, vt2, rn, offset, what)
+}
+
+// Generalized SIMD pair core: na selects the 25-23 field (010 = signed
+// offset, 000 = no-allocate, 001 = post-index writeback).
+fn arm64_emit_pair_vf(opc: u64, scale: u64, is_load: bool, na: u64,
+        vt: u64, vt2: u64, rn: u64, offset: u64, what: string) {
+    assert(arm64_is_v(vt) == 1 && arm64_is_v(vt2) == 1,
+        sym.join(what, ": registers must be V registers"));
+    if is_load {
+        assert(arm64_reg_number(vt) != arm64_reg_number(vt2),
+            sym.join(what, ": Rt2==Rt is unpredictable for LDP"));
+    }
+    assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
+        sym.join(what, ": base must be an X register or SP"));
+    assert(offset % scale == 0, sym.join(what, ": offset must be a multiple of the element size (", to_string(scale), ")"));
+    let imm7: u64 = 0
+    if offset >= 0x8000000000000000 {
+        const mag: u64 = (-offset) / scale
+        assert(mag <= 64, sym.join(what, ": offset out of range"));
+        imm7 = (-mag) & 0x7f
+    } else {
+        const mag: u64 = offset / scale
+        assert(mag < 64, sym.join(what, ": offset out of range"));
+        imm7 = mag
+    }
+    let l: u64 = 0
+    if is_load {
+        l = 1
+    }
+    emit.u32((opc << 30) | (0x5 << 27) | (1 << 26) | (na << 23) | (l << 22)
+        | ((imm7 & 0x7f) << 15) | (arm64_reg_number(vt2) << 10)
+        | (arm64_reg_number(rn) << 5) | arm64_reg_number(vt))
+}
+
+// Pair post-index forms (immediate only; the offset is the scaled imm7,
+// -64..63). clang: ldp s0, s1, [x2], #4 -> 0x2cc08440;
+// stp q14, q15, [x16, #-16] style bounds match the offset pair.
+fn arm64_ldp_s_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(0, 4, true, 1, vt, vt2, rn, offset, "ldp s post")
+}
+
+fn arm64_ldp_d_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(1, 8, true, 1, vt, vt2, rn, offset, "ldp d post")
+}
+
+fn arm64_ldp_q_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(2, 16, true, 1, vt, vt2, rn, offset, "ldp q post")
+}
+
+fn arm64_stp_s_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(0, 4, false, 1, vt, vt2, rn, offset, "stp s post")
+}
+
+fn arm64_stp_d_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(1, 8, false, 1, vt, vt2, rn, offset, "stp d post")
+}
+
+fn arm64_stp_q_post(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_vf(2, 16, false, 1, vt, vt2, rn, offset, "stp q post")
+}
+
+// LDP (floating-point S pair). clang: ldp s0, s1, [x2] -> 0x2d400440.
+fn arm64_ldp_s(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(0, 4, true, false, vt, vt2, rn, offset, "ldp s")
+}
+
+// LDP (floating-point D pair). clang: ldp d3, d4, [x5, #8] -> 0x6d4090a3.
+fn arm64_ldp_d(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(1, 8, true, false, vt, vt2, rn, offset, "ldp d")
+}
+
+// LDP (Q pair, full 128-bit pair load). clang: ldp q6, q7, [sp] ->
+// 0xad401fe6.
+fn arm64_ldp_q(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(2, 16, true, false, vt, vt2, rn, offset, "ldp q")
+}
+
+// STP (floating-point S pair). clang: stp s8, s9, [x10, #252] ->
+// 0x2d1fa548.
+fn arm64_stp_s(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(0, 4, false, false, vt, vt2, rn, offset, "stp s")
+}
+
+// STP (floating-point D pair). clang: stp d11, d12, [x13, #-8] ->
+// 0x6d3fb1ab.
+fn arm64_stp_d(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(1, 8, false, false, vt, vt2, rn, offset, "stp d")
+}
+
+// STP (Q pair). clang: stp q14, q15, [x16, #-16] -> 0xad3fbe0e.
+fn arm64_stp_q(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(2, 16, false, false, vt, vt2, rn, offset, "stp q")
+}
+
+// LDNP (floating-point S pair, no allocate). clang: ldnp s17, s18, [x19]
+// -> 0x2c404a71.
+fn arm64_ldnp_s(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(0, 4, true, true, vt, vt2, rn, offset, "ldnp s")
+}
+
+// LDNP (floating-point D pair, no allocate). clang: ldnp d20, d21,
+// [x22, #16] -> 0x6c4156d4.
+fn arm64_ldnp_d(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(1, 8, true, true, vt, vt2, rn, offset, "ldnp d")
+}
+
+// LDNP (Q pair, no allocate). clang: ldnp q23, q24, [x25, #-16] ->
+// 0xac7fe337.
+fn arm64_ldnp_q(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(2, 16, true, true, vt, vt2, rn, offset, "ldnp q")
+}
+
+// STNP (floating-point S pair, no allocate). clang: stnp s25, s26, [x27]
+// -> 0x2c006b79.
+fn arm64_stnp_s(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(0, 4, false, true, vt, vt2, rn, offset, "stnp s")
+}
+
+// STNP (floating-point D pair, no allocate). clang: stnp d28, d29,
+// [x30, #8] -> 0x6c00f7dc.
+fn arm64_stnp_d(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(1, 8, false, true, vt, vt2, rn, offset, "stnp d")
+}
+
+// STNP (Q pair, no allocate). clang: stnp q0, q1, [x2, #-16] ->
+// 0xac3f8440.
+fn arm64_stnp_q(vt: u64, vt2: u64, rn: u64, offset: u64) {
+    arm64_emit_pair_v(2, 16, false, true, vt, vt2, rn, offset, "stnp q")
+}
+
+// --- Vector FP arithmetic (three-same FP, tied FMLA/FMLS, one-source misc) ----
+// Three-same FP (LLVM SIMDThreeSameVectorFP, AArch64InstrFormats.td:6433, over
+// BaseSIMDThreeSameVector :6256): same layout as the integer three-same but
+// size = {S, 01|11} (S flag at bit 23, 01 = S lanes, 11 = D lanes) and
+// opcode = {0b11, opc} at bits 15-11. Arrangements are 2S/4S/2D only.
+// Opcodes (U, S, opc3): FADD (0,0,2), FSUB (0,1,2), FMUL (1,0,3), FDIV
+// (1,0,7), FMAX (0,0,6), FMIN (0,1,6), FMAXNM (0,0,0), FMINNM (0,1,0);
+// the tied FMLA (0,0,1) / FMLS (0,1,1) share the field layout.
+fn arm64_check_arr_fp(arr: u64, what: string) {
+    arm64_arr_check(arr, what);
+    assert(arm64_arr_esize(arr) >= 2 && arr != arm64_arr_1d,
+        sym.join(what, ": arrangement must be 2S, 4S or 2D"));
+}
+
+fn arm64_arr_fpsz(arr: u64) -> u64 {
+    let sz: u64 = 1
+    if arm64_arr_esize(arr) == 3 {
+        sz = 3
+    }
+    return sz;
+}
+
+fn arm64_emit_fp3same(q: u64, u: u64, s_bit: u64, opc3: u64, arr: u64,
+        rd: u64, rn: u64, rm: u64) {
+    assert(arm64_is_v(rd) == 1 && arm64_is_v(rn) == 1 && arm64_is_v(rm) == 1,
+        "fp three-same: registers must be V registers");
+    const size3: u64 = (s_bit << 2) | arm64_arr_fpsz(arr)
+    const opcode5: u64 = (3 << 3) | opc3
+    emit.u32((q << 30) | (u << 29) | (0x0e << 24) | (size3 << 21)
+        | (arm64_reg_number(rm) << 16) | (opcode5 << 11) | (1 << 10)
+        | (arm64_reg_number(rn) << 5) | arm64_reg_number(rd))
+}
+
+// FADD (vector). clang: fadd v0.2s, v1.2s, v2.2s -> 0x0e22d420;
+// fadd v6.2d, v7.2d, v8.2d -> 0x4e68d4e6.
+fn arm64_fadd_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fadd");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 0, 2, arr, vd, vn, vm)
+}
+
+// FSUB (vector). clang: fsub v9.4s, v10.4s, v11.4s -> 0x4eabd549.
+fn arm64_fsub_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fsub");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 1, 2, arr, vd, vn, vm)
+}
+
+// FMUL (vector). clang: fmul v12.2s, v13.2s, v14.2s -> 0x2e2eddac.
+fn arm64_fmul_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmul");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 0, 3, arr, vd, vn, vm)
+}
+
+// FDIV (vector). clang: fdiv v15.2d, v16.2d, v17.2d -> 0x6e71fe0f.
+fn arm64_fdiv_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fdiv");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 0, 7, arr, vd, vn, vm)
+}
+
+// FMAX (vector). clang: fmax v18.4s, v19.4s, v20.4s -> 0x4e34f672.
+fn arm64_fmax_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmax");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 0, 6, arr, vd, vn, vm)
+}
+
+// FMIN (vector). clang: fmin v21.4s, v22.4s, v23.4s -> 0x4eb7f6d5.
+fn arm64_fmin_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmin");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 1, 6, arr, vd, vn, vm)
+}
+
+// FMAXNM (vector, IEEE 754 maxNum NaN handling). clang: fmaxnm v24.2d,
+// v25.2d, v26.2d -> 0x4e7ac738.
+fn arm64_fmaxnm_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmaxnm");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 0, 0, arr, vd, vn, vm)
+}
+
+// FMINNM (vector). clang: fminnm v27.2s, v28.2s, v29.2s -> 0x0ebdc79b.
+fn arm64_fminnm_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fminnm");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 1, 0, arr, vd, vn, vm)
+}
+
+// FMLA (tied fused multiply-accumulate: Vd += Vn * Vm). clang:
+// fmla v0.4s, v1.4s, v2.4s -> 0x4e22cc20.
+fn arm64_fmla_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmla");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 0, 1, arr, vd, vn, vm)
+}
+
+// FMLS (tied fused multiply-subtract: Vd -= Vn * Vm). clang:
+// fmls v3.2d, v4.2d, v5.2d -> 0x4ee5cc83.
+fn arm64_fmls_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fmls");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 1, 1, arr, vd, vn, vm)
+}
+
+// One-source vector ops over BaseSIMDTwoSameVector (AArch64InstrFormats.td
+// :6769): 0(31) Q(30) U(29) 01110(28-24) size(23-22) 1(21) 00(20-19)
+// opcode(16-12) 10(11-10) Rn(9-5) Rd(4-0). size is the arrangement element
+// size (integer ABS/NEG use 00..11; the FP one-ops use 10=S, 11=D).
+fn arm64_emit_2misc(q: u64, u: u64, opcode: u64, rd: u64, rn: u64, arr: u64) {
+    assert(arm64_is_v(rd) == 1 && arm64_is_v(rn) == 1,
+        "two-misc: registers must be V registers");
+    emit.u32((q << 30) | (u << 29) | (0x0e << 24)
+        | (arm64_arr_esize(arr) << 22) | (1 << 21) | (opcode << 12) | (2 << 10)
+        | (arm64_reg_number(rn) << 5) | arm64_reg_number(rd))
+}
+
+// FABS (vector). clang: fabs v6.2s, v7.2s -> 0x0ea0f8e6;
+// fabs v10.2d, v11.2d -> 0x4ee0f96a.
+fn arm64_fabs_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fabs");
+    arm64_emit_2misc(arm64_arr_q(arr), 0, 15, vd, vn, arr)
+}
+
+// FNEG (vector). clang: fneg v12.4s, v13.4s -> 0x6ea0f9ac.
+fn arm64_fneg_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fneg");
+    arm64_emit_2misc(arm64_arr_q(arr), 1, 15, vd, vn, arr)
+}
+
+// FSQRT (vector). clang: fsqrt v14.2d, v15.2d -> 0x6ee1f9ee.
+fn arm64_fsqrt_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fsqrt");
+    arm64_emit_2misc(arm64_arr_q(arr), 1, 31, vd, vn, arr)
+}
+
+// --- Vector comparisons --------------------------------------------------------
+// Integer compares are three-same (LLVM SIMDThreeSameVector): CMEQ (U=1,
+// opc 10001), CMTST (U=0, 10001), CMGT (U=0, 00110), CMGE (U=0, 00111),
+// CMHI (U=1, 00110), CMHS (U=1, 00111). FP compares are the FP three-same
+// (LLVM SIMDThreeSameVectorFPCmp, formats.td:6455): FCMEQ (0,0,4),
+// FCMGE (1,0,4), FCMGT (1,1,4), FACGE (1,0,5), FACGT (1,1,5); FCMLE/FCMLT
+// exist only as #0 forms (swap operands for the register semantics).
+// Integer compares accept all arrangements except 1D, FP compares 2S/4S/2D.
+
+// CMEQ (compare bitwise equal, per lane). clang: cmeq v0.16b, v1.16b,
+// v2.16b -> 0x6e228c20.
+fn arm64_cmeq_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmeq");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        17, vd, vn, vm)
+}
+
+// CMGT (signed greater-than). clang: cmgt v9.8h, v10.8h, v11.8h ->
+// 0x4e6b3549.
+fn arm64_cmgt_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmgt");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        6, vd, vn, vm)
+}
+
+// CMGE (signed greater-than-or-equal). clang: cmge v12.8b, v13.8b, v14.8b
+// -> 0x0e2e3dac.
+fn arm64_cmge_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmge");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        7, vd, vn, vm)
+}
+
+// CMHI (unsigned higher). clang: cmhi v15.4s, v16.4s, v17.4s ->
+// 0x6eb1360f.
+fn arm64_cmhi_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmhi");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        6, vd, vn, vm)
+}
+
+// CMHS (unsigned higher-or-same). clang: cmhs v18.2d, v19.2d, v20.2d ->
+// 0x6ef43e72.
+fn arm64_cmhs_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmhs");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        7, vd, vn, vm)
+}
+
+// CMTST (bitwise test: destination lanes are all-ones where operands AND
+// to nonzero). clang: cmtst v21.16b, v22.16b, v23.16b -> 0x4e378ed5.
+fn arm64_cmtst_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "cmtst");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        17, vd, vn, vm)
+}
+
+// FCMEQ (FP equal, per lane). clang: fcmeq v24.4s, v25.4s, v26.4s ->
+// 0x4e3ae738.
+fn arm64_fcmeq_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fcmeq");
+    arm64_emit_fp3same(arm64_arr_q(arr), 0, 0, 4, arr, vd, vn, vm)
+}
+
+// FCMGE (FP greater-than-or-equal). clang: fcmge v27.2d, v28.2d, v29.2d ->
+// 0x6e7de79b.
+fn arm64_fcmge_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fcmge");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 0, 4, arr, vd, vn, vm)
+}
+
+// FCMGT (FP greater-than). clang: fcmgt v0.4s, v1.4s, v2.4s ->
+// 0x6ea2e420.
+fn arm64_fcmgt_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "fcmgt");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 1, 4, arr, vd, vn, vm)
+}
+
+// FACGE (FP absolute greater-than-or-equal). clang: facge v3.2s, v4.2s,
+// v5.2s -> 0x2e25ec83.
+fn arm64_facge_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "facge");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 0, 5, arr, vd, vn, vm)
+}
+
+// FACGT (FP absolute greater-than). clang: facgt v6.2d, v7.2d, v8.2d ->
+// 0x6ee8ece6.
+fn arm64_facgt_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "facgt");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 1, 5, arr, vd, vn, vm)
+}
+
+// ABS (integer absolute value, per lane). clang: abs v9.16b, v10.16b ->
+// 0x4e20b949.
+fn arm64_abs_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "abs");
+    arm64_emit_2misc(arm64_arr_q(arr), 0, 11, vd, vn, arr)
+}
+
+// NEG (integer negate, per lane). clang: neg v13.8h, v14.8h ->
+// 0x6e60b9cd.
+fn arm64_neg_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "neg");
+    arm64_emit_2misc(arm64_arr_q(arr), 1, 11, vd, vn, arr)
+}
+
+// --- Saturating arithmetic (three-same) ----------------------------------------
+// Same three-same layout (BaseSIMDThreeSameVector); opcodes (U, opc):
+// SQADD (0,1), UQADD (1,1), SQSUB (0,5), UQSUB (1,5), SQSHL (0,9),
+// UQSHL (1,9) — all arrangements except 1D; SQDMULH (0,22) and
+// SQRDMULH (1,22) are H/S only (LLVM SIMDThreeSameVectorHS).
+
+// SQADD (signed saturating add). clang: sqadd v0.16b, v1.16b, v2.16b ->
+// 0x4e220c20; sqadd v6.2d, v7.2d, v8.2d -> 0x4ee80ce6.
+fn arm64_sqadd_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sqadd");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        1, vd, vn, vm)
+}
+
+// UQADD (unsigned saturating add). clang: uqadd v9.4s, v10.4s, v11.4s ->
+// 0x6eab0d49.
+fn arm64_uqadd_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "uqadd");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        1, vd, vn, vm)
+}
+
+// SQSUB (signed saturating subtract). clang: sqsub v12.8b, v13.8b, v14.8b
+// -> 0x0e2e2dac.
+fn arm64_sqsub_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sqsub");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        5, vd, vn, vm)
+}
+
+// UQSUB (unsigned saturating subtract). clang: uqsub v15.4h, v16.4h,
+// v17.4h -> 0x2e712e0f.
+fn arm64_uqsub_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "uqsub");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        5, vd, vn, vm)
+}
+
+// SQSHL (signed saturating shift left, register form). clang:
+// sqshl v18.8h, v19.8h, v20.8h -> 0x4e744e72.
+fn arm64_sqshl_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sqshl");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        9, vd, vn, vm)
+}
+
+// UQSHL (unsigned saturating shift left, register form). clang:
+// uqshl v21.2s, v22.2s, v23.2s -> 0x2eb74ed5.
+fn arm64_uqshl_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "uqshl");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        9, vd, vn, vm)
+}
+
+// SQDMULH (signed saturating doubling multiply high, H/S lanes). clang:
+// sqdmulh v24.4s, v25.4s, v26.4s -> 0x4ebab738.
+fn arm64_sqdmulh_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "sqdmulh");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        22, vd, vn, vm)
+}
+
+// SQRDMULH (signed saturating rounding doubling multiply high, H/S lanes).
+// clang: sqrdmulh v27.8h, v28.8h, v29.8h -> 0x6e7db79b.
+fn arm64_sqrdmulh_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "sqrdmulh");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        22, vd, vn, vm)
+}
+
+// --- Pairwise adds, min/max, shift-insert --------------------------------------
+// ADDP (LLVM SIMDThreeSameVector, U=0 opc 10111): all arrangements except
+// 1D. FADDP (SIMDThreeSameVectorFP, U=1 S=0 opc 010): 2S/4S/2D.
+// SMAX/SMIN/UMAX/UMIN (SIMDThreeSameVectorBHS, opc 01100/01101 with U for
+// signed/unsigned): B/H/S lanes only. SLI/SRI (tied shift-insert, LLVM
+// SIMDVectorLShiftBHSDTied / RShiftBHSDTied): the shift-immediate layout
+// with U=1 and opcodes 01010 / 01000; SLI encodes immhb = T + shift
+// (0..T-1), SRI encodes immhb = 2T - shift (1..T).
+
+// ADDP (pairwise add). clang: addp v0.16b, v1.16b, v2.16b -> 0x4e22bc20;
+// addp v3.2d, v4.2d, v5.2d -> 0x4ee5bc83.
+fn arm64_addp_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "addp");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        23, vd, vn, vm)
+}
+
+// FADDP (pairwise FP add). clang: faddp v6.4s, v7.4s, v8.4s ->
+// 0x6e28d4e6; faddp v9.2d, v10.2d, v11.2d -> 0x6e6bd549.
+fn arm64_faddp_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_fp(arr, "faddp");
+    arm64_emit_fp3same(arm64_arr_q(arr), 1, 0, 2, arr, vd, vn, vm)
+}
+
+// SMAX (signed max, H/S/B lanes... H/S/B only, no D). clang:
+// smax v12.8h, v13.8h, v14.8h -> 0x4e6e65ac.
+fn arm64_smax_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "smax");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        12, vd, vn, vm)
+}
+
+// SMIN (signed min). clang: smin v15.4s, v16.4s, v17.4s -> 0x4eb16e0f.
+fn arm64_smin_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "smin");
+    arm64_emit_3same(arm64_arr_q(arr), 0, ((arm64_arr_esize(arr) << 1) | 1),
+        13, vd, vn, vm)
+}
+
+// UMAX (unsigned max). clang: umax v18.16b, v19.16b, v20.16b ->
+// 0x6e346672.
+fn arm64_umax_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "umax");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        12, vd, vn, vm)
+}
+
+// UMIN (unsigned min). clang: umin v21.8b, v22.8b, v23.8b ->
+// 0x2e376ed5.
+fn arm64_umin_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "umin");
+    arm64_emit_3same(arm64_arr_q(arr), 1, ((arm64_arr_esize(arr) << 1) | 1),
+        13, vd, vn, vm)
+}
+
+// SLI (tied shift left and insert; Vd keeps bits above the shift).
+// clang: sli v24.8b, v25.8b, #3 -> 0x2f0b5738.
+fn arm64_sli(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sli");
+    const t: u64 = 8 << arm64_arr_esize(arr)
+    assert(shift <= (t - 1), sym.join("sli: shift amount out of range 0..", to_string(t - 1)));
+    arm64_emit_shift_imm(arm64_arr_q(arr), 1, 10, t + shift, vd, vn, "sli")
+}
+
+// SRI (tied shift right and insert; Vd keeps bits below the shift).
+// clang: sri v26.4s, v27.4s, #12 -> 0x6f34477a.
+fn arm64_sri(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sri");
+    const t: u64 = 8 << arm64_arr_esize(arr)
+    assert(shift >= 1 && shift <= t, sym.join("sri: shift amount out of range 1..", to_string(t)));
+    arm64_emit_shift_imm(arm64_arr_q(arr), 1, 8, (2 * t) - shift, vd, vn, "sri")
+}
+
+// --- Integer two-register misc (REV64/REV32/REV16, NOT, CNT) -------------------
+// Same two-misc layout (BaseSIMDTwoSameVector) with U/opcode per LLVM:
+// NOT (U=1, opc 00101, clang prints the preferred alias "mvn"), CNT (U=0,
+// 00101), REV16 (U=0, 00001) are B-lane only (8B/16B); REV32 (U=1, 00000)
+// reaches H; REV64 (U=0, 00000) reaches S. NOTE: REV32/REV64 take NO D
+// lanes and are U=1/U=0 respectively — do not confuse with RBIT/REV which
+// are scalar-only.
+
+// NOT (vector bitwise NOT; the assembler prints the alias "mvn").
+// clang: not v15.16b, v16.16b -> 0x6e205a0f (disassembles as mvn).
+fn arm64_not_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_byte(arr, "not");
+    arm64_emit_2misc(arm64_arr_q(arr), 1, 5, vd, vn, arr)
+}
+
+// CNT (per-byte population count). clang: cnt v17.8b, v18.8b ->
+// 0x0e205a51.
+fn arm64_cnt_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_byte(arr, "cnt");
+    arm64_emit_2misc(arm64_arr_q(arr), 0, 5, vd, vn, arr)
+}
+
+// REV16 (reverse bytes in each 16-bit halfword). clang: rev16 v19.16b,
+// v20.16b -> 0x4e201a93.
+fn arm64_rev16_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_byte(arr, "rev16");
+    arm64_emit_2misc(arm64_arr_q(arr), 0, 1, vd, vn, arr)
+}
+
+// REV32 (reverse 16-bit halfwords in each 32-bit word; B/H arrangements).
+// clang: rev32 v21.8h, v22.8h -> 0x6e600ad5.
+fn arm64_rev32_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "rev32");
+    assert(arm64_arr_esize(arr) <= 1,
+        sym.join("rev32: arrangement must be 8B, 16B, 4H or 8H"));
+    arm64_emit_2misc(arm64_arr_q(arr), 1, 0, vd, vn, arr)
+}
+
+// REV64 (reverse 32-bit words in the 64-bit doubleword; B/H/S arrangements).
+// clang: rev64 v23.4s, v24.4s -> 0x4ea00b17.
+fn arm64_rev64_vec(vd: u64, vn: u64, arr: u64) {
+    arm64_check_arr_bhs(arr, "rev64");
+    arm64_emit_2misc(arm64_arr_q(arr), 0, 0, vd, vn, arr)
+}
+
+// --- EXT, TRN1/TRN2, LD1R, multi-register LD1/ST1 ------------------------------
+// EXT (LLVM BaseSIMDBitwiseExtract, AArch64InstrFormats.td:7681):
+//   0(31) Q(30) 101110000(29-21) Rm(20-16) 0(15) imm4(14-11) 0(10)
+//   Rn(9-5) Rd(4-0). Concatenates Vn:Vm and extracts from byte index imm4;
+//   .8B restricts imm4[3] to zero (index 0..7), .16B allows 0..15.
+fn arm64_ext(vd: u64, vn: u64, vm: u64, idx: u64, arr: u64) {
+    arm64_arr_check(arr, "ext");
+    assert(arr == arm64_arr_8b || arr == arm64_arr_16b,
+        "ext: arrangement must be 8B or 16B");
+    assert(arm64_is_v(vd) == 1 && arm64_is_v(vn) == 1 && arm64_is_v(vm) == 1,
+        "ext: registers must be V registers");
+    if arr == arm64_arr_8b {
+        assert(idx <= 7, "ext 8b: index must be 0..7");
+    } else {
+        assert(idx <= 15, "ext 16b: index must be 0..15");
+    }
+    emit.u32((arm64_arr_q(arr) << 30) | 0x2e000000
+        | (arm64_reg_number(vm) << 16) | (idx << 11)
+        | (arm64_reg_number(vn) << 5) | arm64_reg_number(vd))
+}
+
+// TRN1 (transpose, first halves; LLVM SIMDZipVector opc 010).
+// clang: trn1 v6.16b, v7.16b, v8.16b -> 0x4e0828e6.
+fn arm64_trn1(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(2, vd, vn, vm, arr, "trn1")
+}
+
+// TRN2 (transpose, second halves; opc 110). clang: trn2 v9.4h, v10.4h,
+// v11.4h -> 0x0e4b6949.
+fn arm64_trn2(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(6, vd, vn, vm, arr, "trn2")
+}
+
+// LD1R (load one structure and replicate to all lanes; LLVM BaseSIMDLdR,
+// AArch64InstrFormats.td:11275): 0(31) Q(30) 001101(29-24) 0(23) L=1(22)
+// R=0(21) 00000(20-16) opcode=110(15-13) S=0(12) size(11-10) Rn(9-5)
+// Vt(4-0). All eight arrangements.
+// clang: ld1r { v12.8b }, [x13] -> 0x0d40c1ac; ld1r { v16.2d }, [x17] ->
+// 0x4d40ce30.
+fn arm64_ld1r(vt: u64, arr: u64, rn: u64) {
+    arm64_arr_check(arr, "ld1r");
+    assert(arm64_is_v(vt) == 1, "ld1r: register must be a V register");
+    assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
+        "ld1r: base must be an X register or SP");
+    emit.u32((arm64_arr_q(arr) << 30) | 0x0d000000 | (1 << 22) | (6 << 13)
+        | (arm64_arr_esize(arr) << 10) | (arm64_reg_number(rn) << 5)
+        | arm64_reg_number(vt))
+}
+
+// Internal: multi-register LD1/ST1 (LLVM SIMDLd1Multiple/SIMDSt1Multiple,
+// AArch64InstrFormats.td:11201/11208): same layout as the one-register form
+// with opcodes Two=1010, Three=0110, Four=0010. Hardware reads the
+// sequential registers Rt+1..Rt+3 (mod 32); the wrappers assert the caller
+// named them sequentially for clear diagnostics. All eight arrangements.
+fn arm64_emit_ld1st1_n(opc: u64, is_load: bool, vt: u64, rn: u64, arr: u64,
+        what: string) {
+    arm64_arr_check(arr, what);
+    assert(arm64_is_v(vt) == 1, sym.join(what, ": register must be a V register"));
+    assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
+        sym.join(what, ": base must be an X register or SP"));
+    let l: u64 = 0
+    if is_load {
+        l = 1
+    }
+    emit.u32((arm64_arr_q(arr) << 30) | (24 << 23) | (l << 22) | (opc << 12)
+        | (arm64_arr_esize(arr) << 10) | (arm64_reg_number(rn) << 5)
+        | arm64_reg_number(vt))
+}
+
+fn arm64_check_seq(a: u64, b: u64, what: string) {
+    assert(arm64_reg_number(b) == ((arm64_reg_number(a) + 1) % 32),
+        sym.join(what, ": registers must be sequential (mod 32)"));
+}
+
+// LD1 (two-register list). clang: ld1 { v18.8b, v19.8b }, [x20] ->
+// 0x0c40a292.
+fn arm64_ld1_2(vt: u64, vt2: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x2");
+    arm64_emit_ld1st1_n(10, true, vt, rn, arr, "ld1 x2")
+}
+
+// LD1 (three-register list; wraps mod 32). clang: ld1 { v30.1d, v31.1d,
+// v0.1d }, [x1] -> 0x0c406c3e.
+fn arm64_ld1_3(vt: u64, vt2: u64, vt3: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x3");
+    arm64_check_seq(vt2, vt3, "ld1 x3");
+    arm64_emit_ld1st1_n(6, true, vt, rn, arr, "ld1 x3")
+}
+
+// LD1 (four-register list). clang: ld1 { v21.16b, v22.16b, v23.16b,
+// v24.16b }, [x25] -> 0x4c402335.
+fn arm64_ld1_4(vt: u64, vt2: u64, vt3: u64, vt4: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x4");
+    arm64_check_seq(vt2, vt3, "ld1 x4");
+    arm64_check_seq(vt3, vt4, "ld1 x4");
+    arm64_emit_ld1st1_n(2, true, vt, rn, arr, "ld1 x4")
+}
+
+// ST1 (two-register list). clang: st1 { v1.2s, v2.2s }, [x3] ->
+// 0x0c00a861.
+fn arm64_st1_2(vt: u64, vt2: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "st1 x2");
+    arm64_emit_ld1st1_n(10, false, vt, rn, arr, "st1 x2")
+}
+
+// ST1 (three-register list). clang: st1 { v26.4h, v27.4h, v28.4h }, [x29]
+// -> 0x0c0067ba.
+fn arm64_st1_3(vt: u64, vt2: u64, vt3: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "st1 x3");
+    arm64_check_seq(vt2, vt3, "st1 x3");
+    arm64_emit_ld1st1_n(6, false, vt, rn, arr, "st1 x3")
+}
+
+// ST1 (four-register list).
+fn arm64_st1_4(vt: u64, vt2: u64, vt3: u64, vt4: u64, arr: u64, rn: u64) {
+    arm64_check_seq(vt, vt2, "st1 x4");
+    arm64_check_seq(vt2, vt3, "st1 x4");
+    arm64_check_seq(vt3, vt4, "st1 x4");
+    arm64_emit_ld1st1_n(2, false, vt, rn, arr, "st1 x4")
+}
+
+// --- SIMD post-index writeback ------------------------------------------------
+// Pair post-index (LLVM BaseLoadStorePairPostIdx, AArch64InstrFormats.td
+// :4831): bits 25-23 = 001 and a 7-bit scaled offset at 21-15; immediate
+// form only (pairs have no register-offset writeback).
+// clang: ldp s0, s1, [x2], #4 -> 0x2cc08440; ldp q3, q4, [x5], #32 ->
+// 0xacc110a3; stp d6, d7, [x8], #-8 -> 0x6cbf9d06; stp s9, s10, [x11],
+// #-256 -> 0x2ca02969.
+
+// LD1R / LD1 / ST1 post-index (LLVM BaseSIMDLdRPost :11287 and the POST
+// variants of BaseSIMDLdSt at :10955): bit 23 set, the increment in Xm at
+// bits 20-16. Xm is an X register, or XZR which encodes the implicit
+// #transfer-size immediate (list bytes for LD1/ST1, element size for LD1R).
+// clang: ld1r { v12.8b }, [x13], x14 -> 0x0dcec1ac; ld1r { v15.4s },
+// [x16], #4 -> 0x4ddfca0f; ld1 { v17.16b, v18.16b }, [x19], x20 ->
+// 0x4cd4a271; st1 { v21.4h-v23.4h }, [x24], #24 -> 0x0c9f6715;
+// ld1 { v25.8b }, [x26], #8 -> 0x0cdf7359.
+fn arm64_check_post_xm(xm: u64, what: string) {
+    assert(arm64_reg_is64(xm) && !arm64_reg_is_sp(xm),
+        sym.join(what, ": increment must be an X register or xzr (#size)"));
+}
+
+fn arm64_emit_ld1st1_post(opc: u64, is_load: bool, vt: u64, rn: u64, xm: u64,
+        arr: u64, what: string) {
+    arm64_arr_check(arr, what);
+    assert(arm64_is_v(vt) == 1, sym.join(what, ": register must be a V register"));
+    assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
+        sym.join(what, ": base must be an X register or SP"));
+    arm64_check_post_xm(xm, what);
+    let l: u64 = 0
+    if is_load {
+        l = 1
+    }
+    emit.u32((arm64_arr_q(arr) << 30) | 0x0c000000 | (1 << 23) | (l << 22)
+        | (arm64_reg_number(xm) << 16) | (opc << 12)
+        | (arm64_arr_esize(arr) << 10) | (arm64_reg_number(rn) << 5)
+        | arm64_reg_number(vt))
+}
+
+// LD1 (one register, post-index). clang: ld1 { v25.8b }, [x26], #8 ->
+// 0x0cdf7359 (xm = xzr encodes the implicit #8).
+fn arm64_ld1_post(vt: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_emit_ld1st1_post(7, true, vt, rn, xm, arr, "ld1 post")
+}
+
+// ST1 (one register, post-index).
+fn arm64_st1_post(vt: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_emit_ld1st1_post(7, false, vt, rn, xm, arr, "st1 post")
+}
+
+// LD1 (two-register list, post-index). clang: ld1 { v17.16b, v18.16b },
+// [x19], x20 -> 0x4cd4a271.
+fn arm64_ld1_2_post(vt: u64, vt2: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x2 post");
+    arm64_emit_ld1st1_post(10, true, vt, rn, xm, arr, "ld1 x2 post")
+}
+
+// LD1 (three-register list, post-index).
+fn arm64_ld1_3_post(vt: u64, vt2: u64, vt3: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x3 post");
+    arm64_check_seq(vt2, vt3, "ld1 x3 post");
+    arm64_emit_ld1st1_post(6, true, vt, rn, xm, arr, "ld1 x3 post")
+}
+
+// LD1 (four-register list, post-index).
+fn arm64_ld1_4_post(vt: u64, vt2: u64, vt3: u64, vt4: u64, arr: u64, rn: u64,
+        xm: u64) {
+    arm64_check_seq(vt, vt2, "ld1 x4 post");
+    arm64_check_seq(vt2, vt3, "ld1 x4 post");
+    arm64_check_seq(vt3, vt4, "ld1 x4 post");
+    arm64_emit_ld1st1_post(2, true, vt, rn, xm, arr, "ld1 x4 post")
+}
+
+// ST1 (two-register list, post-index).
+fn arm64_st1_2_post(vt: u64, vt2: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_check_seq(vt, vt2, "st1 x2 post");
+    arm64_emit_ld1st1_post(10, false, vt, rn, xm, arr, "st1 x2 post")
+}
+
+// ST1 (three-register list, post-index). clang: st1 { v21.4h, v22.4h,
+// v23.4h }, [x24], #24 -> 0x0c9f6715 (xm = xzr encodes #24).
+fn arm64_st1_3_post(vt: u64, vt2: u64, vt3: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_check_seq(vt, vt2, "st1 x3 post");
+    arm64_check_seq(vt2, vt3, "st1 x3 post");
+    arm64_emit_ld1st1_post(6, false, vt, rn, xm, arr, "st1 x3 post")
+}
+
+// ST1 (four-register list, post-index).
+fn arm64_st1_4_post(vt: u64, vt2: u64, vt3: u64, vt4: u64, arr: u64, rn: u64,
+        xm: u64) {
+    arm64_check_seq(vt, vt2, "st1 x4 post");
+    arm64_check_seq(vt2, vt3, "st1 x4 post");
+    arm64_check_seq(vt3, vt4, "st1 x4 post");
+    arm64_emit_ld1st1_post(2, false, vt, rn, xm, arr, "st1 x4 post")
+}
+
+// LD1R (replicate load, post-index). clang: ld1r { v12.8b }, [x13], x14
+// -> 0x0dcec1ac; ld1r { v15.4s }, [x16], #4 -> 0x4ddfca0f.
+fn arm64_ld1r_post(vt: u64, arr: u64, rn: u64, xm: u64) {
+    arm64_arr_check(arr, "ld1r post");
+    assert(arm64_is_v(vt) == 1, "ld1r post: register must be a V register");
+    assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
+        "ld1r post: base must be an X register or SP");
+    arm64_check_post_xm(xm, "ld1r post");
+    emit.u32((arm64_arr_q(arr) << 30) | 0x0d000000 | (1 << 23) | (1 << 22)
+        | (6 << 13) | (arm64_arr_esize(arr) << 10)
+        | (arm64_reg_number(xm) << 16) | (arm64_reg_number(rn) << 5)
+        | arm64_reg_number(vt))
+}

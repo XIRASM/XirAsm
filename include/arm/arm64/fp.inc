@@ -106,6 +106,48 @@ fn arm64_fdiv_d(rd: u64, rn: u64, rm: u64) {
     arm64_emit_fp2(1, 1, rd, rn, rm, "fdiv d")
 }
 
+// FMAX/FMIN (scalar; IEEE 754 maximum/minimum NaN propagation) and
+// FMAXNM/FMINNM (scalar; maxNum/minNum NaN handling). Same two-source FP
+// layout as FADD/FDIV with opcodes (FADD 0010) 0100/0101/0110/0111.
+// clang: fmax s0, s1, s2 -> 0x1e224820; fminnm d12, d13, d14 ->
+// 0x1e6e79ac.
+
+// FMAX (scalar, S/D).
+fn arm64_fmax_s(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(0, 4, rd, rn, rm, "fmax s")
+}
+
+fn arm64_fmax_d(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(1, 4, rd, rn, rm, "fmax d")
+}
+
+// FMIN (scalar, S/D).
+fn arm64_fmin_s(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(0, 5, rd, rn, rm, "fmin s")
+}
+
+fn arm64_fmin_d(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(1, 5, rd, rn, rm, "fmin d")
+}
+
+// FMAXNM (scalar, S/D).
+fn arm64_fmaxnm_s(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(0, 6, rd, rn, rm, "fmaxnm s")
+}
+
+fn arm64_fmaxnm_d(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(1, 6, rd, rn, rm, "fmaxnm d")
+}
+
+// FMINNM (scalar, S/D).
+fn arm64_fminnm_s(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(0, 7, rd, rn, rm, "fminnm s")
+}
+
+fn arm64_fminnm_d(rd: u64, rn: u64, rm: u64) {
+    arm64_emit_fp2(1, 7, rd, rn, rm, "fminnm d")
+}
+
 // Internal: scalar FP one-source (FMOV 000, FABS 001, FNEG 010, FSQRT 011
 // at bits 17-15, fixed 10000 at 20-16 and 1 at 14).
 fn arm64_emit_fp1(ty: u64, opcode: u64, rd: u64, rn: u64, what: string) {
