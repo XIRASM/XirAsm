@@ -1,4 +1,4 @@
-// M5b batch 5: vector three-same ADD/SUB/MUL and bitwise logical ops
+// M5b batch 4: vector three-same ADD/SUB/MUL and bitwise logical ops
 // (AND/BIC/ORR/ORN/EOR, tied BSL/BIT/BIF).
 //
 // Encodings follow LLVM BaseSIMDThreeSameVector and the logical variants

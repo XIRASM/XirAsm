@@ -55,6 +55,7 @@ fn arm64_emit_simd_copy(q: u64, op: u64, imm5: u64, imm4: u64, rd: u64, rn: u64)
 // dup v4.4s, w5 -> 0x4e040ca4.
 fn arm64_dup_gen(vd: u64, arr: u64, rn: u64) {
     arm64_arr_check(arr, "dup");
+    assert(arr != arm64_arr_1d, "dup: 1D arrangement not supported");
     assert(arm64_is_v(vd) == 1, "dup: destination must be a V register");
     const esize: u64 = arm64_arr_esize(arr)
     assert(!arm64_reg_is_zr(rn) && !arm64_reg_is_sp(rn),
@@ -75,6 +76,7 @@ fn arm64_dup_gen(vd: u64, arr: u64, rn: u64) {
 // dup v10.2s, v11.s[1] -> 0x0e0c056a; dup v12.2d, v13.d[0] -> 0x4e0805ac.
 fn arm64_dup_elem(vd: u64, arr: u64, vn: u64, idx: u64) {
     arm64_arr_check(arr, "dup");
+    assert(arr != arm64_arr_1d, "dup: 1D arrangement not supported");
     assert(arm64_is_v(vd) == 1 && arm64_is_v(vn) == 1,
         "dup: registers must be V registers");
     const esize: u64 = arm64_arr_esize(arr)

@@ -38,6 +38,6 @@ xir tests/isa/arm/negative/arm64-movz-imm-overflow.asm -o out.bin
 实现进度与 ISA 族缺口由实现 agent 的台账维护（里程碑索引：M0 骨架 / M1 分支 /
 M2 核心整数 / M3 条件与进位已完成；M4 访存寻址为下一里程碑）：
 
-- 台账：`the ARM coverage workflowCOVERAGE.md`（家族清单、MC 向量引用、差集明细）
+- 进度台账维护家族清单、MC 向量引用和差集明细；内部规划文件不属于产品发布内容。
 - 本目录测试与台账的对应关系：每个 `arm64-m*.asm` 对应一个里程碑，
   `negative/` 按族归档拒绝行为。

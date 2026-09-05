@@ -1,4 +1,4 @@
-// M5b batch 3: LD1/ST1 (multiple structures, one register, no offset) for
+// M5b batch 2: LD1/ST1 (multiple structures, one register, no offset) for
 // all eight arrangements, including an SP base.
 //
 // Encodings follow LLVM BaseSIMDLdSt (see include/arm/arm64/simd.inc).

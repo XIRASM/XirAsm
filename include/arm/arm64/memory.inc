@@ -19,7 +19,7 @@ fn arm64_emit_ldst_imm(size: u64, opc: u64, scale: u64, rt: u64, rn: u64, offset
     arm64_check_no_sp(rt, "load/store");
     assert(arm64_reg_is64(rn) || arm64_reg_is_sp(rn),
         "load/store base must be an X register or SP");
-    assert(offset % scale == 0, sym.join("load/store offset must be a multiple of the element size (", to_string(scale)));
+    assert(offset % scale == 0, sym.join("load/store offset must be a multiple of the element size (", to_string(scale), ")"));
     const imm12: u64 = offset / scale
     assert(imm12 <= 4095, "load/store offset out of range");
     emit.u32((size << 30) | (0x7 << 27) | (0x1 << 24) | (opc << 22)
@@ -198,7 +198,7 @@ fn arm64_emit_pair_ex(opc: u64, is_load: bool, scale: u64, no_alloc: bool, rt: u
         "load/store pair base must be an X register or SP");
     // The offset arrives as a two's-complement u64 (negative for backwards
     // pairs); the imm7 is signed, scaled by the pair element size.
-    assert(offset % scale == 0, sym.join("load/store pair offset must be a multiple of the element size (", to_string(scale)));
+    assert(offset % scale == 0, sym.join("load/store pair offset must be a multiple of the element size (", to_string(scale), ")"));
     let imm7: u64 = 0
     if offset >= 0x8000000000000000 {
         const mag: u64 = (-offset) / scale

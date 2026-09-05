@@ -1,4 +1,4 @@
-// M5b batch 2: AdvSIMD copy space — DUP (general/element), INS
+// M5b batch 1: AdvSIMD copy space — DUP (general/element), INS
 // (general/element), UMOV, SMOV.
 //
 // Encodings follow the LLVM TableGen classes cited per emitter in

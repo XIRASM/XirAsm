@@ -12,7 +12,13 @@
 //   arm64/move.inc    move-wide immediate (MOVZ/MOVK/MOVN), MOV register
 //   arm64/branch.inc  NOP/RET, condition codes, all PC-relative branches
 //   arm64/alu.inc     add/subtract: immediate, shifted register, extended
-//   arm64/sync.inc    exclusive and ordered load/store (M4.6, family by family)
+//   arm64/cond.inc    conditional compare/select (CCMP/CCMN/CSEL family)
+//   arm64/memory.inc  unscaled/pair/register-offset/literal loads and stores
+//   arm64/sync.inc    exclusive and ordered load/store (M4.6)
+//   arm64/system.inc  barriers, hints, BTI, MRS/MSR, PState
+//   arm64/fp.inc      scalar floating point (M5a)
+//   arm64/simd.inc    Advanced SIMD vector operations (M5b)
+//   arm64/sysreg_table.inc  TLBI/DC/AT/IC and core SysReg encoding table
 //   arm64/asm.inc     arm64_asm text adapter over the emitters
 //
 // Register model (see arm64/regs.inc):

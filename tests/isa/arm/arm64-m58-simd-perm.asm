@@ -1,4 +1,4 @@
-// M5b batch 7: UZP1/UZP2/ZIP1/ZIP2 vector permutes.
+// M5b batch 6: UZP1/UZP2/ZIP1/ZIP2 vector permutes.
 //
 // Encodings follow LLVM BaseSIMDZipVector (see include/arm/arm64/simd.inc).
 // Pinned words extracted mechanically from clang --target=aarch64-linux-gnu

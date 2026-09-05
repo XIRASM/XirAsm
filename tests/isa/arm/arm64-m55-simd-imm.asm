@@ -1,4 +1,4 @@
-// M5b batch 4: MOVI/MVNI AdvSIMD modified immediates — byte, halfword
+// M5b batch 3: MOVI/MVNI AdvSIMD modified immediates — byte, halfword
 // (LSL 0/8), word (LSL 0/8/16/24), word MSL, and the 64-bit replicated form.
 //
 // Encodings follow LLVM BaseSIMDModifiedImm and its instantiations (see

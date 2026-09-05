@@ -1,4 +1,4 @@
-// M5b batch 6: vector shift by immediate — SHL/SSHR/USHR and the widening
+// M5b batch 5: vector shift by immediate — SHL/SSHR/USHR and the widening
 // SSHLL/SSHLL2/USHLL/USHLL2 forms.
 //
 // Encodings follow LLVM BaseSIMDVectorShift (see include/arm/arm64/simd.inc).

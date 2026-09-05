@@ -1,6 +1,6 @@
 // A64 scalar floating point (M5a) — the FP/SIMD register file shares the
 // encoding space; scalar S/D forms address the low lanes of V registers
-// (ARM ARM B1.3.1). SIMD vector forms arrive in a later stage.
+// (ARM ARM B1.3.1). Vector forms live in arm64/simd.inc.
 //
 // FP load/store unsigned immediate (LLVM LDRSui/STRSui/LDRDui/STRDui):
 //   size(31-30) 111(29-27) V=1(26) 01(25-24) opc(23-22) imm12(21-10)
