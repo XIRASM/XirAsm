@@ -488,10 +488,14 @@ const ExpressionParser = struct {
         if (identifier.isStart(byte)) return self.parsePostfix(try self.parseIdentifierOrBuiltin());
         if (byte == '(') {
             try self.consumeExpectedByte('(');
-            var expr = try self.parseExpression(.logical_or);
-            errdefer expr.deinit(self.allocator);
-            self.skipWhitespace();
-            try self.consumeExpectedByte(')');
+            const expr = blk: {
+                var inner = try self.parseExpression(.logical_or);
+                errdefer inner.deinit(self.allocator);
+                self.skipWhitespace();
+                try self.consumeExpectedByte(')');
+                break :blk inner;
+            };
+            // parsePostfix owns the expression, including its error paths.
             return self.parsePostfix(expr);
         }
 
@@ -500,12 +504,14 @@ const ExpressionParser = struct {
 
     fn parseNumber(self: *ExpressionParser) ExpressionError!Node {
         const start = self.pos;
+        const is_prefixed_integer = self.input[start] == '0' and start + 1 < self.input.len and
+            std.mem.indexOfScalar(u8, "xXbBoO", self.input[start + 1]) != null;
         while (self.peekByte()) |byte| {
             if (std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '\'') {
                 self.pos += 1;
             } else if (byte == '.' and self.pos + 1 < self.input.len and std.ascii.isDigit(self.input[self.pos + 1])) {
                 self.pos += 1;
-            } else if ((byte == '+' or byte == '-') and self.pos != start and
+            } else if (!is_prefixed_integer and (byte == '+' or byte == '-') and self.pos != start and
                 (self.input[self.pos - 1] == 'e' or self.input[self.pos - 1] == 'E'))
             {
                 self.pos += 1;
@@ -1746,6 +1752,47 @@ test "constant integer evaluation distinguishes arithmetic from symbols" {
     try std.testing.expectEqual(@as(?u64, @bitCast(@as(i64, -129))), try evaluateConstantInteger(std.testing.allocator, "-130 + 1"));
     try std.testing.expectEqual(@as(?u64, null), try evaluateConstantInteger(std.testing.allocator, "target + 4"));
     try std.testing.expectError(error.DivisionByZero, evaluateConstantInteger(std.testing.allocator, "4 / (2 - 2)"));
+}
+
+test "hex arithmetic signs are not decimal exponent signs" {
+    const cases = [_]struct { text: []const u8, expected: u64 }{
+        .{ .text = "0x1e+1", .expected = 31 },
+        .{ .text = "0x1e-1", .expected = 29 },
+        .{ .text = "0X1E+1", .expected = 31 },
+        .{ .text = "0X1E-1", .expected = 29 },
+        .{ .text = "0x1e + 1", .expected = 31 },
+        .{ .text = "0x1f+1", .expected = 32 },
+    };
+    for (cases) |case| {
+        try std.testing.expectEqual(@as(?u64, case.expected), try evaluateConstantInteger(std.testing.allocator, case.text));
+    }
+    var positive = try parseOwned(std.testing.allocator, "1e+2");
+    defer positive.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(f64, 100), positive.float64);
+    var negative = try parseOwned(std.testing.allocator, "1E-2");
+    defer negative.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(f64, 0.01), negative.float64);
+    try std.testing.expectError(error.InvalidNumber, parseOwned(std.testing.allocator, "1e+"));
+    try std.testing.expectError(error.InvalidNumber, parseOwned(std.testing.allocator, "1e-"));
+}
+
+test "parenthesized postfix parse errors release their expression once" {
+    try std.testing.expectError(error.UnexpectedEof, parseOwned(std.testing.allocator, "(\"abc\")."));
+    try std.testing.expectError(error.InvalidToken, parseOwned(std.testing.allocator, "(\"abc\").0"));
+    try std.testing.expectError(error.UnexpectedEof, parseOwned(std.testing.allocator, "(\"abc\").field."));
+    try std.testing.expectError(error.UnexpectedEof, parseOwned(std.testing.allocator, "(\"abc\""));
+}
+
+fn checkParenthesizedAllocationFailures(allocator: Allocator, input: []const u8) !void {
+    var expression = try parseOwned(allocator, input);
+    defer expression.deinit(allocator);
+}
+
+test "parenthesized postfix construction handles every allocation failure" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    for ([_][]const u8{ "((\"abc\")).field.next", "((\"abc\" + \"def\")).field" }) |input| {
+        try std.testing.checkAllAllocationFailures(no_resize.allocator(), checkParenthesizedAllocationFailures, .{input});
+    }
 }
 
 test "expression evaluates finite f32 and f64 values" {

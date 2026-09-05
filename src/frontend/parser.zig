@@ -20,6 +20,7 @@ pub const ParseError = Allocator.Error || error{
     InvalidStructField,
     UnionFieldDefaultNotAllowed,
     InvalidMetaBlock,
+    InvalidMetaStatement,
     InvalidMetaDefer,
     InvalidLateLayout,
     InvalidMetaFor,
@@ -112,14 +113,14 @@ pub const Parser = struct {
                     } else if (looksLikeMetaReturn(token.text)) {
                         try appendMetaReturn(&statements, self.allocator, token);
                     } else {
-                        try appendOwnedText(&statements, self.allocator, .meta_line, token);
+                        return self.rejectMetaStatement(token);
                     }
                 },
                 .meta_block_start => {
                     try appendMetaBlockStatement(self, &statements, token);
                 },
                 .meta_block_end => {
-                    try statements.append(self.allocator, .{ .meta_block_end = token.span });
+                    return self.rejectMetaStatement(token);
                 },
             }
         }
@@ -134,6 +135,11 @@ pub const Parser = struct {
     fn rejectBareDirective(self: *Parser, token: lexer.Token) ParseError {
         self.last_error_span = token.span;
         return error.LegacyDirectiveSyntax;
+    }
+
+    fn rejectMetaStatement(self: *Parser, token: lexer.Token) ParseError {
+        self.last_error_span = token.span;
+        return error.InvalidMetaStatement;
     }
 
     fn collectContinuedStatement(self: *Parser, token: lexer.Token) ParseError!?[]u8 {
@@ -719,11 +725,11 @@ fn appendExecutableStatement(
             } else if (looksLikeMetaReturn(statement_token.text)) {
                 try appendMetaReturn(statements, parser.allocator, statement_token);
             } else {
-                try appendOwnedText(statements, parser.allocator, .meta_line, statement_token);
+                return parser.rejectMetaStatement(statement_token);
             }
         },
         .meta_block_start => try appendMetaBlockStatement(parser, statements, token),
-        .meta_block_end => return error.InvalidMetaBlock,
+        .meta_block_end => return parser.rejectMetaStatement(statement_token),
     }
 }
 
@@ -1557,6 +1563,30 @@ pub fn parseStructLiteralText(allocator: Allocator, text: []const u8) ParseError
         .struct_literal => |literal| literal,
         .expression, .string => error.InvalidApiArgument,
     };
+}
+
+test "parser rejects unrecognized Meta syntax at its source span" {
+    const cases = [_][]const u8{
+        "if false\n{\ndb(2)\n}\n",
+        "else {\ndb(2)\n}\n",
+        "}\n",
+        "fn discarded()\n{\ndb(2)\n}\n",
+        "while false\n{\ndb(2)\n}\n",
+        "defer\n{\ndb(2)\n}\n",
+        "@unknown\n",
+    };
+    for (cases) |input| {
+        const text = try std.mem.concat(std.testing.allocator, u8, &.{ "db(1)\n", input });
+        defer std.testing.allocator.free(text);
+        var parser = Parser.init(std.testing.allocator, text);
+        try std.testing.expectError(error.InvalidMetaStatement, parser.parse());
+        const span = parser.errorSpan() orelse return error.MissingErrorSpan;
+        try std.testing.expectEqual(@as(u32, 6), span.start);
+    }
+    var nested = Parser.init(std.testing.allocator, "fn outer() {\n    if false\n{\ndb(2)\n}\n}\n");
+    try std.testing.expectError(error.InvalidMetaStatement, nested.parse());
+    const span = nested.errorSpan() orelse return error.MissingErrorSpan;
+    try std.testing.expectEqual(@as(u32, 17), span.start);
 }
 
 test "parser keeps labels ISA statements and Meta statements separate" {

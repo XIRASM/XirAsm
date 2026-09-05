@@ -46,16 +46,28 @@ pub fn lowerStatementFunction(
 
     try validateMutableArguments(module, context, call, function.params);
 
-    try context.scopes.append(allocator, .{});
-    defer context_mod.discardLastScope(context, allocator);
-
+    // Keep all arguments in the caller's environment until evaluation finishes.
+    const values = try allocator.alloc(value_mod.Value, function.params.len);
+    var initialized: usize = 0;
+    defer {
+        for (values[0..initialized]) |*value| value.deinit(allocator);
+        allocator.free(values);
+    }
     for (function.params, 0..) |param, index| {
         const annotation = try typecheck.annotationFromName(module, param.type_name);
         if (param.type_name != null and annotation == null) return error.InvalidMetaFunction;
         var value = try callbacks.value_arg_at_context(allocator, module, context, active.*, call, index);
         errdefer value.deinit(allocator);
         try typecheck.coerceValueToAnnotation(module, &value, annotation);
-        try context_mod.defineLocalValue(context, allocator, param.name, value, param.mutability);
+        values[index] = value;
+        initialized += 1;
+    }
+
+    try context.scopes.append(allocator, .{});
+    defer context_mod.discardLastScope(context, allocator);
+    for (function.params, 0..) |param, index| {
+        try context_mod.defineLocalValue(context, allocator, param.name, values[index], param.mutability);
+        values[index] = .void;
     }
 
     try callbacks.lower_statement_slice(allocator, module, active, output_stack, function.body, context);
@@ -160,9 +172,6 @@ pub fn evalValueFunctionAt(
     }
 
     var scoped_active = active;
-    try context.scopes.append(allocator, .{});
-    defer context_mod.discardLastScope(context, allocator);
-
     var eval_ctx: expr.EvalContext = .{
         .module = module,
         .active_target = active.target,
@@ -177,13 +186,27 @@ pub fn evalValueFunctionAt(
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,
     };
+    const values = try allocator.alloc(value_mod.Value, function.params.len);
+    var initialized: usize = 0;
+    defer {
+        for (values[0..initialized]) |*value| value.deinit(allocator);
+        allocator.free(values);
+    }
     for (function.params, 0..) |param, index| {
         const annotation = try typecheck.annotationFromName(module, param.type_name);
         if (param.type_name != null and annotation == null) return error.InvalidMetaFunction;
         var value = expr.evaluateBuiltinValueArg(allocator, args[index], &eval_ctx) catch |err| return expression_bridge.mapExpressionError(err);
         errdefer value.deinit(allocator);
         try typecheck.coerceValueToAnnotation(module, &value, annotation);
-        try context_mod.defineLocalValue(context, allocator, param.name, value, .@"const");
+        values[index] = value;
+        initialized += 1;
+    }
+
+    try context.scopes.append(allocator, .{});
+    defer context_mod.discardLastScope(context, allocator);
+    for (function.params, 0..) |param, index| {
+        try context_mod.defineLocalValue(context, allocator, param.name, values[index], .@"const");
+        values[index] = .void;
     }
 
     callbacks.lower_statement_slice(allocator, module, &scoped_active, output_stack, function.body, context) catch |err| {

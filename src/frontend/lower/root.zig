@@ -324,7 +324,7 @@ fn lowerStatement(
             errdefer block.deinit(allocator);
             try module.appendLateLayoutBlock(block);
         },
-        .meta_line, .meta_block_start, .meta_block_end => {},
+        .meta_line, .meta_block_start, .meta_block_end => return error.InvalidMetaStatement,
     }
 }
 
@@ -334,6 +334,15 @@ fn addLowerErrorDiagnostic(
     span: source.SourceSpan,
     err: anyerror,
 ) Allocator.Error!void {
+    if (err == error.InvalidMetaStatement) {
+        try module.diagnostics.add(
+            allocator,
+            .err,
+            span,
+            "invalid Meta statement or unmatched block delimiter; block headers must end with '{' on the same line",
+        );
+        return;
+    }
     if (err == error.LegacyDirectiveSyntax) {
         try module.diagnostics.add(
             allocator,

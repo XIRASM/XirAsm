@@ -349,6 +349,12 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("include/format/elf_export.inc"));
     run_api_matrix.addFileArg(b.path("include/format/elfso_import.inc"));
     run_api_matrix.addFileArg(b.path("include/format/elf_const.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_const.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_obj.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_exe.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_dylib.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_export.inc"));
+    run_api_matrix.addFileArg(b.path("include/format/macho_import.inc"));
     run_api_matrix.addFileArg(b.path("include/os/win32/guid.inc"));
     run_api_matrix.addArg("--fixtures");
     run_api_matrix.addFileArg(b.path("tests/x86/basic.asm"));
@@ -433,6 +439,8 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/format/format_elf32_obj_user_facade.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/elf64_so_export.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/elf64_so_import.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_arm64_exe_import.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/macho64_x86_64_exe_import.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/diagnostics.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/err_negative.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/assignment.asm"));
@@ -1645,6 +1653,40 @@ pub fn build(b: *std.Build) void {
         &.{
             "include/format/format.inc",
             "include/os/win32/imports/kernel32.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/format/macho64_arm64_exe_import.asm",
+        "format-macho64-arm64-exe-import",
+        "x64",
+        "32864",
+        &.{
+            "include/format/macho_import.inc",
+            "include/format/macho_exe.inc",
+            "include/format/macho_dylib.inc",
+            "include/format/macho_obj.inc",
+            "include/format/macho_const.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/format/macho64_x86_64_exe_import.asm",
+        "format-macho64-x86-64-exe-import",
+        "x64",
+        "8277",
+        &.{
+            "include/format/macho_import.inc",
+            "include/format/macho_exe.inc",
+            "include/format/macho_dylib.inc",
+            "include/format/macho_obj.inc",
+            "include/format/macho_const.inc",
         },
     );
     addAsmSizeFixtureInstalled(
@@ -4582,6 +4624,24 @@ pub fn build(b: *std.Build) void {
         "x64",
         "4100000044332211080444332211",
     );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/function_argument_scope.asm",
+        "meta-function-argument-scope.bin",
+        "x64",
+        "0201151f1d1f1d",
+    );
+    for ([_][]const u8{
+        "tests/meta/negative/parenthesized_postfix.asm",
+        "tests/meta/negative/split_if_header.asm",
+        "tests/meta/negative/orphan_else.asm",
+        "tests/meta/negative/unmatched_block_end.asm",
+    }) |source_path| {
+        addFailingAsmFixture(b, fixture_step, exe, source_path, "x64");
+    }
     addFailingAsmFixture(
         b,
         fixture_step,

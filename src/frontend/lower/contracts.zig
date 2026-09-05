@@ -28,6 +28,7 @@ pub const LowerError = Allocator.Error || error{
     UnionFieldDefaultNotAllowed,
     DuplicateMetaFunction,
     InvalidMetaBlock,
+    InvalidMetaStatement,
     InvalidMetaDefer,
     InvalidLateLayout,
     InvalidMetaFor,

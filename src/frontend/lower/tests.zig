@@ -1904,11 +1904,60 @@ fn checkLowerPipelineAllocationFailures(allocator: std.mem.Allocator) !void {
 }
 
 test "lowering pipeline handles every allocation failure" {
+    // Force copy-on-growth so heap-dependent remap success cannot change the
+    // allocation count between the baseline and injected-failure runs.
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
     try std.testing.checkAllAllocationFailures(
-        std.testing.allocator,
+        no_resize.allocator(),
         checkLowerPipelineAllocationFailures,
         .{},
     );
+}
+
+fn checkFunctionArgumentAllocationFailures(allocator: Allocator) !void {
+    var module = try lowerSource(allocator,
+        \\const a: string = "caller"
+        \\const b: string = "callee"
+        \\fn pair(a: string, b: string) {
+        \\    assert(a == "callee")
+        \\    assert(b == "caller")
+        \\}
+        \\fn second(a: string, b: string) -> string {
+        \\    return b
+        \\}
+        \\pair(b, a)
+        \\assert(second(b, a) == "caller")
+        \\fn nested() {
+        \\    const a: string = "local"
+        \\    assert(second(b, a) == "local")
+        \\}
+        \\nested()
+    , .{});
+    defer module.deinit();
+}
+
+test "function arguments resolve before callee parameter bindings" {
+    try checkFunctionArgumentAllocationFailures(std.testing.allocator);
+}
+
+test "function argument construction handles every allocation failure" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), checkFunctionArgumentAllocationFailures, .{});
+}
+
+test "partially evaluated function arguments are freed on a type error" {
+    try std.testing.expectError(error.InvalidValueDeclaration, lowerSource(std.testing.allocator,
+        \\fn pair(a: string, b: u64) {
+        \\    db(a, b)
+        \\}
+        \\pair("owned", "wrong type")
+    , .{}));
+    try std.testing.expectError(error.InvalidExpression, lowerSource(std.testing.allocator,
+        \\fn pair(a: string, b: u64) -> string {
+        \\    return a
+        \\}
+        \\const result = pair("owned", "wrong type")
+    , .{}));
 }
 
 fn checkIncludeAllocationFailures(allocator: std.mem.Allocator) !void {

@@ -191,6 +191,8 @@ guide:
 - `return` statements end with `;`.
 - `const` and `let` declarations do not end with semicolons.
 - Blocks use `{` and `}`.
+- Function and control-flow headers end with `{`; do not put that opening
+  brace on a separate line. An orphan `else` or unmatched `}` is an error.
 - Calls and aggregate values may span multiple lines while their parentheses
   or braces remain open.
 
@@ -1168,6 +1170,10 @@ The end of the procedure body completes the call naturally.
 ### Function-Local Scope
 
 Parameters and bindings declared inside a function belong to that invocation:
+
+All arguments are evaluated in the caller's scope before the new parameter
+bindings are introduced. For example, calling `pair(b, a)` does not let a
+parameter named `a` change the meaning of the second argument.
 
 ```asm
 fn adjusted_size(size: u64) -> u64 {

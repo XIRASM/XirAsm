@@ -15,6 +15,12 @@ import("elfexe_import.inc");
 import("elfobj.inc");
 import("elf_export.inc");
 import("elfso_import.inc");
+// Mach-O AArch64 helpers are direct DSL records, matching the advanced
+// row-level APIs above. They do not add a generic plan object.
+import("macho_obj.inc");
+import("macho_exe.inc");
+import("macho_dylib.inc");
+import("macho_import.inc");
 
 const format_kind_pe32: u64 = 1
 const format_kind_pe64: u64 = 2
@@ -25,6 +31,9 @@ const format_kind_coff64: u64 = 6
 const format_kind_elfobj32: u64 = 7
 const format_kind_elfobj64: u64 = 8
 const format_kind_elfso64: u64 = 9
+const format_kind_macho64_object: u64 = 10
+const format_kind_macho64_execute: u64 = 11
+const format_kind_macho64_dylib: u64 = 12
 
 const format_coff_symbol_public: u64 = 1
 const format_coff_symbol_extern: u64 = 2
