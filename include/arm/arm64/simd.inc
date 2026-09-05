@@ -433,3 +433,128 @@ fn arm64_bif_vec(vd: u64, vn: u64, vm: u64, arr: u64) {
     arm64_check_arr_byte(arr, "bif");
     arm64_emit_3same(arm64_arr_q(arr), 1, 7, 3, vd, vn, vm)
 }
+
+// --- Vector shift by immediate ------------------------------------------------
+// Layout (LLVM BaseSIMDVectorShift, AArch64InstrFormats.td:10399):
+//   0(31) Q(30) U(29) 011110(28-23) immhb(22-16) opcode(15-11) 1(10)
+//   Rn(9-5) Rd(4-0). Left shifts encode immhb = T + shift; right shifts
+//   encode immhb = 2T - shift, with T the element size in bits (verified
+//   round trip via clang). Opcodes: SHL 01010 (U = 0), SSHR/USHR 00000
+//   (U = 0/1), SSHLL/USHLL 10100 (U = 0/1). SHL takes 0..T-1, right
+//   shifts 1..T (clang-enforced). Long forms widen every source lane to
+//   double width with the same lane count, and the high-half variants are
+//   the separate SSHLL2/USHLL2 mnemonics (Q = 1, source 128-bit
+//   arrangement); their shift range is 0..T_src-1.
+fn arm64_emit_shift_imm(q: u64, u: u64, opc: u64, immhb: u64, rd: u64, rn: u64,
+        what: string) {
+    assert(immhb >= 1 && immhb <= 127, sym.join(what, ": shift amount out of range"));
+    emit.u32((q << 30) | (u << 29) | 0x0f000000 | (immhb << 16) | (opc << 11)
+        | (1 << 10) | (arm64_reg_number(rn) << 5) | arm64_reg_number(rd))
+}
+
+// SHL (vector), shift 0..T-1. clang: shl v0.8b, v1.8b, #3 -> 0x0f0b5420;
+// shl v8.2d, v9.2d, #33 -> 0x4f615528.
+fn arm64_shl(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "shl");
+    const t: u64 = 8 << arm64_arr_esize(arr)
+    assert(shift <= (t - 1), sym.join("shl: shift amount out of range 0..", to_string(t - 1)));
+    arm64_emit_shift_imm(arm64_arr_q(arr), 0, 10, t + shift, vd, vn, "shl")
+}
+
+// SSHR (arithmetic right), shift 1..T. clang: sshr v10.4h, v11.4h, #4 ->
+// 0x0f1c056a; sshr v12.8b, v13.8b, #8 -> 0x0f0805ac.
+fn arm64_sshr(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "sshr");
+    const t: u64 = 8 << arm64_arr_esize(arr)
+    assert(shift >= 1 && shift <= t, sym.join("sshr: shift amount out of range 1..", to_string(t)));
+    arm64_emit_shift_imm(arm64_arr_q(arr), 0, 0, (2 * t) - shift, vd, vn, "sshr")
+}
+
+// USHR (logical right), shift 1..T. clang: ushr v14.4s, v15.4s, #12 ->
+// 0x6f3405ee; ushr v16.2d, v17.2d, #64 -> 0x6f400630.
+fn arm64_ushr(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_check_arr_arith(arr, "ushr");
+    const t: u64 = 8 << arm64_arr_esize(arr)
+    assert(shift >= 1 && shift <= t, sym.join("ushr: shift amount out of range 1..", to_string(t)));
+    arm64_emit_shift_imm(arm64_arr_q(arr), 1, 0, (2 * t) - shift, vd, vn, "ushr")
+}
+
+// Internal: long shifts. The arrangement is the SOURCE view; dest is the
+// same lane count at double element width. `high` selects SSHLL2/USHLL2
+// (Q = 1, 128-bit source arrangement).
+fn arm64_emit_shift_long(vd: u64, vn: u64, shift: u64, arr: u64, u: u64,
+        high: u64, what: string) {
+    arm64_arr_check(arr, what);
+    assert(arm64_is_v(vd) == 1 && arm64_is_v(vn) == 1,
+        sym.join(what, ": registers must be V registers"));
+    const esize: u64 = arm64_arr_esize(arr)
+    assert(esize <= 2, sym.join(what, ": source lanes must be B/H/S"));
+    assert(arm64_arr_q(arr) == high,
+        sym.join(what, ": source arrangement half must match the variant"));
+    const t: u64 = 8 << esize
+    assert(shift <= (t - 1), sym.join(what, ": shift amount out of range 0..T-1"));
+    arm64_emit_shift_imm(high, u, 20, t + shift, vd, vn, what)
+}
+
+// SSHLL (low half). clang: sshll v20.8h, v21.8b, #1 -> 0x0f09a6b4.
+fn arm64_sshll(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_emit_shift_long(vd, vn, shift, arr, 0, 0, "sshll")
+}
+
+// SSHLL2 (high half). clang: sshll2 v22.8h, v23.16b, #3 -> 0x4f0ba6f6.
+fn arm64_sshll2(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_emit_shift_long(vd, vn, shift, arr, 0, 1, "sshll2")
+}
+
+// USHLL (low half). clang: ushll v24.4s, v25.4h, #5 -> 0x2f15a738;
+// ushll v28.2d, v29.2s, #7 -> 0x2f27a7bc.
+fn arm64_ushll(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_emit_shift_long(vd, vn, shift, arr, 1, 0, "ushll")
+}
+
+// USHLL2 (high half). clang: ushll2 v26.4s, v27.8h, #7 -> 0x6f17a77a.
+fn arm64_ushll2(vd: u64, vn: u64, shift: u64, arr: u64) {
+    arm64_emit_shift_long(vd, vn, shift, arr, 1, 1, "ushll2")
+}
+
+// --- Vector permutes (UZP1/UZP2/ZIP1/ZIP2) -------------------------------------
+// Layout (LLVM BaseSIMDZipVector, AArch64InstrFormats.td:7716):
+//   0(31) Q(30) 001110(29-24) size(23-22) 0(21) Rm(20-16) 0(15)
+//   opcode(14-12) 10(11-10) Rn(9-5) Rd(4-0). Opcodes: UZP1 001,
+//   UZP2 101, ZIP1 011, ZIP2 111 (TRN 010/110 left to a later batch).
+//   There is no 1D arrangement (clang rejects it).
+fn arm64_emit_permute(opc: u64, rd: u64, rn: u64, rm: u64, arr: u64,
+        what: string) {
+    arm64_arr_check(arr, what);
+    assert(arr != arm64_arr_1d, sym.join(what, ": 1D arrangement not supported"));
+    assert(arm64_is_v(rd) == 1 && arm64_is_v(rn) == 1 && arm64_is_v(rm) == 1,
+        sym.join(what, ": registers must be V registers"));
+    emit.u32((arm64_arr_q(arr) << 30) | (0x0e << 24)
+        | (arm64_arr_esize(arr) << 22) | (arm64_reg_number(rm) << 16)
+        | (opc << 12) | (2 << 10) | (arm64_reg_number(rn) << 5)
+        | arm64_reg_number(rd))
+}
+
+// UZP1 (unzip even lanes). clang: uzp1 v0.16b, v1.16b, v2.16b ->
+// 0x4e021820; uzp1 v6.4h, v7.4h, v8.4h -> 0x0e4818e6.
+fn arm64_uzp1(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(1, vd, vn, vm, arr, "uzp1")
+}
+
+// UZP2 (unzip odd lanes). clang: uzp2 v3.8b, v4.8b, v5.8b -> 0x0e055883;
+// uzp2 v27.2d, v28.2d, v29.2d -> 0x4edd5b9b.
+fn arm64_uzp2(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(5, vd, vn, vm, arr, "uzp2")
+}
+
+// ZIP1 (zip, first halves). clang: zip1 v12.2s, v13.2s, v14.2s ->
+// 0x0e8e39ac; zip1 v18.2d, v19.2d, v20.2d -> 0x4ed43a72.
+fn arm64_zip1(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(3, vd, vn, vm, arr, "zip1")
+}
+
+// ZIP2 (zip, second halves). clang: zip2 v15.4s, v16.4s, v17.4s ->
+// 0x4e917a0f; zip2 v24.16b, v25.16b, v26.16b -> 0x4e1a7b38.
+fn arm64_zip2(vd: u64, vn: u64, vm: u64, arr: u64) {
+    arm64_emit_permute(7, vd, vn, vm, arr, "zip2")
+}
