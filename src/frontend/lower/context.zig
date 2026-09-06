@@ -2,6 +2,7 @@ const std = @import("std");
 
 const expr = @import("../expr.zig");
 const meta_function = @import("../meta_function.zig");
+const macro = @import("../macro.zig");
 const output_mod = @import("../output/root.zig");
 const value_mod = @import("../value.zig");
 const contracts = @import("contracts.zig");
@@ -14,6 +15,9 @@ pub const LowerContext = struct {
     defer_here: ?u64 = null,
     source_stack: std.ArrayList(SourceFrame) = .empty,
     functions: meta_function.Store = .{},
+    macros: macro.Store = .{},
+    macro_expansions: usize = 0,
+    frozen_local_names: std.ArrayList([]const u8) = .empty,
     scopes: std.ArrayList(MetaScope) = .empty,
     call_depth: u32 = 0,
     value_function_depth: u32 = 0,
@@ -30,6 +34,8 @@ pub const LowerContext = struct {
         }
         self.scopes.deinit(allocator);
         self.functions.deinit(allocator);
+        self.macros.deinit(allocator);
+        self.frozen_local_names.deinit(allocator);
         self.source_stack.deinit(allocator);
         self.* = undefined;
     }
@@ -210,6 +216,33 @@ pub fn resolveLocalValue(context: *anyopaque, allocator: Allocator, name: []cons
 pub fn currentSourcePath(context: *const LowerContext) ?[]const u8 {
     if (context.source_stack.items.len == 0) return null;
     return context.source_stack.items[context.source_stack.items.len - 1].path;
+}
+
+pub fn captureOperandEnvironment(context: *const LowerContext, allocator: Allocator, module: *const @import("../module.zig").Module) contracts.LowerError!*value_mod.OperandEnvironment {
+    var bindings: value_mod.MapValue = .{ .entries = try allocator.alloc(value_mod.MapEntry, 0) };
+    errdefer bindings.deinit(allocator);
+    for (module.symbols.items.items) |symbol| {
+        if (symbol.binding == .value) {
+            bindings.setCloned(allocator, symbol.name, symbol.binding.value.value) catch |err| return switch (err) {
+                error.OutOfMemory => error.OutOfMemory,
+                error.CollectionTooLarge => error.InvalidApiArgument,
+            };
+        }
+    }
+    for (context.scopes.items) |scope| {
+        for (scope.locals.items) |local| {
+            bindings.setCloned(allocator, local.name, local.value) catch |err| return switch (err) {
+                error.OutOfMemory => error.OutOfMemory,
+                error.CollectionTooLarge => error.InvalidApiArgument,
+            };
+        }
+    }
+    var depth: usize = 0;
+    for (bindings.entries) |entry| depth = @max(depth, entry.value.operandCaptureDepth());
+    if (depth >= value_mod.OperandEnvironment.max_depth) return error.MacroCaptureDepthExceeded;
+    const environment = try allocator.create(value_mod.OperandEnvironment);
+    environment.* = .{ .allocator = allocator, .bindings = bindings, .depth = depth + 1 };
+    return environment;
 }
 
 pub fn sourceStackContains(context: *const LowerContext, identity: []const u8) bool {

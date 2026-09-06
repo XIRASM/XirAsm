@@ -101,6 +101,7 @@ pub fn formatMetaValue(allocator: Allocator, value: value_mod.Value) LowerError!
         .@"struct" => |struct_value| try std.fmt.allocPrint(allocator, "struct#{}", .{struct_value.type_id.index}),
         .list => |list| try std.fmt.allocPrint(allocator, "list#{}", .{list.items.len}),
         .map => |map| try std.fmt.allocPrint(allocator, "map#{}", .{map.entries.len}),
+        .operand => |operand| try operand.text(allocator),
     };
 }
 

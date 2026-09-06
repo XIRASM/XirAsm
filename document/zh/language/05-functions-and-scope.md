@@ -13,6 +13,85 @@ XIRASM 有两种函数：
 
 一个函数最好只做一类事：要么执行输出或布局操作，要么返回一个可用于表达式的值。
 
+## 指令形式的宏
+
+`macro` 让 Meta 编码过程可以用自然指令语法调用：
+
+```asm
+macro byte(value) {
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+const LIMIT: u64 = 7
+byte LIMIT + 1
+byte (LIMIT + 2)
+```
+
+输出为 `08 09`。参数是不可变的 `operand`，不会自动变成整数或字符串。
+`operand.eval` 用调用处捕获的值绑定求值；宏内同名变量不会改变传入表达式的含义。
+类型、整数溢出、变量声明和赋值仍遵循普通 Meta 规则。前向标号应通过
+`operand.text` 交给延迟分支辅助函数，不应提前求地址。
+
+`operand.text(op)` 取拼写；`operand.slice(op, start, end)` 取经过边界检查的
+左闭右开字节片段；`operand.split(op)` 在顶层逗号处分割，保留引号和配对的
+`()[]{}`，返回操作数列表。切片和分割保留原始捕获环境。
+
+```asm
+macro twice(dst, src) {
+    mov dst, src
+    mov dst, src
+}
+macro bytes(...values) {
+    for item in values {
+        byte item
+    }
+}
+twice eax, ebx
+bytes 1, 2, 3
+```
+
+指令操作数中绑定到 `operand` 的标识符会转发原始操作数，包括循环和辅助函数中的
+操作数局部变量。普通字符串、引号内文本和助记符不替换，插入的参数也不会再次扫描。
+混合模板的每个片段保留各自的值绑定；求值过程中调用的函数，以及 `here()` 等位置
+内置函数，使用第一个片段的捕获上下文。每次显式调用 `operand.eval` 都会重新求值。
+
+宏必须在顶层定义，先定义或导入后使用。名称区分大小写，允许点分隔名称。
+参数没有类型注解和默认值，末尾可以有一个 `...name`。相同名称允许多个不同精确
+参数数目的定义及一个可变参数定义；精确匹配优先，已知名称参数数目不匹配时报错。
+调用使用 `name operands`；`name(expression)` 是函数语法，`name (expression)`
+中的空白表示首个操作数为括号表达式。宏体使用现有的多行代码块语法。
+
+宏可以使用 Meta 变量、控制流、过程、指令和合法的收尾块注册，但不能返回值。
+`break`、`continue` 不能跳出调用者的循环。已保存的 `defer`、`late_layout` 中不能
+定义或调用宏，也不能借宏绕过返回值函数的副作用限制。
+
+每个实际到达的宏调用仅在源码 lowering 时执行一次。编码、布局、松弛和收尾不会
+重跑宏体。函数和宏共享 128 层调用深度；同一 lowering 上下文累计最多调用宏
+100,000 次，每次最多 256 个操作数、64 层操作数括号。这不替代原有 Meta 循环限制。
+保存的操作数之间最多有 128 层捕获依赖，超限报告 `MacroCaptureDepthExceeded`。
+捕获会复制可见的值绑定；不再需要原始语法时应保存求值结果，避免长期保留较大的环境和集合。
+静态标号仍是模块标号；私有标号用 `sym.unique` 配合 `label.define`。
+`isa(text)` 可绕过宏查找，直接提交原生指令。
+
+### A64 自然指令
+
+```asm
+import("arm/arm64-macros.inc")
+const VALUE: u64 = 42
+movz x0, #VALUE
+add x1, x0, #(VALUE + 1)
+ldr x2, [sp, #16]
+b.eq done
+done:
+ret
+```
+
+此可选入口包装现有 `arm64/asm.inc` 支持的整数移动、算术、逻辑、条件、分支和
+访存/地址形式，不代表全部 A64 或浮点/SIMD API 都有宏。立即数沿用 Meta 表达式，
+寄存器、范围、移位、对齐和写回检查由 DSL 编码辅助函数完成。`b.eq` 只有一个目标参数。
+导入后，同名助记符在该 lowering 上下文中归宏处理，不自动按原生 target 隔离；
+混合 ISA 源码需要 API-only 入口时继续导入 `arm/arm64.inc`。
+
 ## 过程函数
 
 过程函数适合组合一组输出操作：

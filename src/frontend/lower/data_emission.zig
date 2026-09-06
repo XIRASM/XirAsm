@@ -42,7 +42,7 @@ pub fn lowerEmitCall(
                 .integer => |integer| try appendIntegerBytes(module.allocator, &bytes, integer.value, byte_count),
                 .string => |text| try bytes.appendSlice(module.allocator, text),
                 .bytes => |data| try bytes.appendSlice(module.allocator, data),
-                .void, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+                .operand, .void, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
             }
         } else {
             const value = try callbacks.integer_arg_at_context(module, context, active.*, call, index);
@@ -111,7 +111,7 @@ pub fn lowerFileCall(
     defer path_value.deinit(module.allocator);
     const path = switch (path_value) {
         .string => |text| text,
-        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+        .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
     };
     const range: ?meta_data.ByteRange = if (call.args.len == 3) .{
         .offset = try integerArgAsUsize(module, context, active.*, call, 1, callbacks),

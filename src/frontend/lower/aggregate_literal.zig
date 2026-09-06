@@ -150,7 +150,7 @@ fn valueFromLiteralField(
             errdefer aggregate_value.deinit(allocator);
             const stored = switch (aggregate_value) {
                 .@"struct" => |stored| stored,
-                .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidValueDeclaration,
+                .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidValueDeclaration,
             };
             if (stored.type_id.index != field.ty.index) return error.InvalidValueDeclaration;
             break :blk aggregate_value;

@@ -8,6 +8,7 @@ syntax.signed_integer_type	syntax	i8/i16/i32/i64	acceptsValue	dword: i32	Signed 
 format.win32_guid	format	win32_guid	fn win32_guid	win32_guid(	Build the 16-byte Windows memory representation of a GUID.
 syntax.block	syntax	block	appendMetaBlockStatement	let value = 2	Scoped Meta block lifetime.
 syntax.fn	syntax	fn	parseMetaFunctionStart	fn emit_pair	User Meta function declaration.
+syntax.macro	syntax	macro	parseMacroStart	macro byte(value)	Ordered statement macro with captured operands and exact or variadic arity.
 syntax.fn_let_param	syntax	let procedure parameter	parseMetaFunctionParam	fn update(let	Writes a procedure parameter back to a direct caller let binding.
 syntax.user_fn_call	syntax	user function call	lowerMetaFunctionCall	emit_pair(2)	User Meta function invocation.
 syntax.fn_return	syntax	fn return type	return_type_name	fn align_up(value: u64, align: u64) -> u64	Return-value Meta function declaration.
@@ -495,6 +496,10 @@ expr.split	expr	split	meta_std.isBuiltinName(name); "split"	split(	Split string 
 expr.join	expr	join	meta_std.isBuiltinName(name); "join"	join(	Join compile-time list of strings into string.
 expr.sym_join	expr	sym.join	meta_std.isBuiltinName(name); "sym.join"	sym.join(	Concatenate scalar values into a dynamic symbol name.
 expr.sym_unique	expr	sym.unique	call.name, "sym.unique"	sym.unique(	Generate a deterministic unique symbol name during Meta lowering.
+expr.operand_text	expr	operand.text	call.name, "operand.text"	operand.text(	Read the spelling of a captured macro operand.
+expr.operand_slice	expr	operand.slice	call.name, "operand.slice"	operand.slice(	Slice a captured macro operand preserving its environment.
+expr.operand_eval	expr	operand.eval	call.name, "operand.eval"	operand.eval(	Evaluate a captured operand using caller bindings.
+expr.operand_split	expr	operand.split	call.name, "operand.split"	operand.split(	Split balanced comma-separated operands retaining caller bindings.
 expr.bytes_new	expr	bytes.new	meta_std.isBuiltinName(name); "bytes.new"	bytes.new(	Create empty bytes value.
 expr.bytes_push	expr	bytes.push	meta_std.isBuiltinName(name); "bytes.push"	bytes.push(	Append one byte to bytes value.
 expr.bytes_concat	expr	bytes.concat	meta_std.isBuiltinName(name); "bytes.concat"	bytes.concat(	Concatenate bytes values.

@@ -1290,6 +1290,113 @@ effects visible at the call site.
 The next chapter introduces lists, maps, strings, and byte sequences for
 functions that need to work with collections and structured text.
 
+### Statement Macros
+
+Use a statement macro to give a Meta procedure natural instruction syntax:
+
+```asm
+macro byte(value) {
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+
+const LIMIT: u64 = 7
+byte LIMIT + 1
+byte (LIMIT + 2)
+```
+
+This emits `08 09`. Macro arguments are immutable `operand` values, not
+implicitly evaluated integers or strings. `operand.eval` evaluates a Meta
+expression with the value bindings captured at the call. A local `LIMIT`
+declared inside the macro cannot change the captured expression. Integer
+overflow, types, variable declarations, and assignments obey ordinary Meta
+rules. Forward labels should be passed as text to a deferred branch helper,
+rather than evaluated before their address is known.
+
+`operand.text(value)` returns its spelling. `operand.slice(value, start, end)`
+selects a checked byte range while retaining captured bindings.
+`operand.split(value)` splits at top-level commas, respecting quotes and balanced
+`()`, `[]`, and `{}`, and returns a list of operands. These helpers let a DSL
+strip its own immediate prefix or inspect memory operands without losing scope.
+
+```asm
+macro twice(dst, src) {
+    mov dst, src
+    mov dst, src
+}
+
+macro bytes(...values) {
+    for item in values {
+        byte item
+    }
+}
+
+twice eax, ebx
+bytes 1, 2, 3
+```
+
+In instruction operands, an identifier bound to an `operand` is forwarded with
+its original capture. This also applies to operand-valued locals in loops and
+helpers. Quoted text and mnemonics are not substituted; inserted text is not
+rescanned for more parameter names. Ordinary string variables are not template
+slots. Mixed expressions retain each piece's captured value bindings. Functions
+called by `operand.eval` use the first piece's captured scope; their own parameter
+and local rules remain the ordinary Meta rules. Location builtins such as `here()`
+use that piece's capture location. Each explicit `operand.eval` executes anew.
+
+Macro definitions must be at top level and appear before use, including through
+`import`. Names are case-sensitive and may contain dot-separated identifier
+segments. Parameters have no type annotations or defaults; one trailing
+`...name` collects remaining operands. An exact arity overload takes priority
+over the single variadic overload allowed per name. A known macro name with
+wrong arity is an error. Calls use `name operands`, not `name(operands)`; whitespace
+before a parenthesized first operand distinguishes `name (expression)`.
+
+Macro bodies use the existing multiline block grammar and can contain Meta
+variables, control flow, procedures, instructions, and valid finalizer
+registrations. They do not return values. `break` and `continue` cannot escape
+into a caller's loop. Macro definitions and invocations are forbidden inside
+stored `defer` and `late_layout` bodies, and macros cannot bypass value-function
+side-effect restrictions.
+
+Each reached invocation executes once during source lowering. Layout, relaxation,
+encoding and finalization do not rerun its body. Macro and function calls share
+a depth limit of 128; macro calls also have a cumulative limit of 100,000 per
+source-lowering context. A call accepts at most 256 operands and 64 levels of
+operand delimiters. These limits do not replace the existing Meta loop limits.
+Captured environments may reference earlier saved operands up to 128 levels;
+deeper chains report `MacroCaptureDepthExceeded`. Captures copy visible value
+bindings, so retaining operands alongside large collections has a memory cost.
+Evaluate and store ordinary values when the original syntax is no longer needed.
+
+Static labels inside a macro remain module labels. For a private label, create
+a name with `sym.unique` and define it with `label.define`. Use `isa(text)` to
+explicitly emit a native instruction without macro dispatch.
+
+### Natural A64 Instructions
+
+The optional `arm/arm64-macros.inc` include wraps the existing A64 DSL encoders:
+
+```asm
+import("arm/arm64-macros.inc")
+const VALUE: u64 = 42
+movz x0, #VALUE
+add x1, x0, #(VALUE + 1)
+ldr x2, [sp, #16]
+b.eq done
+done:
+ret
+```
+
+It supports the instruction families already exposed by `arm64/asm.inc`:
+integer moves, arithmetic, logical and conditional operations, branches, and
+its load/store/address forms. It does not expose every A64 instruction or the
+floating-point/SIMD API families. Immediate expressions reuse Meta arithmetic;
+register, shift, range, alignment, and writeback validation reuse the DSL helpers.
+`b.eq` takes one target operand. The include owns matching mnemonic names for
+the rest of that lowering context, independently of the native target. Import
+`arm/arm64.inc` for API-only use in mixed-ISA sources.
+
 ## 6. Collections and Text
 
 ### Collections Are Compile-Time Values

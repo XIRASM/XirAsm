@@ -72,7 +72,18 @@ fn runBlocksOnce(
     defer output_stack.deinit(allocator);
 
     for (module.late_layout.items.items) |block| {
-        try runStatements(allocator, module, &active, &output_stack, &context, block.body, callbacks);
+        const previous_expansion = module.diagnostics.active_expansion;
+        module.diagnostics.active_expansion = block.span.expansion;
+        defer module.diagnostics.active_expansion = previous_expansion;
+        const diagnostic_start = module.diagnostics.items.items.len;
+        runStatements(allocator, module, &active, &output_stack, &context, block.body, callbacks) catch |err| {
+            if (err == error.OutOfMemory) return err;
+            if (block.span.expansion != null and module.diagnostics.items.items.len == diagnostic_start) {
+                try module.diagnostics.add(allocator, .err, block.span, @errorName(err));
+                return error.FrontendDiagnostics;
+            }
+            return err;
+        };
     }
 
     if (output_stack.items.len != 0) return error.UnclosedVirtualOutput;
@@ -202,6 +213,7 @@ fn cloneStatement(
         .meta_break,
         .meta_continue,
         .meta_fn,
+        .macro_def,
         .meta_return,
         .meta_block,
         .meta_defer,
@@ -245,6 +257,7 @@ fn freezeStatementAppend(
         .meta_break,
         .meta_continue,
         .meta_fn,
+        .macro_def,
         .meta_return,
         .meta_block,
         .meta_defer,

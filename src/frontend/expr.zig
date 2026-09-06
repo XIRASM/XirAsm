@@ -217,10 +217,22 @@ pub const EvalContext = struct {
     next_unique_symbol: ?*const fn (context: *anyopaque, allocator: Allocator, prefix: []const u8) ExpressionError![]u8 = null,
     call_user_function: ?*const fn (context: *anyopaque, allocator: Allocator, name: []const u8, args: []const BuiltinArgument, eval_ctx: *EvalContext) ExpressionError!value_mod.Value = null,
     evaluate_struct_literal: ?*const fn (context: *anyopaque, allocator: Allocator, text: []const u8, eval_ctx: *EvalContext) ExpressionError!value_mod.Value = null,
+    eval_operand: ?*const fn (*anyopaque, Allocator, value_mod.OperandValue, *EvalContext) ExpressionError!value_mod.Value = null,
+    undefined_symbols: []const []const u8 = &.{},
 };
 
 pub fn parseOwned(allocator: Allocator, input: []const u8) ExpressionError!Node {
     var parser = ExpressionParser.init(allocator, input);
+    return parser.parse();
+}
+
+pub const SymbolMapper = struct {
+    context: *anyopaque,
+    map: *const fn (*anyopaque, Allocator, []const u8, usize, bool) ExpressionError![]u8,
+};
+
+pub fn parseOwnedWithSymbols(allocator: Allocator, input: []const u8, mapper: SymbolMapper) ExpressionError!Node {
+    var parser: ExpressionParser = .{ .allocator = allocator, .input = input, .symbol_mapper = mapper };
     return parser.parse();
 }
 
@@ -295,6 +307,7 @@ pub fn evaluateValue(allocator: Allocator, node: *const Node, ctx: *EvalContext)
 }
 
 const ExpressionParser = struct {
+    symbol_mapper: ?SymbolMapper = null,
     allocator: Allocator,
     input: []const u8,
     pos: usize = 0,
@@ -549,6 +562,7 @@ const ExpressionParser = struct {
     }
 
     fn parseIdentifierOrBuiltin(self: *ExpressionParser) ExpressionError!Node {
+        const start = self.pos;
         var token: std.ArrayList(u8) = .empty;
         defer token.deinit(self.allocator);
 
@@ -580,7 +594,12 @@ const ExpressionParser = struct {
             return self.parseBuiltinCall(token.items);
         }
 
-        return .{ .symbol = try self.allocator.dupe(u8, token.items) };
+        return .{ .symbol = try self.mapSymbol(token.items, start, false) };
+    }
+
+    fn mapSymbol(self: *ExpressionParser, name: []const u8, start: usize, allow_unbound: bool) ExpressionError![]u8 {
+        if (self.symbol_mapper) |mapper| return mapper.map(mapper.context, self.allocator, name, start, allow_unbound);
+        return self.allocator.dupe(u8, name);
     }
 
     fn appendDottedBuiltinSuffix(self: *ExpressionParser, token: *std.ArrayList(u8)) ExpressionError!void {
@@ -593,6 +612,7 @@ const ExpressionParser = struct {
             !std.mem.eql(u8, token.items, "map") and
             !std.mem.eql(u8, token.items, "sym") and
             !std.mem.eql(u8, token.items, "tokens") and
+            !std.mem.eql(u8, token.items, "operand") and
             !std.mem.eql(u8, token.items, "match"))
         {
             return;
@@ -608,7 +628,7 @@ const ExpressionParser = struct {
             try token.append(self.allocator, try self.requireByte());
         }
 
-        if ((std.mem.eql(u8, token.items, "load.bytes") or loadByteCount(token.items) != null or meta_std.isBuiltinName(token.items) or meta_data.isBuiltinName(token.items) or std.mem.eql(u8, token.items, "sym.unique")) and self.peekByte() == '(') return;
+        if ((std.mem.eql(u8, token.items, "load.bytes") or loadByteCount(token.items) != null or meta_std.isBuiltinName(token.items) or meta_data.isBuiltinName(token.items) or @import("macro.zig").isOperandBuiltin(token.items) or std.mem.eql(u8, token.items, "sym.unique")) and self.peekByte() == '(') return;
 
         self.pos = saved_pos;
         token.shrinkRetainingCapacity(saved_len);
@@ -694,7 +714,11 @@ const ExpressionParser = struct {
                     (!saw_field_separator or allow_dotted_identifier) and
                     (next == ',' or next == ')'))
                 {
-                    return .{ .identifier = try self.allocator.dupe(u8, self.input[start..ident_end]) };
+                    const name = self.input[start..ident_end];
+                    if (std.mem.eql(u8, builtin_name, "sizeof") or std.mem.eql(u8, builtin_name, "offset_of")) {
+                        return .{ .identifier = try self.allocator.dupe(u8, name) };
+                    }
+                    return .{ .identifier = try self.mapSymbol(name, start, std.mem.eql(u8, builtin_name, "label_addr")) };
                 }
                 self.pos = start;
             }
@@ -984,6 +1008,32 @@ fn evalFloatArithmetic(comptime T: type, op: BinaryOp, left: T, right: T) Expres
 }
 
 fn evalBuiltinCall(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) ExpressionError!value_mod.Value {
+    if (@import("macro.zig").isOperandBuiltin(call.name)) {
+        const slicing = std.mem.eql(u8, call.name, "operand.slice");
+        if (call.args.len != @as(usize, if (slicing) 3 else 1)) return error.InvalidArgument;
+        var argument = try evaluateBuiltinValueArg(allocator, call.args[0], ctx);
+        defer argument.deinit(allocator);
+        const operand = switch (argument) {
+            .operand => |captured| captured,
+            else => return error.TypeMismatch,
+        };
+        if (std.mem.eql(u8, call.name, "operand.text")) return .{ .string = try operand.text(allocator) };
+        if (std.mem.eql(u8, call.name, "operand.split")) return @import("macro.zig").splitValue(allocator, operand) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return error.InvalidArgument,
+        };
+        if (slicing) {
+            const start = try evaluateBuiltinIntegerArg(allocator, call.args[1], ctx);
+            const end = try evaluateBuiltinIntegerArg(allocator, call.args[2], ctx);
+            return .{ .operand = @import("macro.zig").sliceOperand(allocator, operand, start, end) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => return error.InvalidArgument,
+            } };
+        }
+        if (!std.mem.eql(u8, call.name, "operand.eval")) return error.InvalidArgument;
+        const callback = ctx.eval_operand orelse return error.InvalidOperand;
+        return callback(ctx.local_context orelse return error.InvalidOperand, allocator, operand, ctx);
+    }
     if (meta_std.isBuiltinName(call.name)) {
         return evalMetaStdBuiltin(allocator, call, ctx);
     }
@@ -1278,7 +1328,7 @@ fn evalFieldAccess(allocator: Allocator, access: FieldAccess, ctx: *EvalContext)
 
     const struct_value = switch (object) {
         .@"struct" => |stored| stored,
-        .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.TypeMismatch,
     };
 
     return (try struct_value.fieldValueByName(allocator, access.field_name)) orelse error.UnknownField;
@@ -1311,7 +1361,7 @@ fn builtinLabelNameArg(allocator: Allocator, call: BuiltinCall, index: usize, ct
             defer resolved.deinit(allocator);
             break :blk switch (resolved) {
                 .string => |text| try allocator.dupe(u8, text),
-                .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => try allocator.dupe(u8, name),
+                .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => try allocator.dupe(u8, name),
             };
         },
         .expression => builtinStringArg(allocator, call, index, ctx),
@@ -1320,7 +1370,11 @@ fn builtinLabelNameArg(allocator: Allocator, call: BuiltinCall, index: usize, ct
 }
 
 fn sizeofType(ctx: *EvalContext, name: []const u8) ExpressionError!u64 {
-    const id = ctx.module.lookupTypeName(name) orelse return error.UnknownTypeName;
+    const id = (@import("type_name.zig").resolveNamedOrFixedInteger(ctx.module, name) catch |err| return switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        error.InvalidIntegerBits => error.InvalidIntegerBits,
+        error.DuplicateTypeName, error.TooManyTypes => error.InvalidType,
+    }) orelse return error.UnknownTypeName;
     return (ctx.module.typeLayout(id) catch return error.InvalidOperand).size;
 }
 
@@ -1525,6 +1579,9 @@ fn loadByteCount(name: []const u8) ?u8 {
 }
 
 fn resolveSymbolValue(allocator: Allocator, ctx: *EvalContext, name: []const u8) ExpressionError!value_mod.Value {
+    for (ctx.undefined_symbols) |missing| {
+        if (std.mem.eql(u8, name, missing)) return error.UndefinedSymbol;
+    }
     if (ctx.resolve_local) |resolve_local| {
         if (ctx.local_context) |local_context| {
             if (try resolve_local(local_context, allocator, name)) |value| return value;
@@ -1732,6 +1789,7 @@ fn isBuiltinName(name: []const u8) bool {
         std.mem.eql(u8, name, "load.bytes") or
         meta_std.isBuiltinName(name) or
         meta_data.isBuiltinName(name) or
+        @import("macro.zig").isOperandBuiltin(name) or
         loadByteCount(name) != null;
 }
 

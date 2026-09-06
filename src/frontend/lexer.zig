@@ -202,6 +202,7 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
     return std.mem.eql(u8, first_word, "let") or
         std.mem.eql(u8, first_word, "const") or
         std.mem.eql(u8, first_word, "fn") or
+        std.mem.eql(u8, first_word, "macro") or
         std.mem.eql(u8, first_word, "meta") or
         std.mem.eql(u8, first_word, "packed") or
         std.mem.eql(u8, first_word, "for") or
@@ -222,6 +223,10 @@ fn looksLikeMetaLine(trimmed: []const u8) bool {
 fn looksLikeBareDirective(trimmed: []const u8) bool {
     const first_word = firstWord(trimmed);
     return isBareDirectiveName(first_word) and !hasCallOpenAfterCallee(trimmed);
+}
+
+pub fn isMacroNameAvailable(name: []const u8) bool {
+    return classifyTrimmed(name) == .isa_line;
 }
 
 fn isBareDirectiveName(name: []const u8) bool {

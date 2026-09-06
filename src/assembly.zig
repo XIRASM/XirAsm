@@ -134,9 +134,20 @@ fn runDeferredFinalizers(
     };
 
     for (module.deferred.items.items) |block| {
+        const previous_expansion = module.diagnostics.active_expansion;
+        module.diagnostics.active_expansion = block.span.expansion;
+        defer module.diagnostics.active_expansion = previous_expansion;
         try frontend.lower.pushMetaScope(state.lower_context, state.allocator);
         defer frontend.lower.popMetaScope(state.lower_context, state.allocator);
-        try runDeferredStatements(&state, block.body);
+        const diagnostic_start = module.diagnostics.items.items.len;
+        runDeferredStatements(&state, block.body) catch |err| {
+            if (err == error.OutOfMemory) return err;
+            if (block.span.expansion != null and module.diagnostics.items.items.len == diagnostic_start) {
+                try module.diagnostics.add(module.allocator, .err, block.span, @errorName(err));
+                return error.FrontendDiagnostics;
+            }
+            return err;
+        };
     }
 }
 
@@ -291,7 +302,7 @@ fn runDeferredStoreBytes(state: *FinalizerState, call: frontend.ast.ApiCallState
     const bytes = switch (value) {
         .bytes => |data| data,
         .string => |text| text,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
     };
     if (target.explicit_section)
         try state.image.storeBytesInSection(target.section, target.address, bytes)
@@ -462,7 +473,7 @@ fn formatDeferredValue(allocator: Allocator, value: frontend.Value) ![]u8 {
         .string => |text| allocator.dupe(u8, text),
         .bytes => |bytes| formatBytesValue(allocator, bytes),
         .type => |id| std.fmt.allocPrint(allocator, "type({d})", .{id.index}),
-        .@"struct", .list, .map => error.InvalidApiArgument,
+        .operand, .@"struct", .list, .map => error.InvalidApiArgument,
     };
 }
 

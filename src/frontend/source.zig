@@ -10,6 +10,7 @@ pub const SourceSpan = struct {
     source: ?SourceId = null,
     start: u32 = 0,
     end: u32 = 0,
+    expansion: ?u32 = null,
 };
 
 pub const unknown_span: SourceSpan = .{};

@@ -15,7 +15,7 @@ const ActiveOutput = contracts.ActiveOutput;
 const LowerContext = context_mod.LowerContext;
 const LowerError = contracts.LowerError;
 
-const max_call_depth = 128;
+const max_call_depth = @import("../macro.zig").max_call_depth;
 
 pub const Callbacks = struct {
     lower_statement_slice: *const fn (Allocator, *module_mod.Module, *ActiveOutput, *std.ArrayList(ActiveOutput), []const ast.Statement, *LowerContext) LowerError!void,
@@ -188,6 +188,7 @@ pub fn evalValueFunctionAt(
         .next_unique_symbol = nextUniqueSymbol,
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,
+        .eval_operand = @import("../macro.zig").evaluateOperand,
     };
     const previous_output_image = context.output_image;
     context.output_image = output_image;

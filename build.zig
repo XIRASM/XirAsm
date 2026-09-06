@@ -144,6 +144,8 @@ pub fn build(b: *std.Build) void {
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
+    const unit_step = b.step("test-unit", "Run frontend unit and allocation-failure tests");
+    unit_step.dependOn(&run_mod_tests.step);
 
     // Creates an executable that will run `test` blocks from the executable's
     // root module. Note that test executables only test one module at a time,
@@ -490,6 +492,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/token_match_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/dynamic_symbols.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/isa_text.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/macro_core.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/include_import/defs.inc"));
     run_api_matrix.addFileArg(b.path("tests/meta/include_import/inline.inc"));
     run_api_matrix.addFileArg(b.path("tests/meta/include_import/main.asm"));
@@ -553,6 +556,24 @@ pub fn build(b: *std.Build) void {
     release_boundary_step.dependOn(&run_release_boundary.step);
 
     const fixture_step = b.step("test-fixtures", "Assemble source fixtures with the compiled CLI");
+    const macro_step = b.step("test-macros", "Validate statement macros and A64 instruction wrappers");
+    macro_step.dependOn(&run_mod_tests.step);
+    fixture_step.dependOn(macro_step);
+    const macro_inputs: []const []const u8 = &.{ "include/arm/arm64-macros.inc", "include/arm/arm64/asm_macro.inc", "include/arm/arm64/macro_operands.inc" };
+    addAsmFixtureInstalled(b, macro_step, exe, fixture_checker, "tests/isa/arm/arm64-macros.asm", "arm64-macros.bin", "x64", "1f2003d5400580d28046a2f2e10300aae10300aa22ac0091430801cba40840f9e40f1ff8e40741f8e6805ff8e0073fa9600000b440000054f2ffff17c0035fd6", macro_inputs);
+    for ([_]struct { name: []const u8, size: []const u8 }{
+        .{ .name = "arm64-m2-asm-sugar-macros", .size = "96" },
+        .{ .name = "arm64-m3-cond-macros", .size = "152" },
+        .{ .name = "arm64-m4-memory-macros", .size = "4253" },
+        .{ .name = "arm64-m45-addr-macros", .size = "116" },
+    }) |fixture| {
+        addAsmSizeFixtureInstalled(b, macro_step, exe, file_size_checker, b.fmt("tests/isa/arm/{s}.asm", .{fixture.name}), b.fmt("{s}.bin", .{fixture.name}), "x64", fixture.size, macro_inputs);
+    }
+    for ([_][]const u8{ "prefix", "register", "shift", "immediate", "writeback", "missing-label", "misaligned-label" }) |name| {
+        addFailingAsmFixtureWithInputs(b, macro_step, exe, b.fmt("tests/isa/arm/negative/macro-{s}.asm", .{name}), "x64", macro_inputs, "macro invoked here");
+    }
+    addFailingAsmFixtureWithInputs(b, macro_step, exe, "tests/isa/arm/negative/macro-arity.asm", "x64", macro_inputs, "MacroArityMismatch");
+    addFailingAsmFixtureWithInputs(b, macro_step, exe, "tests/isa/arm/negative/macro-brackets.asm", "x64", macro_inputs, "InvalidMacroOperands");
     const api_reference_step = b.step(
         "test-api-reference",
         "Validate API Reference examples and diagnostics",
@@ -4354,6 +4375,16 @@ pub fn build(b: *std.Build) void {
         "meta-isa-text.bin",
         "x64",
         "c5fc58c1c5f458cac5ec58d3c3",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/macro_core.asm",
+        "meta-macro-core.bin",
+        "x64",
+        "08080801020300010289d890",
     );
     addAsmFixture(
         b,

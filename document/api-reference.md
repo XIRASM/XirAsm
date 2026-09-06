@@ -510,6 +510,67 @@ The source emits:
 | End the innermost loop early | `break` |
 | Skip the rest of one iteration | `continue` |
 
+#### Statement Macros
+
+```asm
+macro emit_byte(value) {
+    emit.u8(operand.eval(value))
+}
+emit_byte 42
+```
+
+`macro name(parameters) {` starts a multiline top-level declaration. Parameters
+are immutable `operand` values; a final `...name` is a `list` of operands.
+No parameter annotations, defaults, return types, or return statements are
+allowed. Definitions are ordered and case-sensitive. Dot-separated names are
+allowed; duplicate parameter names, duplicate exact arities, multiple variadic
+overloads, and names reserved by statement syntax are rejected.
+
+Calls use instruction syntax. Exact arity wins over a matching variadic overload.
+A known name with mismatching arity reports `MacroArityMismatch`. Empty operands,
+unbalanced delimiters, and semicolon-separated instruction text are invalid.
+`name (expression)` is a one-operand call; `name(expression)` remains function
+syntax. Macros may shadow native mnemonics; `isa(text)` bypasses macro lookup.
+
+| API | Result | Contract |
+| --- | --- | --- |
+| `operand.text(op)` | `string` | Returns spelling without evaluating it. |
+| `operand.eval(op)` | expression value | Uses captured value bindings and the existing Meta evaluator. |
+| `operand.slice(op, start, end)` | `operand` | Half-open byte range; requires `0 <= start <= end <= byte length`. |
+| `operand.split(op)` | `list` | Top-level comma split preserving each piece's capture; empty text gives an empty list. |
+
+All four APIs require an `operand`, with no implicit string conversion. Slices
+may select any valid byte range; evaluating incomplete tokens is an expression
+error. Empty slices are valid values but cannot be evaluated. Operand values
+may be cloned into collections and outlive the invocation; their captures remain
+immutable. Collection equality compares operand pieces and capture identity,
+not only spelling. Compare `operand.text` results for spelling equality.
+
+Captured bindings preserve caller values before later mutations or callee
+shadowing. Operand-valued identifiers in instruction operands forward their
+original capture; ordinary strings and quoted text do not substitute. Forwarded
+text is not rescanned. Mixed templates preserve each piece's value bindings;
+called functions and location builtins use the first piece's capture context.
+Repeated explicit evaluation repeats expression execution. Unknown identifiers
+are errors, not zero or deferred macro-local lookups.
+
+Macros execute once per reached call during lowering, with ordinary Meta typing,
+scopes, control flow and side-effect restrictions. Encoding and layout do not
+re-execute them. Static labels remain module labels; use `sym.unique` and
+`label.define` for private labels. A macro may register a valid finalizer but
+stored `defer`/`late_layout` bodies cannot contain macro definitions or calls.
+Limits: 128 shared function/macro call depth, 100,000 cumulative macro calls,
+256 operands per call, and 64 nested operand delimiters.
+References through previously saved operand captures are limited to 128 levels
+(`MacroCaptureDepthExceeded`). Snapshots copy visible value bindings; storing
+evaluated values avoids retaining unnecessary environments and large collections.
+
+The opt-in `arm/arm64-macros.inc` exposes the integer, branch and memory/address
+families supported by the existing A64 text adapter through direct DSL calls.
+`#` immediate prefixes are parsed by this include, not by `operand.eval`.
+Its mnemonic ownership is not target-scoped; `arm/arm64.inc` remains API-only.
+See the language guide for usage and supported scope.
+
 ### Chapter 3: Structs, Unions, and Aggregate Values
 
 Structs and unions describe binary layouts. Their values exist during assembly

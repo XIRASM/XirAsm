@@ -156,7 +156,7 @@ pub fn lowerApiCall(
         defer value.deinit(module.allocator);
         const name = switch (value) {
             .string => |text| text,
-            .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         if (!identifier.isName(name)) return error.InvalidApiArgument;
         const fragment_position = try callbacks.active_fragment_position(module, active.section_id);
@@ -350,7 +350,7 @@ pub fn lowerApiCall(
         const bytes = switch (value) {
             .bytes => |data| data,
             .string => |text| text,
-            .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         const fragment_id = try module.emitBytes(active.section_id, bytes, call.span);
         try callbacks.advance_active_output(active, module.fragments.items.items[fragment_id.index]);
@@ -370,7 +370,7 @@ pub fn lowerApiCall(
         defer value.deinit(module.allocator);
         const struct_value = switch (value) {
             .@"struct" => |stored| stored,
-            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
         };
         const bytes = try callbacks.emit_struct_value(module, struct_value);
         defer module.allocator.free(bytes);
@@ -402,7 +402,7 @@ pub fn lowerApiCall(
         const bytes = switch (value) {
             .bytes => |data| data,
             .string => |text| text,
-            .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+            .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
         };
         try module.storeBytesAt(store_target.section, store_target.address, bytes);
         return;
@@ -453,6 +453,10 @@ pub fn lowerApiCall(
         return;
     }
 
+    if (context.macros.contains(call.callee)) {
+        try module.diagnostics.add(allocator, .err, call.span, "macro calls use instruction syntax without parentheses");
+        return error.FrontendDiagnostics;
+    }
     return error.UnknownApiCall;
 }
 

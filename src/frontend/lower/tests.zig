@@ -869,6 +869,16 @@ test "lowering treats lexical import aliases as one source" {
     try std.testing.expectEqual(@as(usize, 1), text.fragments.items.len);
 }
 
+test "macro definitions survive imported AST teardown and import deduplication" {
+    const files = [_]TestIncludeFile{.{ .path = "src/macros.inc", .bytes = "macro byte(x) {\n emit.u8(operand.eval(x))\n}\n" }};
+    var resolver: TestIncludeResolver = .{ .files = &files };
+    var module = try module_mod.Module.init(std.testing.allocator, target.Target.default);
+    defer module.deinit();
+    try lowerSourceIntoModuleWithPathOptions(std.testing.allocator, &module, "src/main.asm", "import(\"macros.inc\")\nimport(\"./macros.inc\")\nbyte 42\n", .{ .include_resolver = .{ .context = &resolver, .resolve = TestIncludeResolver.resolve } });
+    try std.testing.expectEqual(@as(usize, 1), module.fragments.items.items.len);
+    try std.testing.expectEqualSlices(u8, &.{42}, module.fragments.items.items[0].bytes.data);
+}
+
 test "module remembers imports across separate lowering sessions" {
     const files = [_]TestIncludeFile{
         .{

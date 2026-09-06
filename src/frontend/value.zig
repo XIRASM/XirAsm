@@ -22,6 +22,7 @@ pub const ValueType = enum {
     @"struct",
     list,
     map,
+    operand,
 };
 
 pub const MutableValueLookup = union(enum) {
@@ -43,6 +44,7 @@ pub fn valueTypeFromName(name: []const u8) ?ValueType {
     if (std.mem.eql(u8, name, "struct")) return .@"struct";
     if (std.mem.eql(u8, name, "list")) return .list;
     if (std.mem.eql(u8, name, "map")) return .map;
+    if (std.mem.eql(u8, name, "operand")) return .operand;
     return null;
 }
 
@@ -276,6 +278,78 @@ pub const MapValue = struct {
     }
 };
 
+pub const OperandEnvironment = struct {
+    pub const max_depth = 128;
+
+    allocator: std.mem.Allocator,
+    depth: usize = 1,
+    active_target: ?@import("target.zig").Target = null,
+    active_section: ?@import("fragment.zig").SectionId = null,
+    active_offset: u64 = 0,
+    active_file_offset: ?u64 = null,
+    references: usize = 1,
+    bindings: MapValue,
+
+    pub fn retain(self: *OperandEnvironment) std.mem.Allocator.Error!void {
+        self.references = std.math.add(usize, self.references, 1) catch return error.OutOfMemory;
+    }
+
+    pub fn release(self: *OperandEnvironment, _: std.mem.Allocator) void {
+        self.references -= 1;
+        if (self.references != 0) return;
+        const owner = self.allocator;
+        self.bindings.deinit(owner);
+        owner.destroy(self);
+    }
+};
+
+pub const OperandPiece = struct {
+    text: []u8,
+    environment: *OperandEnvironment,
+
+    pub fn deinit(self: *OperandPiece, allocator: std.mem.Allocator) void {
+        allocator.free(self.text);
+        self.environment.release(allocator);
+    }
+
+    pub fn clone(self: OperandPiece, allocator: std.mem.Allocator) std.mem.Allocator.Error!OperandPiece {
+        const text = try allocator.dupe(u8, self.text);
+        errdefer allocator.free(text);
+        try self.environment.retain();
+        return .{ .text = text, .environment = self.environment };
+    }
+};
+
+pub const OperandValue = struct {
+    pieces: []OperandPiece,
+
+    pub fn deinit(self: *OperandValue, allocator: std.mem.Allocator) void {
+        for (self.pieces) |*piece| piece.deinit(allocator);
+        allocator.free(self.pieces);
+    }
+
+    pub fn clone(self: OperandValue, allocator: std.mem.Allocator) std.mem.Allocator.Error!OperandValue {
+        const pieces = try allocator.alloc(OperandPiece, self.pieces.len);
+        var count: usize = 0;
+        errdefer {
+            for (pieces[0..count]) |*piece| piece.deinit(allocator);
+            allocator.free(pieces);
+        }
+        for (self.pieces, 0..) |piece, index| {
+            pieces[index] = try piece.clone(allocator);
+            count += 1;
+        }
+        return .{ .pieces = pieces };
+    }
+
+    pub fn text(self: OperandValue, allocator: std.mem.Allocator) std.mem.Allocator.Error![]u8 {
+        var result: std.ArrayList(u8) = .empty;
+        errdefer result.deinit(allocator);
+        for (self.pieces) |piece| try result.appendSlice(allocator, piece.text);
+        return result.toOwnedSlice(allocator);
+    }
+};
+
 pub const Value = union(enum) {
     void,
     integer: IntegerValue,
@@ -288,6 +362,27 @@ pub const Value = union(enum) {
     @"struct": StructValue,
     list: ListValue,
     map: MapValue,
+    operand: OperandValue,
+
+    pub fn operandCaptureDepth(self: Value) usize {
+        var depth: usize = 0;
+        switch (self) {
+            .operand => |op| for (op.pieces) |piece| {
+                depth = @max(depth, piece.environment.depth);
+            },
+            .list => |list| for (list.items) |item| {
+                depth = @max(depth, item.operandCaptureDepth());
+            },
+            .map => |map| for (map.entries) |entry| {
+                depth = @max(depth, entry.value.operandCaptureDepth());
+            },
+            .@"struct" => |aggregate| for (aggregate.fields) |field| {
+                depth = @max(depth, field.value.operandCaptureDepth());
+            },
+            else => {},
+        }
+        return depth;
+    }
 
     pub fn int(value: u64) Value {
         return .{ .integer = IntegerValue.untyped(value) };
@@ -304,6 +399,7 @@ pub const Value = union(enum) {
             .@"struct" => |*struct_value| struct_value.deinit(allocator),
             .list => |*list| list.deinit(allocator),
             .map => |*map| map.deinit(allocator),
+            .operand => |*operand| operand.deinit(allocator),
         }
         self.* = undefined;
     }
@@ -321,6 +417,7 @@ pub const Value = union(enum) {
             .@"struct" => |struct_value| .{ .@"struct" = try struct_value.clone(allocator) },
             .list => |list| .{ .list = try list.clone(allocator) },
             .map => |map| .{ .map = try map.clone(allocator) },
+            .operand => |operand| .{ .operand = try operand.clone(allocator) },
         };
     }
 
@@ -337,83 +434,84 @@ pub const Value = union(enum) {
             .@"struct" => .@"struct",
             .list => .list,
             .map => .map,
+            .operand => .operand,
         };
     }
 
     pub fn expectInteger(self: Value) !u64 {
         return switch (self) {
             .integer => |integer| integer.value,
-            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
+            .operand, .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
         };
     }
 
     pub fn expectIntegerValue(self: Value) !IntegerValue {
         return switch (self) {
             .integer => |integer| integer,
-            .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
+            .operand, .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedInteger,
         };
     }
 
     pub fn expectFloat32(self: Value) !f32 {
         return switch (self) {
             .float32 => |value| value,
-            .void, .integer, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat32,
+            .operand, .void, .integer, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat32,
         };
     }
 
     pub fn expectFloat64(self: Value) !f64 {
         return switch (self) {
             .float64 => |value| value,
-            .void, .integer, .float32, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat64,
+            .operand, .void, .integer, .float32, .boolean, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedFloat64,
         };
     }
 
     pub fn expectBoolean(self: Value) !bool {
         return switch (self) {
             .boolean => |value| value,
-            .void, .integer, .float32, .float64, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedBoolean,
+            .operand, .void, .integer, .float32, .float64, .string, .bytes, .type, .@"struct", .list, .map => error.ExpectedBoolean,
         };
     }
 
     pub fn expectString(self: Value) ![]const u8 {
         return switch (self) {
             .string => |text| text,
-            .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.ExpectedString,
+            .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.ExpectedString,
         };
     }
 
     pub fn expectBytes(self: Value) ![]const u8 {
         return switch (self) {
             .bytes => |data| data,
-            .void, .integer, .float32, .float64, .boolean, .string, .type, .@"struct", .list, .map => error.ExpectedBytes,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .type, .@"struct", .list, .map => error.ExpectedBytes,
         };
     }
 
     pub fn expectType(self: Value) !types.TypeId {
         return switch (self) {
             .type => |id| id,
-            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .@"struct", .list, .map => error.ExpectedType,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .@"struct", .list, .map => error.ExpectedType,
         };
     }
 
     pub fn expectStruct(self: Value) !StructValue {
         return switch (self) {
             .@"struct" => |struct_value| struct_value,
-            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => error.ExpectedStruct,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => error.ExpectedStruct,
         };
     }
 
     pub fn expectList(self: Value) !ListValue {
         return switch (self) {
             .list => |list| list,
-            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .map => error.ExpectedList,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .map => error.ExpectedList,
         };
     }
 
     pub fn expectMap(self: Value) !MapValue {
         return switch (self) {
             .map => |map| map,
-            .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list => error.ExpectedMap,
+            .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list => error.ExpectedMap,
         };
     }
 };
@@ -437,6 +535,16 @@ pub fn cloneValueSlice(allocator: std.mem.Allocator, values: []const Value) std.
 
 pub fn valuesEqual(left: Value, right: Value) bool {
     return switch (left) {
+        .operand => |left_operand| switch (right) {
+            .operand => |right_operand| blk: {
+                if (left_operand.pieces.len != right_operand.pieces.len) break :blk false;
+                for (left_operand.pieces, right_operand.pieces) |a, b| {
+                    if (a.environment != b.environment or !std.mem.eql(u8, a.text, b.text)) break :blk false;
+                }
+                break :blk true;
+            },
+            else => false,
+        },
         .void => right == .void,
         .integer => |left_integer| switch (right) {
             .integer => |right_integer| left_integer.value == right_integer.value,
@@ -572,14 +680,14 @@ fn writeFieldValue(
         .int => |int_type| {
             const integer = switch (value) {
                 .integer => |stored| stored.value,
-                .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+                .operand, .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
             };
             try writeIntegerField(bytes, base_offset, field, integer, int_type);
         },
         .@"struct", .@"union" => {
             const nested = switch (value) {
                 .@"struct" => |stored| stored,
-                .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
+                .operand, .void, .integer, .float32, .float64, .boolean, .string, .bytes, .type, .list, .map => return error.InvalidApiArgument,
             };
             if (nested.type_id.index != field.ty.index) return error.InvalidType;
             const nested_offset = std.math.add(u64, base_offset, field.offset) catch return error.IntegerOverflow;

@@ -75,7 +75,7 @@ pub fn evalValueAtContext(
     return expr.evaluateValue(allocator, node, &ctx) catch |err| return mapExpressionError(err);
 }
 
-fn evalContext(
+pub fn evalContext(
     module: *module_mod.Module,
     context: *LowerContext,
     active: ActiveExpressionContext,
@@ -95,6 +95,7 @@ fn evalContext(
         .next_unique_symbol = callbacks.next_unique_symbol,
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,
+        .eval_operand = @import("../macro.zig").evaluateOperand,
     };
 }
 

@@ -167,7 +167,7 @@ fn evalTomlParse(allocator: Allocator, args: []const value_mod.Value) Error!valu
     const source = switch (args[0]) {
         .string => |text| text,
         .bytes => |bytes| bytes,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     return parseTomlValue(allocator, source);
 }
@@ -184,7 +184,7 @@ fn evalJsonParse(allocator: Allocator, args: []const value_mod.Value) Error!valu
     const source = switch (args[0]) {
         .string => |text| text,
         .bytes => |bytes| bytes,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     return parseJsonValue(allocator, source);
 }
@@ -357,14 +357,14 @@ fn jsonObjectToMap(allocator: Allocator, object: std.json.ObjectMap) Error![]val
 fn expectString(value: value_mod.Value) Error![]const u8 {
     return switch (value) {
         .string => |text| text,
-        .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => error.TypeMismatch,
     };
 }
 
 fn expectUsize(value: value_mod.Value) Error!usize {
     const integer = switch (value) {
         .integer => |stored| stored.value,
-        .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .operand, .void, .float32, .float64, .boolean, .string, .bytes, .type, .@"struct", .list, .map => return error.TypeMismatch,
     };
     if (integer > std.math.maxInt(usize)) return error.InvalidApiInteger;
     return @intCast(integer);

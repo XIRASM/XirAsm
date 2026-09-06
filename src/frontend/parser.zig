@@ -25,6 +25,7 @@ pub const ParseError = Allocator.Error || error{
     InvalidLateLayout,
     InvalidMetaFor,
     InvalidMetaFunction,
+    InvalidMacro,
     InvalidMetaIf,
     InvalidMetaWhile,
     UnexpectedEndOfMetaBlock,
@@ -92,6 +93,8 @@ pub const Parser = struct {
                         try appendStructDeclaration(self, &statements, token);
                     } else if (looksLikeMetaFunctionStart(token.text)) {
                         try appendMetaFunctionStatement(self, &statements, token);
+                    } else if (looksLikeMacroStart(token.text)) {
+                        try appendMacroStatement(self, &statements, token);
                     } else if (looksLikeMetaForStart(token.text)) {
                         try appendMetaForStatement(self, &statements, token);
                     } else if (looksLikeMetaWhileStart(token.text)) {
@@ -191,7 +194,7 @@ pub const Parser = struct {
 fn metaFunctionSignatureNeedsContinuation(token: lexer.Token) ParseError!bool {
     if (token.kind != .meta_line) return false;
     const trimmed = std.mem.trim(u8, token.text, " \t\r\n");
-    if (!std.mem.startsWith(u8, trimmed, "fn ")) return false;
+    if (!std.mem.startsWith(u8, trimmed, "fn ") and !looksLikeMacroStart(trimmed)) return false;
     const balance = try scanStatementBalance(token.text, .{});
     return balance.paren_depth != 0 or balance.in_string != null;
 }
@@ -334,7 +337,15 @@ fn appendApiCall(
     allocator: Allocator,
     token: lexer.Token,
 ) ParseError!void {
-    var parsed = try parseApiCall(allocator, token.text, token.span);
+    var parsed = parseApiCall(allocator, token.text, token.span) catch |err| {
+        if (err == error.OutOfMemory) return err;
+        const open = std.mem.indexOfScalar(u8, token.text, '(') orelse return err;
+        if (open == 0 or !std.ascii.isWhitespace(token.text[open - 1])) return err;
+        // A statement macro can start with a parenthesized operand. Its name
+        // is resolved during lowering, after ordered imports and definitions.
+        try appendOwnedText(statements, allocator, .isa_line, token);
+        return;
+    };
     errdefer parsed.deinit(allocator);
 
     try statements.append(allocator, .{
@@ -583,6 +594,76 @@ fn appendMetaFunctionStatement(
     return error.UnexpectedEndOfMetaFunction;
 }
 
+fn looksLikeMacroStart(text: []const u8) bool {
+    return text.len > 5 and std.mem.eql(u8, text[0..5], "macro") and
+        std.ascii.isWhitespace(text[5]);
+}
+
+fn appendMacroStatement(parser: *Parser, statements: *ast.StatementList, token: lexer.Token) ParseError!void {
+    parser.last_error_span = token.span;
+    var declaration = try parseMacroStart(parser.allocator, token.text, token.span);
+    errdefer declaration.deinit(parser.allocator);
+    var body: ast.StatementList = .{};
+    errdefer body.deinit(parser.allocator);
+    while (!parser.lexer.done()) {
+        const next = try parser.lexer.next();
+        if (next.kind == .meta_block_end) {
+            declaration.definition.body = try body.items.toOwnedSlice(parser.allocator);
+            try statements.append(parser.allocator, .{ .macro_def = declaration });
+            parser.last_error_span = null;
+            return;
+        }
+        try appendExecutableStatement(parser, &body, next);
+    }
+    return error.UnexpectedEndOfMetaFunction;
+}
+
+fn parseMacroStart(allocator: Allocator, text: []const u8, span: source.SourceSpan) ParseError!ast.MacroStatement {
+    const signature = std.mem.trim(u8, text[5..], statement_ws);
+    if (signature.len == 0 or signature[signature.len - 1] != '{') return error.InvalidMacro;
+    const open = std.mem.indexOfScalar(u8, signature, '(') orelse return error.InvalidMacro;
+    const close = std.mem.lastIndexOfScalar(u8, signature, ')') orelse return error.InvalidMacro;
+    if (close < open or !std.mem.eql(u8, std.mem.trim(u8, signature[close + 1 ..], statement_ws), "{")) return error.InvalidMacro;
+    const name = std.mem.trim(u8, signature[0..open], statement_ws);
+    var segments = std.mem.splitScalar(u8, name, '.');
+    while (segments.next()) |segment| {
+        if (!identifier.isName(segment)) return error.InvalidMacro;
+    }
+    if (!lexer.isMacroNameAvailable(name)) return error.InvalidMacro;
+    const owned_name = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned_name);
+    var params: std.ArrayList(ast.MetaFunctionParam) = .empty;
+    errdefer {
+        for (params.items) |*param| param.deinit(allocator);
+        params.deinit(allocator);
+    }
+    const param_text = std.mem.trim(u8, signature[open + 1 .. close], statement_ws);
+    var variadic = false;
+    if (param_text.len != 0) {
+        var parts = std.mem.splitScalar(u8, param_text, ',');
+        while (parts.next()) |part| {
+            if (variadic) return error.InvalidMacro;
+            var param_name = std.mem.trim(u8, part, statement_ws);
+            if (std.mem.startsWith(u8, param_name, "...")) {
+                variadic = true;
+                param_name = param_name[3..];
+            }
+            if (!identifier.isName(param_name) or std.mem.indexOfScalar(u8, param_name, '.') != null or
+                std.mem.eql(u8, param_name, "true") or std.mem.eql(u8, param_name, "false") or
+                metaParamNameExists(params.items, param_name)) return error.InvalidMacro;
+            const owned_param = try allocator.dupe(u8, param_name);
+            errdefer allocator.free(owned_param);
+            try params.append(allocator, .{ .name = owned_param, .span = span });
+        }
+    }
+    return .{ .definition = .{
+        .name = owned_name,
+        .params = try params.toOwnedSlice(allocator),
+        .body = &.{},
+        .span = span,
+    }, .variadic = variadic };
+}
+
 fn appendMetaBlockStatement(
     parser: *Parser,
     statements: *ast.StatementList,
@@ -686,7 +767,11 @@ fn appendExecutableStatement(
     var owned_token_text: ?[]u8 = null;
     defer if (owned_token_text) |text| parser.allocator.free(text);
 
-    if (statementCanContinue(statement_token)) {
+    if (try metaFunctionSignatureNeedsContinuation(statement_token)) {
+        const continued_text = try parser.collectMetaFunctionSignature(statement_token);
+        owned_token_text = continued_text;
+        statement_token.text = continued_text;
+    } else if (statementCanContinue(statement_token)) {
         if (try parser.collectContinuedStatement(statement_token)) |continued_text| {
             owned_token_text = continued_text;
             statement_token.text = continued_text;
@@ -704,6 +789,8 @@ fn appendExecutableStatement(
                 try appendStructDeclaration(parser, statements, statement_token);
             } else if (looksLikeMetaFunctionStart(statement_token.text)) {
                 try appendMetaFunctionStatement(parser, statements, statement_token);
+            } else if (looksLikeMacroStart(statement_token.text)) {
+                try appendMacroStatement(parser, statements, statement_token);
             } else if (looksLikeMetaForStart(statement_token.text)) {
                 try appendMetaForStatement(parser, statements, statement_token);
             } else if (looksLikeMetaWhileStart(statement_token.text)) {

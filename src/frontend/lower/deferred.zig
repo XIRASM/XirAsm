@@ -79,6 +79,8 @@ fn freezeStatementSlice(
     statements: []const ast.Statement,
     callbacks: Callbacks,
 ) LowerError![]output_mod.DeferredStatement {
+    const previous_names = context.frozen_local_names.items.len;
+    defer context.frozen_local_names.shrinkRetainingCapacity(previous_names);
     var frozen: std.ArrayList(output_mod.DeferredStatement) = .empty;
     errdefer {
         for (frozen.items) |*statement| {
@@ -89,6 +91,9 @@ fn freezeStatementSlice(
 
     for (statements) |statement| {
         try freezeStatementAppend(allocator, context, statement, &frozen, callbacks);
+        if (statement == .value_decl) {
+            try context.frozen_local_names.append(allocator, statement.value_decl.name);
+        }
     }
 
     return frozen.toOwnedSlice(allocator);
@@ -115,6 +120,7 @@ fn cloneStatement(
         .struct_decl,
         .meta_for_range,
         .meta_fn,
+        .macro_def,
         .meta_return,
         .meta_block,
         .meta_defer,
@@ -169,6 +175,7 @@ fn freezeStatementAppend(
         .struct_decl,
         .meta_for_range,
         .meta_fn,
+        .macro_def,
         .meta_return,
         .meta_block,
         .meta_defer,
@@ -435,7 +442,7 @@ fn renderFrozenValue(allocator: Allocator, value: value_mod.Value) LowerError![]
         .boolean => |boolean| try allocator.dupe(u8, if (boolean) "true" else "false"),
         .string => |text| try formatStringLiteral(allocator, text),
         .bytes => |bytes| try formatBytesValue(allocator, bytes),
-        .void, .type, .@"struct", .list, .map => error.InvalidApiArgument,
+        .operand, .void, .type, .@"struct", .list, .map => error.InvalidApiArgument,
     };
 }
 
@@ -446,6 +453,7 @@ fn renderFrozenExpression(
 ) LowerError![]u8 {
     switch (node.*) {
         .symbol => |name| {
+            if (isFrozenLocal(context, name)) return allocator.dupe(u8, name);
             if (lookupLocalValue(context, name)) |value| {
                 return renderFrozenValue(allocator, value.*);
             }
@@ -510,6 +518,7 @@ fn renderBuiltinArgumentSource(allocator: Allocator, maybe_context: ?*LowerConte
             renderExpressionSource(allocator, null, node),
         .identifier => |name| {
             if (maybe_context) |context| {
+                if (isFrozenLocal(context, name)) return allocator.dupe(u8, name);
                 if (lookupLocalValue(context, name)) |value| {
                     return renderFrozenValue(allocator, value.*);
                 }
@@ -518,6 +527,13 @@ fn renderBuiltinArgumentSource(allocator: Allocator, maybe_context: ?*LowerConte
         },
         .struct_literal => return error.InvalidApiArgument,
     };
+}
+
+fn isFrozenLocal(context: *const LowerContext, name: []const u8) bool {
+    for (context.frozen_local_names.items) |local| {
+        if (std.mem.eql(u8, local, name)) return true;
+    }
+    return false;
 }
 
 fn renderUnarySource(allocator: Allocator, maybe_context: ?*LowerContext, unary: expr.Unary) LowerError![]u8 {

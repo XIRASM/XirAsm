@@ -133,6 +133,10 @@ pub fn cloneStatement(
         .meta_break => |meta_break| .{ .meta_break = meta_break },
         .meta_continue => |meta_continue| .{ .meta_continue = meta_continue },
         .meta_fn => |meta_fn| .{ .meta_fn = try clone(allocator, meta_fn) },
+        .macro_def => |macro_def| .{ .macro_def = .{
+            .definition = try clone(allocator, macro_def.definition),
+            .variadic = macro_def.variadic,
+        } },
         .meta_return => |meta_return| .{ .meta_return = .{
             .value = try cloneExpression(allocator, meta_return.value),
             .span = meta_return.span,

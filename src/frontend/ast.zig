@@ -143,6 +143,15 @@ pub const MetaFunctionStatement = struct {
     }
 };
 
+pub const MacroStatement = struct {
+    definition: MetaFunctionStatement,
+    variadic: bool = false,
+
+    pub fn deinit(self: *MacroStatement, allocator: Allocator) void {
+        self.definition.deinit(allocator);
+    }
+};
+
 pub const MetaReturnStatement = struct {
     value: expr.Node,
     span: source.SourceSpan,
@@ -360,6 +369,7 @@ pub const Statement = union(enum) {
     meta_break: MetaBreakStatement,
     meta_continue: MetaContinueStatement,
     meta_fn: MetaFunctionStatement,
+    macro_def: MacroStatement,
     meta_return: MetaReturnStatement,
     meta_block: MetaBlockStatement,
     meta_defer: MetaDeferStatement,
@@ -381,6 +391,7 @@ pub const Statement = union(enum) {
             .meta_for_range => |*statement| statement.deinit(allocator),
             .meta_break, .meta_continue => {},
             .meta_fn => |*statement| statement.deinit(allocator),
+            .macro_def => |*statement| statement.deinit(allocator),
             .meta_return => |*statement| statement.deinit(allocator),
             .meta_block => |*statement| statement.deinit(allocator),
             .meta_defer => |*statement| statement.deinit(allocator),
@@ -405,6 +416,7 @@ pub const Statement = union(enum) {
             .meta_break => |statement| statement.span,
             .meta_continue => |statement| statement.span,
             .meta_fn => |statement| statement.span,
+            .macro_def => |statement| statement.definition.span,
             .meta_return => |statement| statement.span,
             .meta_block => |statement| statement.span,
             .meta_defer => |statement| statement.span,
@@ -413,6 +425,16 @@ pub const Statement = union(enum) {
             .meta_block_start => |statement_span| statement_span,
             .meta_block_end => |statement_span| statement_span,
         };
+    }
+
+    pub fn withExpansion(self: Statement, expansion: ?u32) Statement {
+        var result = self;
+        switch (result) {
+            .meta_block_start, .meta_block_end => |*stored| stored.expansion = expansion,
+            .macro_def => |*stored| stored.definition.span.expansion = expansion,
+            inline else => |*stored| stored.span.expansion = expansion,
+        }
+        return result;
     }
 };
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const macro = @import("../macro.zig");
 
 const ast = @import("../ast.zig");
 const expr = @import("../expr.zig");
@@ -163,9 +164,12 @@ fn lowerStatementSlice(
     context: *LowerContext,
 ) LowerError!void {
     for (statements) |statement| {
-        lowerStatement(allocator, module, active, output_stack, statement, context) catch |err| {
+        const diagnostic_start = module.diagnostics.items.items.len;
+        lowerStatement(allocator, module, active, output_stack, statement.withExpansion(module.diagnostics.active_expansion), context) catch |err| {
             if (err == error.MetaFunctionReturned or err == error.MetaLoopBreak or err == error.MetaLoopContinue) return err;
             if (err == error.FrontendDiagnostics) return err;
+            if (err == error.OutOfMemory) return err;
+            if (module.diagnostics.items.items.len > diagnostic_start) return err;
             try addLowerErrorDiagnostic(allocator, module, statement.span(), err);
             return err;
         };
@@ -239,8 +243,10 @@ fn lowerStatement(
         },
         .isa_instruction => |instruction| {
             if (context.value_function_depth != 0) return error.SideEffectInValueFunction;
+            if (try macro.dispatch(allocator, module, active, output_stack, instruction, context, .{ .lower_statements = lowerStatementSlice })) return;
             try requireOpenOutputRegion(active.*);
-            const lowered_text = try isa_lowering.lowerText(allocator, module, context, active.*, instruction.text, isaLoweringCallbacks());
+            const forwarded = try macro.forwardNative(allocator, context, module, active.*, instruction.text, expressionCallbacks());
+            const lowered_text = forwarded orelse try isa_lowering.lowerText(allocator, module, context, active.*, instruction.text, isaLoweringCallbacks());
             defer allocator.free(lowered_text);
             const fragment_id = try module.appendIsaInstruction(
                 active.section_id,
@@ -254,6 +260,9 @@ fn lowerStatement(
             try type_declaration.lower(allocator, module, declaration, typeDeclarationCallbacks());
         },
         .api_call => |call| {
+            if (call.text.len > call.callee.len and std.ascii.isWhitespace(call.text[call.callee.len]) and context.macros.contains(call.callee)) {
+                if (try macro.dispatch(allocator, module, active, output_stack, .{ .text = call.text, .span = call.span }, context, .{ .lower_statements = lowerStatementSlice })) return;
+            }
             if (collection_mutation.mutationKind(call.callee)) |mutation| {
                 try collection_mutation.lower(module, context, active.*, call, mutation, collectionMutationCallbacks());
                 return;
@@ -291,6 +300,10 @@ fn lowerStatement(
             } else {
                 try module.value_functions.define(allocator, meta_fn);
             }
+        },
+        .macro_def => |declaration| {
+            if (context.scopes.items.len != 0) return error.InvalidMacro;
+            try context.macros.define(allocator, declaration);
         },
         .meta_return => |meta_return| {
             if (context.value_function_depth == 0) return error.InvalidMetaFunction;

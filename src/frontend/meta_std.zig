@@ -211,7 +211,7 @@ fn evalLen(args: []const value_mod.Value) Error!value_mod.Value {
         .bytes => |data| data.len,
         .list => |list| list.items.len,
         .map => |map| map.entries.len,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct" => return error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct" => return error.TypeMismatch,
     });
 }
 
@@ -231,7 +231,7 @@ fn valueToString(allocator: Allocator, value: value_mod.Value) Error![]u8 {
         .string => |text| try allocator.dupe(u8, text),
         .bytes => |data| try bytesToHex(allocator, data),
         .type => |id| try std.fmt.allocPrint(allocator, "type#{}", .{id.index}),
-        .@"struct", .list, .map => return error.TypeMismatch,
+        .operand, .@"struct", .list, .map => return error.TypeMismatch,
     };
 }
 
@@ -271,7 +271,7 @@ fn evalContains(args: []const value_mod.Value) Error!value_mod.Value {
     return .{ .boolean = switch (args[0]) {
         .string => |haystack| std.mem.indexOf(u8, haystack, try expectString(args[1])) != null,
         .bytes => |haystack| std.mem.indexOf(u8, haystack, try expectBytes(args[1])) != null,
-        .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.TypeMismatch,
     } };
 }
 
