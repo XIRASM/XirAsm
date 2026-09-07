@@ -519,6 +519,18 @@ pub fn evalModuleValueFunction(
     return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, eval_ctx.output_image, &output_stack, function_index, args, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
 }
 
+pub fn evalModuleOperand(
+    context: *anyopaque,
+    allocator: Allocator,
+    operand: value_mod.OperandValue,
+    eval_ctx: *expr.EvalContext,
+) expr.ExpressionError!value_mod.Value {
+    var operand_ctx = eval_ctx.*;
+    // Direct finalizer expressions share the value-function symbol counter.
+    operand_ctx.next_unique_symbol = meta_function_runtime.nextUniqueSymbol;
+    return macro.evaluateOperand(context, allocator, operand, &operand_ctx);
+}
+
 pub fn evalModuleStructLiteralValue(
     context: *anyopaque,
     allocator: Allocator,

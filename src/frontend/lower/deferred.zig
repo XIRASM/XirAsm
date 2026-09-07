@@ -45,10 +45,17 @@ pub fn freezeBlockFromAst(
     context.defer_here = here_address;
     defer context.defer_here = previous_defer_here;
 
+    var captures: value_mod.MapValue = .{ .entries = try allocator.alloc(value_mod.MapEntry, 0) };
+    errdefer captures.deinit(allocator);
+    const previous_captures = context.deferred_captures;
+    context.deferred_captures = &captures;
+    defer context.deferred_captures = previous_captures;
+
     const body = try freezeStatementSlice(allocator, context, meta_defer.body, callbacks);
     return .{
         .body = body,
         .span = meta_defer.span,
+        .captures = captures,
     };
 }
 
@@ -446,6 +453,22 @@ fn renderFrozenValue(allocator: Allocator, value: value_mod.Value) LowerError![]
     };
 }
 
+fn renderFrozenLocal(allocator: Allocator, context: *LowerContext, name: []const u8, value: value_mod.Value) LowerError![]u8 {
+    switch (value) {
+        .operand, .list, .map, .@"struct", .type => {
+            const captures = context.deferred_captures orelse return error.InvalidApiArgument;
+            if (captures.entryByKey(name) == null) {
+                captures.setCloned(allocator, name, value) catch |err| return switch (err) {
+                    error.OutOfMemory => error.OutOfMemory,
+                    error.CollectionTooLarge => error.InvalidApiArgument,
+                };
+            }
+            return allocator.dupe(u8, name);
+        },
+        else => return renderFrozenValue(allocator, value),
+    }
+}
+
 fn renderFrozenExpression(
     allocator: Allocator,
     context: *LowerContext,
@@ -455,7 +478,7 @@ fn renderFrozenExpression(
         .symbol => |name| {
             if (isFrozenLocal(context, name)) return allocator.dupe(u8, name);
             if (lookupLocalValue(context, name)) |value| {
-                return renderFrozenValue(allocator, value.*);
+                return renderFrozenLocal(allocator, context, name, value.*);
             }
         },
         .builtin_call => |call| {
@@ -520,7 +543,7 @@ fn renderBuiltinArgumentSource(allocator: Allocator, maybe_context: ?*LowerConte
             if (maybe_context) |context| {
                 if (isFrozenLocal(context, name)) return allocator.dupe(u8, name);
                 if (lookupLocalValue(context, name)) |value| {
-                    return renderFrozenValue(allocator, value.*);
+                    return renderFrozenLocal(allocator, context, name, value.*);
                 }
             }
             return allocator.dupe(u8, name);

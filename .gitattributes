@@ -12,6 +12,8 @@ include/**/*.inc linguist-language=Assembly
 
 # Generated Win32 SDK catalogs must not dominate repository language statistics.
 include/os/win32/** linguist-generated=true
+# Keep generated manifests and notices byte-identical across checkouts.
+include/arm/arm64/generated/** text eol=lf
 *.bin binary
 *.exe binary
 *.dll binary

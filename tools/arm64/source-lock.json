@@ -1,0 +1,22 @@
+{
+  "a64_node_counts": {
+    "Instruction": 4350,
+    "InstructionAlias": 292,
+    "InstructionGroup": 778,
+    "InstructionSet": 1
+  },
+  "files": {
+    "Features.json": "633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187",
+    "Instructions.json": "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe"
+  },
+  "lock_version": 1,
+  "schema_files": 140,
+  "schema_tree_sha256": "5fb04eedca8431b51d80221a1d6ebcd1abb8bca038df94785321182dcbff0006",
+  "version": {
+    "architecture": "vFATAp1-A",
+    "build": "818",
+    "ref": "2026-06_rel",
+    "schema": "2.9.5",
+    "timestamp": "2026-06-24 17:12:14"
+  }
+}

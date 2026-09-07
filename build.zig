@@ -556,24 +556,10 @@ pub fn build(b: *std.Build) void {
     release_boundary_step.dependOn(&run_release_boundary.step);
 
     const fixture_step = b.step("test-fixtures", "Assemble source fixtures with the compiled CLI");
-    const macro_step = b.step("test-macros", "Validate statement macros and A64 instruction wrappers");
+    const macro_step = b.step("test-macros", "Validate statement macros");
     macro_step.dependOn(&run_mod_tests.step);
     fixture_step.dependOn(macro_step);
-    const macro_inputs: []const []const u8 = &.{ "include/arm/arm64-macros.inc", "include/arm/arm64/asm_macro.inc", "include/arm/arm64/macro_operands.inc" };
-    addAsmFixtureInstalled(b, macro_step, exe, fixture_checker, "tests/isa/arm/arm64-macros.asm", "arm64-macros.bin", "x64", "1f2003d5400580d28046a2f2e10300aae10300aa22ac0091430801cba40840f9e40f1ff8e40741f8e6805ff8e0073fa9600000b440000054f2ffff17c0035fd6", macro_inputs);
-    for ([_]struct { name: []const u8, size: []const u8 }{
-        .{ .name = "arm64-m2-asm-sugar-macros", .size = "96" },
-        .{ .name = "arm64-m3-cond-macros", .size = "152" },
-        .{ .name = "arm64-m4-memory-macros", .size = "4253" },
-        .{ .name = "arm64-m45-addr-macros", .size = "116" },
-    }) |fixture| {
-        addAsmSizeFixtureInstalled(b, macro_step, exe, file_size_checker, b.fmt("tests/isa/arm/{s}.asm", .{fixture.name}), b.fmt("{s}.bin", .{fixture.name}), "x64", fixture.size, macro_inputs);
-    }
-    for ([_][]const u8{ "prefix", "register", "shift", "immediate", "writeback", "missing-label", "misaligned-label" }) |name| {
-        addFailingAsmFixtureWithInputs(b, macro_step, exe, b.fmt("tests/isa/arm/negative/macro-{s}.asm", .{name}), "x64", macro_inputs, "macro invoked here");
-    }
-    addFailingAsmFixtureWithInputs(b, macro_step, exe, "tests/isa/arm/negative/macro-arity.asm", "x64", macro_inputs, "MacroArityMismatch");
-    addFailingAsmFixtureWithInputs(b, macro_step, exe, "tests/isa/arm/negative/macro-brackets.asm", "x64", macro_inputs, "InvalidMacroOperands");
+    // A64 differential checks use the installed CLI via tests/isa/arm.
     const api_reference_step = b.step(
         "test-api-reference",
         "Validate API Reference examples and diagnostics",
@@ -4729,7 +4715,19 @@ pub fn build(b: *std.Build) void {
         "x64",
         "785634124433221188776655",
     );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/deferred_operand_eval.asm",
+        "meta-deferred-operand-eval.bin",
+        "x64",
+        "0800000008000000040000001122334411223344",
+    );
     for ([_][]const u8{
+        "tests/meta/negative/deferred_operand_unknown.asm",
+        "tests/meta/negative/deferred_operand_side_effect.asm",
         "tests/meta/negative/parenthesized_postfix.asm",
         "tests/meta/negative/split_if_header.asm",
         "tests/meta/negative/orphan_else.asm",

@@ -139,8 +139,15 @@ fn runDeferredFinalizers(
         defer module.diagnostics.active_expansion = previous_expansion;
         try frontend.lower.pushMetaScope(state.lower_context, state.allocator);
         defer frontend.lower.popMetaScope(state.lower_context, state.allocator);
+        if (block.captures) |captures| {
+            for (captures.entries) |entry| {
+                var value = try entry.value.clone(state.allocator);
+                errdefer value.deinit(state.allocator);
+                try frontend.lower.defineFinalLocalValue(state.lower_context, state.allocator, entry.key, value, .@"const");
+            }
+        }
         const diagnostic_start = module.diagnostics.items.items.len;
-        runDeferredStatements(&state, block.body) catch |err| {
+        runDeferredScopedStatements(&state, block.body) catch |err| {
             if (err == error.OutOfMemory) return err;
             if (block.span.expansion != null and module.diagnostics.items.items.len == diagnostic_start) {
                 try module.diagnostics.add(module.allocator, .err, block.span, @errorName(err));
@@ -445,6 +452,7 @@ fn deferredEvalContext(state: *FinalizerState) frontend.expr.EvalContext {
         .resolve_local = frontend.lower.resolveLocalValue,
         .call_user_function = frontend.lower.evalModuleValueFunction,
         .evaluate_struct_literal = frontend.lower.evalModuleStructLiteralValue,
+        .eval_operand = frontend.lower.evalModuleOperand,
     };
 }
 
@@ -986,4 +994,164 @@ test "flat assembly reports product stages in order" {
         try std.testing.expectEqual(stage, observed.begun[index] orelse return error.MissingObservedStage);
         try std.testing.expectEqual(stage, observed.ended[index] orelse return error.MissingObservedStage);
     }
+}
+
+fn exerciseDeferredOperandEvaluation(allocator: Allocator) !void {
+    var module = try frontend.lowerSource(allocator,
+        \\let saved: list = list.new()
+        \\macro save(value) {
+        \\    list.push_mut(saved, value)
+        \\}
+        \\fn indirect() -> u64 {
+        \\    return operand.eval(list.get(saved, 0));
+        \\}
+        \\fn indirect_stamp() -> string {
+        \\    return operand.eval(list.get(saved, 1));
+        \\}
+        \\let addend: u64 = 4
+        \\save label_addr(future) + addend
+        \\save sym.unique("evaluation")
+        \\addend = 99
+        \\emit.u32(0)
+        \\emit.u32(0)
+        \\future:
+        \\emit.u8(9)
+        \\defer {
+        \\    let addend: u64 = 100
+        \\    store.u32(0, operand.eval(list.get(saved, 0)))
+        \\    assert(addend == 100)
+        \\    addend = addend + 1
+        \\    assert(addend == 101)
+        \\    assert(operand.eval(list.get(saved, 1)) == "evaluation__0")
+        \\}
+        \\defer {
+        \\    store.u32(4, indirect())
+        \\    assert(indirect_stamp() == "evaluation__1")
+        \\}
+    , .{});
+    defer module.deinit();
+    var result = try assembleFlat(allocator, &module, null);
+    defer result.deinit(allocator);
+    try std.testing.expectEqualSlices(u8, &.{ 12, 0, 0, 0, 12, 0, 0, 0, 9 }, result.bytes);
+}
+
+test "deferred operands preserve captures and scopes through every allocation failure" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredOperandEvaluation, .{});
+}
+
+fn exerciseDeferredOperandError(allocator: Allocator, expression: []const u8, expected: anyerror) !void {
+    const text = try std.fmt.allocPrint(allocator,
+        \\let saved: list = list.new()
+        \\macro save(value) {{
+        \\    list.push_mut(saved, value)
+        \\}}
+        \\fn forbidden() -> u64 {{
+        \\    emit.u8(1)
+        \\    return 0;
+        \\}}
+        \\save {s}
+        \\emit.u32(0)
+        \\defer {{
+        \\    const missing: u64 = 7
+        \\    store.u32(0, operand.eval(list.get(saved, 0)))
+        \\}}
+    , .{expression});
+    defer allocator.free(text);
+    var module = try frontend.lowerSource(allocator, text, .{});
+    defer module.deinit();
+    const fragment_count = module.fragments.items.items.len;
+    if (assembleFlat(allocator, &module, null)) |output| {
+        var result = output;
+        defer result.deinit(allocator);
+        return error.TestExpectedError;
+    } else |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => try std.testing.expectEqual(expected, err),
+    }
+    try std.testing.expectEqual(fragment_count, module.fragments.items.items.len);
+}
+
+test "deferred operand failures preserve errors and release captured state" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredOperandError, .{ "missing", error.UndefinedSymbol });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredOperandError, .{ "1 / 0", error.DivisionByZero });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredOperandError, .{ "forbidden()", error.InvalidOperand });
+}
+
+fn exerciseDeferredCompositeCapture(allocator: Allocator) !void {
+    var module = try frontend.lowerSource(allocator,
+        \\packed struct Pair {
+        \\    value: u32
+        \\}
+        \\fn patch(arg: operand, values: list) {
+        \\    const pair: Pair = Pair { value: 5 }
+        \\    const kind: type = u32
+        \\    let config: map = map.new()
+        \\    map.set_mut(config, "value", values)
+        \\    defer {
+        \\        const values: list = values
+        \\        const config: map = config
+        \\        const arg: operand = arg
+        \\        assert(pair.value == 5)
+        \\        assert(kind == u32)
+        \\        store.u32(here(), operand.eval(arg) + list.get(values, 0))
+        \\        assert(list.get(map.get(config, "value"), 0) == 3)
+        \\        if true {
+        \\            const values: list = list.of(99)
+        \\            assert(list.get(values, 0) == 99)
+        \\        }
+        \\        assert(list.get(values, 0) == 3)
+        \\    }
+        \\    map.set_mut(config, "value", list.of(100))
+        \\    emit.u32(0)
+        \\}
+        \\macro capture(arg) {
+        \\    patch(arg, list.of(3))
+        \\}
+        \\const addend: u64 = 1
+        \\capture label_addr(end) + addend
+        \\capture 7
+        \\end:
+        \\emit.u8(9)
+    , .{});
+    defer module.deinit();
+    for (0..2) |_| {
+        var result = try assembleFlat(allocator, &module, null);
+        defer result.deinit(allocator);
+        try std.testing.expectEqualSlices(u8, &.{ 12, 0, 0, 0, 10, 0, 0, 0, 9 }, result.bytes);
+    }
+}
+
+test "deferred composite snapshots retain ownership and survive repeated finalization" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredCompositeCapture, .{});
+}
+
+fn exerciseDeferredCapturedError(allocator: Allocator) !void {
+    var module = try frontend.lowerSource(allocator,
+        \\macro capture(arg) {
+        \\    const values: list = list.of(arg)
+        \\    defer {
+        \\        store.u32(here(), operand.eval(list.get(values, 0)))
+        \\    }
+        \\    emit.u32(0)
+        \\}
+        \\capture missing
+    , .{});
+    defer module.deinit();
+    if (assembleFlat(allocator, &module, null)) |output| {
+        var result = output;
+        defer result.deinit(allocator);
+        return error.TestExpectedError;
+    } else |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => try std.testing.expectEqual(error.FrontendDiagnostics, err),
+    }
+    try std.testing.expectEqualStrings("UndefinedSymbol", module.diagnostics.items.items[0].message);
+}
+
+test "deferred composite failures clean up snapshots and preserve macro diagnostics" {
+    var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
+    try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredCapturedError, .{});
 }

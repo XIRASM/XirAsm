@@ -13,6 +13,7 @@ pub const LowerContext = struct {
     include_resolver: ?contracts.IncludeResolver = null,
     output_image: ?output_mod.Image = null,
     defer_here: ?u64 = null,
+    deferred_captures: ?*value_mod.MapValue = null,
     source_stack: std.ArrayList(SourceFrame) = .empty,
     functions: meta_function.Store = .{},
     macros: macro.Store = .{},

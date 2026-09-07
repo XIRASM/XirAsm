@@ -1375,27 +1375,54 @@ explicitly emit a native instruction without macro dispatch.
 
 ### Natural A64 Instructions
 
-The optional `arm/arm64-macros.inc` include wraps the existing A64 DSL encoders:
+Import `arm/a64-macros.inc` to use the generated A64 DSL with natural syntax:
 
 ```asm
-import("arm/arm64-macros.inc")
-const VALUE: u64 = 42
-movz x0, #VALUE
-add x1, x0, #(VALUE + 1)
-ldr x2, [sp, #16]
-b.eq done
-done:
-ret
+import("arm/a64-macros.inc")
+const OFFSET: u64 = 16
+fadd v0.4s, v1.4s, v2.4s
+movi v3.4s, #255, lsl #8
+ldr x2, [sp, #OFFSET]
+ld2 {v31.s, v0.s}[3], [sp], x4
+ldr x5, data
+data:
+emit.u64(0)
 ```
 
-It supports the instruction families already exposed by `arm64/asm.inc`:
-integer moves, arithmetic, logical and conditional operations, branches, and
-its load/store/address forms. It does not expose every A64 instruction or the
-floating-point/SIMD API families. Immediate expressions reuse Meta arithmetic;
-register, shift, range, alignment, and writeback validation reuse the DSL helpers.
-`b.eq` takes one target operand. The include owns matching mnemonic names for
-the rest of that lowering context, independently of the native target. Import
-`arm/arm64.inc` for API-only use in mixed-ISA sources.
+The current library covers generated floating-point, Advanced SIMD, lane/copy/
+table, immediate/conversion, memory/structure load-store, scalar integer,
+branch and system forms. Branches accept deferred labels; conditional branches
+use `b.eq target`, and ADRP computes the difference between target and site pages.
+System registers accept fixed names such as `nzcv` and generic `S3_3_C4_C2_0`
+spellings. Coverage and source identities are recorded in
+`include/arm/a64/generated/manifest.json`; feature metadata does not establish
+that a particular device can execute an instruction.
+
+Regular A64 extension batches also cover AES/SHA/CRC, LSE atomics, FP16,
+dot products, BF16/I8MM, pointer authentication, BTI and MTE forms. Grouped
+dot-product lanes use `v2.4b[index]` or `v2.2h[index]`, with matching direct
+descriptors such as `a64_lane("v2.4b", index)`. SVE/SME and A32/T32 are not included.
+
+The include owns its mnemonic names throughout the lowering context, independently
+of the native target. Use `arm/a64.inc` for direct API calls in mixed-ISA sources.
+Direct calls take descriptor lists, for example:
+
+```asm
+a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))
+```
+
+Immediate expressions use Meta arithmetic. Captured operands retain caller
+bindings. The wrapper checks operand shapes before evaluating expressions, then
+validates instruction-specific register roles, ranges, scaling, alignment and
+writeback overlap. Memory bases accept X0-X30 or SP. Register offsets use
+UXTW/SXTW with W registers or LSL/SXTX with X registers.
+
+For literal loads, `#expression` supplies a byte displacement. A bare label is
+resolved after layout; a captured address expression may use
+`label_addr(data) + ADDEND`. Direct calls use `a64_rel(displacement)`,
+`a64_target(name)` or `a64_address(address)`. Deferred targets are resolved and
+range-checked through a finalizer; macros themselves are not re-executed.
+The `_word` functions accept resolved descriptors and return the encoding.
 
 ## 6. Collections and Text
 

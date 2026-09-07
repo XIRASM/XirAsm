@@ -75,22 +75,47 @@ bytes 1, 2, 3
 
 ### A64 自然指令
 
+导入 `arm/a64-macros.inc`，通过自然语法使用生成的 A64 DSL：
+
 ```asm
-import("arm/arm64-macros.inc")
-const VALUE: u64 = 42
-movz x0, #VALUE
-add x1, x0, #(VALUE + 1)
-ldr x2, [sp, #16]
-b.eq done
-done:
-ret
+import("arm/a64-macros.inc")
+const OFFSET: u64 = 16
+fadd v0.4s, v1.4s, v2.4s
+movi v3.4s, #255, lsl #8
+ldr x2, [sp, #OFFSET]
+ld2 {v31.s, v0.s}[3], [sp], x4
+ldr x5, data
+data:
+emit.u64(0)
 ```
 
-此可选入口包装现有 `arm64/asm.inc` 支持的整数移动、算术、逻辑、条件、分支和
-访存/地址形式，不代表全部 A64 或浮点/SIMD API 都有宏。立即数沿用 Meta 表达式，
-寄存器、范围、移位、对齐和写回检查由 DSL 编码辅助函数完成。`b.eq` 只有一个目标参数。
-导入后，同名助记符在该 lowering 上下文中归宏处理，不自动按原生 target 隔离；
-混合 ISA 源码需要 API-only 入口时继续导入 `arm/arm64.inc`。
+当前库覆盖生成的浮点、Advanced SIMD、lane/copy/table、立即数/转换，以及访存和
+结构访存、标量整数、分支和系统指令形式。分支支持延后解析标签，条件分支使用
+`b.eq target`，ADRP 计算目标页与指令所在页之间的差值。系统寄存器支持 `nzcv`
+等固定名称及 `S3_3_C4_C2_0` 通用拼写。覆盖范围和来源标识见
+`include/arm/a64/generated/manifest.json`；特性元数据不保证具体设备能够执行指令。
+
+常规 A64 扩展批次还覆盖 AES/SHA/CRC、LSE 原子操作、FP16、点积、BF16/I8MM、
+指针认证、BTI 和 MTE 形式。点积的成组 lane 使用 `v2.4b[index]` 或
+`v2.2h[index]`，对应直接描述符如 `a64_lane("v2.4b", index)`。
+尚不包含 SVE/SME 和 A32/T32。
+
+导入后，同名助记符在整个 lowering 上下文中归宏处理，不按原生 target 隔离。
+混合 ISA 源码可导入 `arm/a64.inc` 使用直接 API。直接调用接收描述符列表，例如：
+
+```asm
+a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))
+```
+
+立即数表达式沿用 Meta 算术，捕获操作数保留调用者绑定。包装层先检查操作数形状，
+再求值并检查各指令的寄存器角色、范围、缩放、对齐和写回重叠约束。
+访存基址允许 X0-X30 或 SP；寄存器偏移的 UXTW/SXTW 使用 W 寄存器，
+LSL/SXTX 使用 X 寄存器。
+
+literal load 的 `#expression` 表示字节位移；裸标号在布局后解析，捕获地址表达式可写为
+`label_addr(data) + ADDEND`。直接调用使用 `a64_rel(displacement)`、
+`a64_target(name)` 或 `a64_address(address)`。延后目标通过收尾块解析并检查范围，
+不会重新执行宏；`_word` 函数接收已解析描述符并返回编码。
 
 ## 过程函数
 

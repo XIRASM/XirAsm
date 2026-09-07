@@ -18,6 +18,7 @@ pub const lowerStatementsIntoModule = root.lowerStatementsIntoModule;
 pub const runLateLayoutPhase = root.runLateLayoutPhase;
 pub const evalModuleValueFunction = root.evalModuleValueFunction;
 pub const evalModuleStructLiteralValue = root.evalModuleStructLiteralValue;
+pub const evalModuleOperand = root.evalModuleOperand;
 pub const pushMetaScope = root.pushMetaScope;
 pub const popMetaScope = root.popMetaScope;
 pub const defineFinalLocalValue = root.defineFinalLocalValue;

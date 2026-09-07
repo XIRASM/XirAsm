@@ -1,43 +1,41 @@
-# tests/isa/arm — A64 DSL 编码层测试
+# A64 DSL Encoding Tests
 
-`include/arm/arm64.inc` 的测试。该层用 Meta/DSL 以数据字形式发射 A64 指令
-（`emit.u32` 小端词），不经过任何 ISA 后端，因此测试通过 `xir` 直接运行，
-不接入 build.zig fixture。
+These tests validate `arm/a64.inc` and `arm/a64-macros.inc` using the existing
+release executable. Python maintains the generation and verification pipeline;
+the assembler consumes shipped includes without Python or architecture data.
 
-## 运行方式
-
-```sh
-xir tests/isa/arm/arm64-m0-basics.asm -o out0.bin
-xir tests/isa/arm/arm64-m1-branches.asm -o out1.bin
+```text
+python tools/arm64/generate_a64.py --check
+python tests/isa/arm/test_a64_generation.py
+python tests/isa/arm/check_a64_generated.py --sync --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/check_a64_b3_edges.py --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/check_a64_b4_edges.py --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/check_a64_extension_edges.py --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/test_official_inventory.py
 ```
 
-正向测试是自校验的：每条指令发射后，`defer` 内用 `load.u32` + `assert`
-对照期望编码字，汇编成功即全部断言通过。
+`--xirasm <release-executable>` selects a compiler; the default is
+`zig-out/bin/xirasm.exe`. `--sync` installs and verifies only new A64 includes
+beside that executable. DSL changes do not require a compiler rebuild.
 
-负向测试位于 `negative/`，每个文件断言一种拒绝行为，运行必须报错：
+The differential runner compares direct API and natural macro bytes against
+Clang. `--batch B1` through `B4` or `E1` through `E4` selects a batch; repeat `--mnemonic` to select
+specific owners. `--phase rejections` checks only rejections and captures, and
+does not claim positive coverage. `--phase smoke` checks one case per form.
+`--output <new-directory>` retains evidence.
 
-```sh
-xir tests/isa/arm/negative/arm64-movz-imm-overflow.asm -o out.bin
-# error: move-wide imm16 does not fit its field width
-```
+The B3 edge runner independently checks labels, deferred captures, single
+evaluation, memory offsets, register lists and invalid operand shapes. It
+records the exact official-source exceptions where Clang accepts an operand
+that XIRASM rejects. Generation regressions check structural rules; inventory
+tests exercise the pinned source reader separately.
 
-注意：需从仓库根目录用相对/绝对路径运行；在 `negative/` 目录内以裸文件名
-运行会因项目根定位失败报 `IncludeNotAvailable`。
+B1-B4 cover 1144 source records and 3592 forms. E1-E4 add 599 source records
+and 766 forms, for 1743 records and 4358 forms in total. The extension edge
+runner checks fixed crypto, LSE register-pair, FP16, grouped-lane, PAC/MTE and
+capture cases. The B4 edge runner independently
+checks scalar aliases, register roles, system access, branches and page targets.
+Source feature metadata and
+Clang byte comparisons do not establish execution on a particular A64 device.
 
-## 验证方法学
-
-期望编码字有三重来源，出处在测试与 include 注释中逐条引用：
-
-1. LLVM MC fixture 黄金向量（`llvm/test/MC/AArch64/`，如
-   `basic-a64-instructions.s`、`arm64-branch-encoding.s`）；
-2. 由 ARM ARM 字段布局手工推导的派生形式（位移、寄存器组合）；
-3. radare2 独立反汇编抽查（`r2 -q -n -a arm -b 64 -c "pd N" out.bin`）。
-
-## 覆盖状态
-
-实现进度与 ISA 族缺口由实现 agent 的台账维护（里程碑索引：M0 骨架 / M1 分支 /
-M2 核心整数 / M3 条件与进位已完成；M4 访存寻址为下一里程碑）：
-
-- 进度台账维护家族清单、MC 向量引用和差集明细；内部规划文件不属于产品发布内容。
-- 本目录测试与台账的对应关系：每个 `arm64-m*.asm` 对应一个里程碑，
-  `negative/` 按族归档拒绝行为。
+See `tools/arm64/README.md` for the pinned-source production workflow.

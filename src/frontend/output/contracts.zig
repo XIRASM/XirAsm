@@ -110,10 +110,12 @@ pub const MetaWhile = struct {
 pub const DeferredBlock = struct {
     body: []DeferredStatement,
     span: source.SourceSpan,
+    captures: ?value_mod.MapValue = null,
 
     pub fn deinit(self: *DeferredBlock, allocator: Allocator) void {
         for (self.body) |*statement| statement.deinit(allocator);
         allocator.free(self.body);
+        if (self.captures) |*captures| captures.deinit(allocator);
         self.* = undefined;
     }
 };

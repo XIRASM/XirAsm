@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "isa": "A64",
+  "baseline_features": ["FEAT_AdvSIMD", "FEAT_FP"],
+  "groups": {
+    "sve": "scalable",
+    "sme": "scalable",
+    "reserved": "regular",
+    "dpimm": "regular",
+    "control": "regular",
+    "ldst": "regular",
+    "dpreg": "regular",
+    "simd_dp": "regular"
+  },
+  "classification": "Conservative implementation queue, not a CPU capability or privilege model. Operand-dependent conditions remain unresolved constraints. Selected candidates still require family and feature review."
+}

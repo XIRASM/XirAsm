@@ -565,10 +565,11 @@ References through previously saved operand captures are limited to 128 levels
 (`MacroCaptureDepthExceeded`). Snapshots copy visible value bindings; storing
 evaluated values avoids retaining unnecessary environments and large collections.
 
-The opt-in `arm/arm64-macros.inc` exposes the integer, branch and memory/address
-families supported by the existing A64 text adapter through direct DSL calls.
+The opt-in `arm/a64-macros.inc` exposes the generated A64 floating-point, SIMD
+and memory families through direct DSL calls. Scalar integer arithmetic,
+branches and system instructions are not yet included in this library.
 `#` immediate prefixes are parsed by this include, not by `operand.eval`.
-Its mnemonic ownership is not target-scoped; `arm/arm64.inc` remains API-only.
+Its mnemonic ownership is not target-scoped; `arm/a64.inc` is API-only.
 See the language guide for usage and supported scope.
 
 ### Chapter 3: Structs, Unions, and Aggregate Values
@@ -1082,6 +1083,15 @@ The output is `34 12`.
 The procedure call occurs during ordinary source processing. Values captured
 from the procedure scope are frozen for the deferred block. The procedure is
 not called from inside `defer`.
+
+Referenced local lists, maps, structs, type values, and operands are also
+snapshotted at registration. Later mutations of the originals do not change the
+snapshot. Deferred locals may shadow captured names; their initializers still
+see the outer captured value. An operand retains its caller bindings and capture
+location and is evaluated only by an explicit `operand.eval`. Use `label_addr`
+inside a captured expression to resolve a label after layout. Module-level
+bindings referenced directly by a top-level `defer` retain their existing
+finalization-time lookup behavior.
 
 #### Deferred Execution Order
 

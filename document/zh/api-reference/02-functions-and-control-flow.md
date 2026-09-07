@@ -56,9 +56,10 @@ emit_byte 42
 保存的操作数之间最多有 128 层捕获依赖，超限为 `MacroCaptureDepthExceeded`。
 快照复制可见值绑定；保存求值结果可以避免不必要的环境和大型集合常驻。
 
-可选 `arm/arm64-macros.inc` 通过 DSL 过程提供现有 A64 文本适配器支持的整数、分支及
-访存/地址形式。`#` 前缀由该 include 处理，不是 `operand.eval` 语法。同名助记符的
-归属不按 target 隔离；`arm/arm64.inc` 保持 API-only。示例和覆盖范围见语言指南。
+可选 `arm/a64-macros.inc` 通过 DSL 过程提供生成的 A64 浮点、SIMD 和访存形式。
+标量整数算术、分支和系统指令尚未纳入此库。`#` 前缀由该 include 处理，
+不是 `operand.eval` 语法。同名助记符的归属不按 target 隔离；
+`arm/a64.inc` 为 API-only。示例和覆盖范围见语言指南。
 
 ## 过程函数
 

@@ -1,0 +1,3826 @@
+{
+  "alternatives": [
+    {
+      "encoding": "AESD_B_cryptoaes",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "AESD",
+      "q": 1,
+      "rule": "tl_advsimd.py:398",
+      "status": "converted"
+    },
+    {
+      "encoding": "AESE_B_cryptoaes",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "AESE",
+      "q": 1,
+      "rule": "tl_advsimd.py:398",
+      "status": "converted"
+    },
+    {
+      "encoding": "AESIMC_B_cryptoaes",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "AESIMC",
+      "q": 1,
+      "rule": "tl_advsimd.py:398",
+      "status": "converted"
+    },
+    {
+      "encoding": "AESMC_B_cryptoaes",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "AESMC",
+      "q": 1,
+      "rule": "tl_advsimd.py:398",
+      "status": "converted"
+    },
+    {
+      "encoding": "BCAX_VVV16_crypto4",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16), VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "BCAX",
+      "q": 1,
+      "rule": "tl_advsimd.py:404",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32B_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32B",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32H_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32H",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32W_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32W",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32X_64C_dp_2src",
+      "matcher": "W, W, X",
+      "mnemonic": "CRC32X",
+      "q": 1,
+      "rule": "tl_general.py:160",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32CB_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32CB",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32CH_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32CH",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32CW_32C_dp_2src",
+      "matcher": "W, W, W",
+      "mnemonic": "CRC32CW",
+      "q": 1,
+      "rule": "tl_general.py:123",
+      "status": "converted"
+    },
+    {
+      "encoding": "CRC32CX_64C_dp_2src",
+      "matcher": "W, W, X",
+      "mnemonic": "CRC32CX",
+      "q": 1,
+      "rule": "tl_general.py:160",
+      "status": "converted"
+    },
+    {
+      "encoding": "EOR3_VVV16_crypto4",
+      "matcher": "VStatic(BYTE, 16), VStatic(BYTE, 16), VStatic(BYTE, 16), VStatic(BYTE, 16)",
+      "mnemonic": "EOR3",
+      "q": 1,
+      "rule": "tl_advsimd.py:404",
+      "status": "converted"
+    },
+    {
+      "encoding": "RAX1_VVV2_cryptosha512_3",
+      "matcher": "VStatic(QWORD, 2), VStatic(QWORD, 2), VStatic(QWORD, 2)",
+      "mnemonic": "RAX1",
+      "q": 1,
+      "rule": "tl_advsimd.py:428",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1C_QSV_cryptosha3",
+      "matcher": "Q, S, VStatic(DWORD, 4)",
+      "mnemonic": "SHA1C",
+      "q": 1,
+      "rule": "tl_advsimd.py:44",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1H_SS_cryptosha2",
+      "matcher": "S, S",
+      "mnemonic": "SHA1H",
+      "q": 1,
+      "rule": "tl_advsimd.py:50",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1M_QSV_cryptosha3",
+      "matcher": "Q, S, VStatic(DWORD, 4)",
+      "mnemonic": "SHA1M",
+      "q": 1,
+      "rule": "tl_advsimd.py:44",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1P_QSV_cryptosha3",
+      "matcher": "Q, S, VStatic(DWORD, 4)",
+      "mnemonic": "SHA1P",
+      "q": 1,
+      "rule": "tl_advsimd.py:44",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1SU0_VVV_cryptosha3",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SHA1SU0",
+      "q": 1,
+      "rule": "tl_advsimd.py:446",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA1SU1_VV_cryptosha2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SHA1SU1",
+      "q": 1,
+      "rule": "tl_advsimd.py:440",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA256H2_QQV_cryptosha3",
+      "matcher": "Q, Q, VStatic(DWORD, 4)",
+      "mnemonic": "SHA256H2",
+      "q": 1,
+      "rule": "tl_advsimd.py:38",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA256H_QQV_cryptosha3",
+      "matcher": "Q, Q, VStatic(DWORD, 4)",
+      "mnemonic": "SHA256H",
+      "q": 1,
+      "rule": "tl_advsimd.py:38",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA256SU0_VV_cryptosha2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SHA256SU0",
+      "q": 1,
+      "rule": "tl_advsimd.py:440",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA256SU1_VVV_cryptosha3",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SHA256SU1",
+      "q": 1,
+      "rule": "tl_advsimd.py:446",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA512H2_QQV_cryptosha512_3",
+      "matcher": "Q, Q, VStatic(QWORD, 2)",
+      "mnemonic": "SHA512H2",
+      "q": 1,
+      "rule": "tl_advsimd.py:32",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA512H_QQV_cryptosha512_3",
+      "matcher": "Q, Q, VStatic(QWORD, 2)",
+      "mnemonic": "SHA512H",
+      "q": 1,
+      "rule": "tl_advsimd.py:32",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA512SU0_VV2_cryptosha512_2",
+      "matcher": "VStatic(QWORD, 2), VStatic(QWORD, 2)",
+      "mnemonic": "SHA512SU0",
+      "q": 1,
+      "rule": "tl_advsimd.py:422",
+      "status": "converted"
+    },
+    {
+      "encoding": "SHA512SU1_VVV2_cryptosha512_3",
+      "matcher": "VStatic(QWORD, 2), VStatic(QWORD, 2), VStatic(QWORD, 2)",
+      "mnemonic": "SHA512SU1",
+      "q": 1,
+      "rule": "tl_advsimd.py:428",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3PARTW1_VVV4_cryptosha512_3",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SM3PARTW1",
+      "q": 1,
+      "rule": "tl_advsimd.py:446",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3PARTW2_VVV4_cryptosha512_3",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SM3PARTW2",
+      "q": 1,
+      "rule": "tl_advsimd.py:446",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3SS1_VVV4_crypto4",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SM3SS1",
+      "q": 1,
+      "rule": "tl_advsimd.py:452",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3TT1A_VVV4_crypto3_imm2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VElement(DWORD)",
+      "mnemonic": "SM3TT1A",
+      "q": 1,
+      "rule": "tl_advsimd.py:458",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3TT1B_VVV4_crypto3_imm2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VElement(DWORD)",
+      "mnemonic": "SM3TT1B",
+      "q": 1,
+      "rule": "tl_advsimd.py:458",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3TT2A_VVV4_crypto3_imm2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VElement(DWORD)",
+      "mnemonic": "SM3TT2A",
+      "q": 1,
+      "rule": "tl_advsimd.py:458",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM3TT2B_VVV_crypto3_imm2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VElement(DWORD)",
+      "mnemonic": "SM3TT2B",
+      "q": 1,
+      "rule": "tl_advsimd.py:458",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM4E_VV4_cryptosha512_2",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SM4E",
+      "q": 1,
+      "rule": "tl_advsimd.py:440",
+      "status": "converted"
+    },
+    {
+      "encoding": "SM4EKEY_VVV4_cryptosha512_3",
+      "matcher": "VStatic(DWORD, 4), VStatic(DWORD, 4), VStatic(DWORD, 4)",
+      "mnemonic": "SM4EKEY",
+      "q": 1,
+      "rule": "tl_advsimd.py:446",
+      "status": "converted"
+    },
+    {
+      "encoding": "XAR_VVV2_crypto3_imm6",
+      "matcher": "VStatic(QWORD, 2), VStatic(QWORD, 2), VStatic(QWORD, 2), Imm",
+      "mnemonic": "XAR",
+      "q": 1,
+      "rule": "tl_advsimd.py:434",
+      "status": "converted"
+    }
+  ],
+  "batch": "E1",
+  "blocked_records": [],
+  "failures": [],
+  "files": {
+    "a64-b2-macros.inc": "fc72b39cc7ef2f79865441fdd8081446a8282e890fb260df27c7e7f73b02cb3a",
+    "a64-b2.inc": "19ebb9d07dbfdcff3e49450c6181cb0a66af68bad7314805eed6b7268887f2b6",
+    "a64-macros.inc": "c9597706748fd91c66776d38637e8b885a0d28467f7945560c9b46e410964364",
+    "a64.inc": "c2acdc192e2e1a99a44e8068cb7986f7622bbad1ff290632a974b5656258e933",
+    "a64/generated/NOTICE": "e338e083c298b1c44e675b2a0b87806d50cf3a95ed3e9b5b231b6ac316622baa",
+    "a64/generated/instructions-macros.inc": "3b39d9e908c8bd67990604d3064c1dfc925595dfc078bf8bac7be491845da79d",
+    "a64/generated/instructions.inc": "44f6dd5999e674311a352adf12039f7f2326b0863ab0197c7950ff02058ef5a6",
+    "a64/generated/lanes-immediates-macros.inc": "cd48b9b02aa7bfd3b6c8b6bff1e5582ce5927240ecc6ee95b9518eae61816102",
+    "a64/generated/lanes-immediates.inc": "adad0ddba27752319acab480d63658c955d5513062e2be8d42b33afc4329f806",
+    "a64/generated/names.inc": "82d109f29aec695f616ecafb3cf34632e9b881f5636cb2eaf99674e0d1a6753b",
+    "a64/generated/registers.inc": "6cf424c53b571a52c8594ddcee30db1249aa507a5632ff74fd23192f503d102d"
+  },
+  "format_version": 1,
+  "forms": [
+    {
+      "base": 1311266816,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AES"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/0/children/1/condition"
+        }
+      ],
+      "encoding_id": "AESD_B_cryptoaes",
+      "features": [
+        "FEAT_AES"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1311266816,
+      "id": "e1-0000",
+      "mnemonic": "aesd",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptoaes/AESD_B_cryptoaes",
+      "rule": "tl_advsimd.py:398",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/0/children/1"
+    },
+    {
+      "base": 1311262720,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AES"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/0/children/0/condition"
+        }
+      ],
+      "encoding_id": "AESE_B_cryptoaes",
+      "features": [
+        "FEAT_AES"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1311262720,
+      "id": "e1-0001",
+      "mnemonic": "aese",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptoaes/AESE_B_cryptoaes",
+      "rule": "tl_advsimd.py:398",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/0/children/0"
+    },
+    {
+      "base": 1311275008,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AES"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/0/children/3/condition"
+        }
+      ],
+      "encoding_id": "AESIMC_B_cryptoaes",
+      "features": [
+        "FEAT_AES"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1311275008,
+      "id": "e1-0002",
+      "mnemonic": "aesimc",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptoaes/AESIMC_B_cryptoaes",
+      "rule": "tl_advsimd.py:398",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/0/children/3"
+    },
+    {
+      "base": 1311270912,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AES"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/0/children/2/condition"
+        }
+      ],
+      "encoding_id": "AESMC_B_cryptoaes",
+      "features": [
+        "FEAT_AES"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1311270912,
+      "id": "e1-0003",
+      "mnemonic": "aesmc",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptoaes/AESMC_B_cryptoaes",
+      "rule": "tl_advsimd.py:398",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/0/children/2"
+    },
+    {
+      "base": 3458203648,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/29/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/29/children/1/condition"
+        }
+      ],
+      "encoding_id": "BCAX_VVV16_crypto4",
+      "features": [
+        "FEAT_SHA3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 10,
+          "operand": 3,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292902912,
+      "fixed_value": 3458203648,
+      "id": "e1-0004",
+      "mnemonic": "bcax",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto4/BCAX_VVV16_crypto4",
+      "rule": "tl_advsimd.py:404",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/29/children/1"
+    },
+    {
+      "base": 448806912,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/6/condition"
+        }
+      ],
+      "encoding_id": "CRC32B_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448806912,
+      "id": "e1-0005",
+      "mnemonic": "crc32b",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32B_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/6"
+    },
+    {
+      "base": 448811008,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/9/condition"
+        }
+      ],
+      "encoding_id": "CRC32CB_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448811008,
+      "id": "e1-0006",
+      "mnemonic": "crc32cb",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32CB_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/9"
+    },
+    {
+      "base": 448812032,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/10/condition"
+        }
+      ],
+      "encoding_id": "CRC32CH_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448812032,
+      "id": "e1-0007",
+      "mnemonic": "crc32ch",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32CH_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/10"
+    },
+    {
+      "base": 448813056,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/11/condition"
+        }
+      ],
+      "encoding_id": "CRC32CW_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448813056,
+      "id": "e1-0008",
+      "mnemonic": "crc32cw",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32CW_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/11"
+    },
+    {
+      "base": 2596297728,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/27/condition"
+        }
+      ],
+      "encoding_id": "CRC32CX_64C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 2596297728,
+      "id": "e1-0009",
+      "mnemonic": "crc32cx",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "x",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32CX_64C_dp_2src",
+      "rule": "tl_general.py:160",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/27"
+    },
+    {
+      "base": 448807936,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/7/condition"
+        }
+      ],
+      "encoding_id": "CRC32H_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448807936,
+      "id": "e1-0010",
+      "mnemonic": "crc32h",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32H_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/7"
+    },
+    {
+      "base": 448808960,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/8/condition"
+        }
+      ],
+      "encoding_id": "CRC32W_32C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 448808960,
+      "id": "e1-0011",
+      "mnemonic": "crc32w",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32W_32C_dp_2src",
+      "rule": "tl_general.py:123",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/8"
+    },
+    {
+      "base": 2596293632,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/6/children/0/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_CRC32"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/6/children/0/children/26/condition"
+        }
+      ],
+      "encoding_id": "CRC32X_64C_dp_2src",
+      "features": [
+        "FEAT_CRC32"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 2596293632,
+      "id": "e1-0012",
+      "mnemonic": "crc32x",
+      "operands": [
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "w",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "x",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/dpreg/dp_2src/CRC32X_64C_dp_2src",
+      "rule": "tl_general.py:160",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/6/children/0/children/26"
+    },
+    {
+      "base": 3456106496,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/29/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/29/children/0/condition"
+        }
+      ],
+      "encoding_id": "EOR3_VVV16_crypto4",
+      "features": [
+        "FEAT_SHA3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 10,
+          "operand": 3,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292902912,
+      "fixed_value": 3456106496,
+      "id": "e1-0013",
+      "mnemonic": "eor3",
+      "operands": [
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v16b",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto4/EOR3_VVV16_crypto4",
+      "rule": "tl_advsimd.py:404",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/29/children/0"
+    },
+    {
+      "base": 3462433792,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/3/condition"
+        }
+      ],
+      "encoding_id": "RAX1_VVV2_cryptosha512_3",
+      "features": [
+        "FEAT_SHA3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462433792,
+      "id": "e1-0014",
+      "mnemonic": "rax1",
+      "operands": [
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/RAX1_VVV2_cryptosha512_3",
+      "rule": "tl_advsimd.py:428",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/3"
+    },
+    {
+      "base": 1577058304,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/0/condition"
+        }
+      ],
+      "encoding_id": "SHA1C_QSV_cryptosha3",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577058304,
+      "id": "e1-0015",
+      "mnemonic": "sha1c",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA1C_QSV_cryptosha3",
+      "rule": "tl_advsimd.py:44",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/0"
+    },
+    {
+      "base": 1579681792,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/2/children/0/condition"
+        }
+      ],
+      "encoding_id": "SHA1H_SS_cryptosha2",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1579681792,
+      "id": "e1-0016",
+      "mnemonic": "sha1h",
+      "operands": [
+        {
+          "kind": "s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha2/SHA1H_SS_cryptosha2",
+      "rule": "tl_advsimd.py:50",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/2/children/0"
+    },
+    {
+      "base": 1577066496,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/2/condition"
+        }
+      ],
+      "encoding_id": "SHA1M_QSV_cryptosha3",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577066496,
+      "id": "e1-0017",
+      "mnemonic": "sha1m",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA1M_QSV_cryptosha3",
+      "rule": "tl_advsimd.py:44",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/2"
+    },
+    {
+      "base": 1577062400,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/1/condition"
+        }
+      ],
+      "encoding_id": "SHA1P_QSV_cryptosha3",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577062400,
+      "id": "e1-0018",
+      "mnemonic": "sha1p",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA1P_QSV_cryptosha3",
+      "rule": "tl_advsimd.py:44",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/1"
+    },
+    {
+      "base": 1577070592,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/3/condition"
+        }
+      ],
+      "encoding_id": "SHA1SU0_VVV_cryptosha3",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577070592,
+      "id": "e1-0019",
+      "mnemonic": "sha1su0",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA1SU0_VVV_cryptosha3",
+      "rule": "tl_advsimd.py:446",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/3"
+    },
+    {
+      "base": 1579685888,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA1"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/2/children/1/condition"
+        }
+      ],
+      "encoding_id": "SHA1SU1_VV_cryptosha2",
+      "features": [
+        "FEAT_SHA1"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1579685888,
+      "id": "e1-0020",
+      "mnemonic": "sha1su1",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha2/SHA1SU1_VV_cryptosha2",
+      "rule": "tl_advsimd.py:440",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/2/children/1"
+    },
+    {
+      "base": 1577074688,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA256"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/4/condition"
+        }
+      ],
+      "encoding_id": "SHA256H_QQV_cryptosha3",
+      "features": [
+        "FEAT_SHA256"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577074688,
+      "id": "e1-0021",
+      "mnemonic": "sha256h",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA256H_QQV_cryptosha3",
+      "rule": "tl_advsimd.py:38",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/4"
+    },
+    {
+      "base": 1577078784,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA256"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/5/condition"
+        }
+      ],
+      "encoding_id": "SHA256H2_QQV_cryptosha3",
+      "features": [
+        "FEAT_SHA256"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577078784,
+      "id": "e1-0022",
+      "mnemonic": "sha256h2",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA256H2_QQV_cryptosha3",
+      "rule": "tl_advsimd.py:38",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/5"
+    },
+    {
+      "base": 1579689984,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA256"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/2/children/2/condition"
+        }
+      ],
+      "encoding_id": "SHA256SU0_VV_cryptosha2",
+      "features": [
+        "FEAT_SHA256"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 1579689984,
+      "id": "e1-0023",
+      "mnemonic": "sha256su0",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha2/SHA256SU0_VV_cryptosha2",
+      "rule": "tl_advsimd.py:440",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/2/children/2"
+    },
+    {
+      "base": 1577082880,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/1/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA256"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/1/children/6/condition"
+        }
+      ],
+      "encoding_id": "SHA256SU1_VVV_cryptosha3",
+      "features": [
+        "FEAT_SHA256"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 1577082880,
+      "id": "e1-0024",
+      "mnemonic": "sha256su1",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha3/SHA256SU1_VVV_cryptosha3",
+      "rule": "tl_advsimd.py:446",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/1/children/6"
+    },
+    {
+      "base": 3462430720,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA512"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/0/condition"
+        }
+      ],
+      "encoding_id": "SHA512H_QQV_cryptosha512_3",
+      "features": [
+        "FEAT_SHA512"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462430720,
+      "id": "e1-0025",
+      "mnemonic": "sha512h",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512H_QQV_cryptosha512_3",
+      "rule": "tl_advsimd.py:32",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/0"
+    },
+    {
+      "base": 3462431744,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA512"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/1/condition"
+        }
+      ],
+      "encoding_id": "SHA512H2_QQV_cryptosha512_3",
+      "features": [
+        "FEAT_SHA512"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462431744,
+      "id": "e1-0026",
+      "mnemonic": "sha512h2",
+      "operands": [
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "q",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512H2_QQV_cryptosha512_3",
+      "rule": "tl_advsimd.py:32",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/1"
+    },
+    {
+      "base": 3468722176,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/31/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA512"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/31/children/0/condition"
+        }
+      ],
+      "encoding_id": "SHA512SU0_VV2_cryptosha512_2",
+      "features": [
+        "FEAT_SHA512"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 3468722176,
+      "id": "e1-0027",
+      "mnemonic": "sha512su0",
+      "operands": [
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_2/SHA512SU0_VV2_cryptosha512_2",
+      "rule": "tl_advsimd.py:422",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/31/children/0"
+    },
+    {
+      "base": 3462432768,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA512"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/2/condition"
+        }
+      ],
+      "encoding_id": "SHA512SU1_VVV2_cryptosha512_3",
+      "features": [
+        "FEAT_SHA512"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462432768,
+      "id": "e1-0028",
+      "mnemonic": "sha512su1",
+      "operands": [
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512SU1_VVV2_cryptosha512_3",
+      "rule": "tl_advsimd.py:428",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/2"
+    },
+    {
+      "base": 3462447104,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/4/condition"
+        }
+      ],
+      "encoding_id": "SM3PARTW1_VVV4_cryptosha512_3",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462447104,
+      "id": "e1-0029",
+      "mnemonic": "sm3partw1",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SM3PARTW1_VVV4_cryptosha512_3",
+      "rule": "tl_advsimd.py:446",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/4"
+    },
+    {
+      "base": 3462448128,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/5/condition"
+        }
+      ],
+      "encoding_id": "SM3PARTW2_VVV4_cryptosha512_3",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462448128,
+      "id": "e1-0030",
+      "mnemonic": "sm3partw2",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SM3PARTW2_VVV4_cryptosha512_3",
+      "rule": "tl_advsimd.py:446",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/5"
+    },
+    {
+      "base": 3460300800,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/29/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/29/children/2/condition"
+        }
+      ],
+      "encoding_id": "SM3SS1_VVV4_crypto4",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 10,
+          "operand": 3,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292902912,
+      "fixed_value": 3460300800,
+      "id": "e1-0031",
+      "mnemonic": "sm3ss1",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto4/SM3SS1_VVV4_crypto4",
+      "rule": "tl_advsimd.py:452",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/29/children/2"
+    },
+    {
+      "base": 3460333568,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/27/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/27/children/0/condition"
+        }
+      ],
+      "encoding_id": "SM3TT1A_VVV4_crypto3_imm2",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 12,
+          "operand": 3,
+          "width": 2
+        }
+      ],
+      "fixed_mask": 4292922368,
+      "fixed_value": 3460333568,
+      "id": "e1-0032",
+      "mnemonic": "sm3tt1a",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "lane_s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "imm",
+          "max": 3,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT1A_VVV4_crypto3_imm2",
+      "rule": "tl_advsimd.py:458",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/27/children/0"
+    },
+    {
+      "base": 3460334592,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/27/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/27/children/1/condition"
+        }
+      ],
+      "encoding_id": "SM3TT1B_VVV4_crypto3_imm2",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 12,
+          "operand": 3,
+          "width": 2
+        }
+      ],
+      "fixed_mask": 4292922368,
+      "fixed_value": 3460334592,
+      "id": "e1-0033",
+      "mnemonic": "sm3tt1b",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "lane_s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "imm",
+          "max": 3,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT1B_VVV4_crypto3_imm2",
+      "rule": "tl_advsimd.py:458",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/27/children/1"
+    },
+    {
+      "base": 3460335616,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/27/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/27/children/2/condition"
+        }
+      ],
+      "encoding_id": "SM3TT2A_VVV4_crypto3_imm2",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 12,
+          "operand": 3,
+          "width": 2
+        }
+      ],
+      "fixed_mask": 4292922368,
+      "fixed_value": 3460335616,
+      "id": "e1-0034",
+      "mnemonic": "sm3tt2a",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "lane_s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "imm",
+          "max": 3,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT2A_VVV4_crypto3_imm2",
+      "rule": "tl_advsimd.py:458",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/27/children/2"
+    },
+    {
+      "base": 3460336640,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/27/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/27/children/3/condition"
+        }
+      ],
+      "encoding_id": "SM3TT2B_VVV_crypto3_imm2",
+      "features": [
+        "FEAT_SM3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 12,
+          "operand": 3,
+          "width": 2
+        }
+      ],
+      "fixed_mask": 4292922368,
+      "fixed_value": 3460336640,
+      "id": "e1-0035",
+      "mnemonic": "sm3tt2b",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "lane_s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "imm",
+          "max": 3,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT2B_VVV_crypto3_imm2",
+      "rule": "tl_advsimd.py:458",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/27/children/3"
+    },
+    {
+      "base": 3468723200,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/31/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM4"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/31/children/1/condition"
+        }
+      ],
+      "encoding_id": "SM4E_VV4_cryptosha512_2",
+      "features": [
+        "FEAT_SM4"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4294966272,
+      "fixed_value": 3468723200,
+      "id": "e1-0036",
+      "mnemonic": "sm4e",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_2/SM4E_VV4_cryptosha512_2",
+      "rule": "tl_advsimd.py:440",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/31/children/1"
+    },
+    {
+      "base": 3462449152,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/28/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SM4"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/28/children/6/condition"
+        }
+      ],
+      "encoding_id": "SM4EKEY_VVV4_cryptosha512_3",
+      "features": [
+        "FEAT_SM4"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 4292934656,
+      "fixed_value": 3462449152,
+      "id": "e1-0037",
+      "mnemonic": "sm4ekey",
+      "operands": [
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v4s",
+          "max": 31,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/cryptosha512_3/SM4EKEY_VVV4_cryptosha512_3",
+      "rule": "tl_advsimd.py:446",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/28/children/6"
+    },
+    {
+      "base": 3464495104,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/30/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_SHA3"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/30/children/0/condition"
+        }
+      ],
+      "encoding_id": "XAR_VVV2_crypto3_imm6",
+      "features": [
+        "FEAT_SHA3"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        },
+        {
+          "lsb": 16,
+          "operand": 2,
+          "width": 5
+        },
+        {
+          "lsb": 10,
+          "operand": 3,
+          "width": 6
+        }
+      ],
+      "fixed_mask": 4292870144,
+      "fixed_value": 3464495104,
+      "id": "e1-0038",
+      "mnemonic": "xar",
+      "operands": [
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "v2d",
+          "max": 31,
+          "min": 0
+        },
+        {
+          "kind": "imm",
+          "max": 63,
+          "min": 0
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/crypto3_imm6/XAR_VVV2_crypto3_imm6",
+      "rule": "tl_advsimd.py:434",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/30/children/0"
+    }
+  ],
+  "inventory_sha256": "db619f98fe4e0eaca095a68aab14c7ef902ab999828dbc6051e42a6e519380da",
+  "planned_records": [
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32B_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32CB_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32CH_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32CW_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32CX_64C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32H_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32W_32C_dp_2src",
+    "2026-06_rel/A64/dpreg/dp_2src/CRC32X_64C_dp_2src",
+    "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT1A_VVV4_crypto3_imm2",
+    "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT1B_VVV4_crypto3_imm2",
+    "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT2A_VVV4_crypto3_imm2",
+    "2026-06_rel/A64/simd_dp/crypto3_imm2/SM3TT2B_VVV_crypto3_imm2",
+    "2026-06_rel/A64/simd_dp/crypto3_imm6/XAR_VVV2_crypto3_imm6",
+    "2026-06_rel/A64/simd_dp/crypto4/BCAX_VVV16_crypto4",
+    "2026-06_rel/A64/simd_dp/crypto4/EOR3_VVV16_crypto4",
+    "2026-06_rel/A64/simd_dp/crypto4/SM3SS1_VVV4_crypto4",
+    "2026-06_rel/A64/simd_dp/cryptoaes/AESD_B_cryptoaes",
+    "2026-06_rel/A64/simd_dp/cryptoaes/AESE_B_cryptoaes",
+    "2026-06_rel/A64/simd_dp/cryptoaes/AESIMC_B_cryptoaes",
+    "2026-06_rel/A64/simd_dp/cryptoaes/AESMC_B_cryptoaes",
+    "2026-06_rel/A64/simd_dp/cryptosha2/SHA1H_SS_cryptosha2",
+    "2026-06_rel/A64/simd_dp/cryptosha2/SHA1SU1_VV_cryptosha2",
+    "2026-06_rel/A64/simd_dp/cryptosha2/SHA256SU0_VV_cryptosha2",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA1C_QSV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA1M_QSV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA1P_QSV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA1SU0_VVV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA256H2_QQV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA256H_QQV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha3/SHA256SU1_VVV_cryptosha3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_2/SHA512SU0_VV2_cryptosha512_2",
+    "2026-06_rel/A64/simd_dp/cryptosha512_2/SM4E_VV4_cryptosha512_2",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/RAX1_VVV2_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512H2_QQV_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512H_QQV_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SHA512SU1_VVV2_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SM3PARTW1_VVV4_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SM3PARTW2_VVV4_cryptosha512_3",
+    "2026-06_rel/A64/simd_dp/cryptosha512_3/SM4EKEY_VVV4_cryptosha512_3"
+  ],
+  "rules_sha256": {
+    "tl_advsimd.py": "56d0978c9e700dec39414cf1bfa8019e9b878d21c43ff464c52b67b10d825cf5",
+    "tl_float.py": "3cd5f9585048e418e4d6f2818158e059b09265e799a3f8d2c5d7cf7a9aab0a92",
+    "tl_fpsimd.py": "d5879714db02c6c30b25c32ce9287fe99b790e8863006e41fd17e8d2d91fce52",
+    "tl_general.py": "e7f9eb2cdd93289eaef8f844a1bf19b7818f79db31705fd9d6a318936e4741e1",
+    "tl_sve.py": "a40ea817bdc1a6f70b341386982b19594cadf2c07871bad10c8b37af6bc7cea3",
+    "tl_system.py": "3905aa946370740f1914389df59368c7b45527e47637a136599ec9b09e187219"
+  },
+  "source_lock": {
+    "a64_node_counts": {
+      "Instruction": 4350,
+      "InstructionAlias": 292,
+      "InstructionGroup": 778,
+      "InstructionSet": 1
+    },
+    "files": {
+      "Features.json": "633259000ffd3da32900bd0c0c1beae4a9eea7095c278f74d62a00c846b41187",
+      "Instructions.json": "a1ad2c6538a47cd97d8762791ac5af88bce1d5f6aff096c9b77aef853e76acfe"
+    },
+    "lock_version": 1,
+    "schema_files": 140,
+    "schema_tree_sha256": "5fb04eedca8431b51d80221a1d6ebcd1abb8bca038df94785321182dcbff0006",
+    "version": {
+      "architecture": "vFATAp1-A",
+      "build": "818",
+      "ref": "2026-06_rel",
+      "schema": "2.9.5",
+      "timestamp": "2026-06-24 17:12:14"
+    }
+  },
+  "xml_entries": 39,
+  "xml_sha256": {
+    "aesd_advsimd.xml": "ba3bdb7ddc4c35bf6409479f7472e3d9e77e8c55fc9a450547610fba50d7adaf",
+    "aese_advsimd.xml": "c143ac5f251ea18c94a4d097b6bb2c757570f0a9a8bb0980ef1ac7d5cf8b3e21",
+    "aesimc_advsimd.xml": "7be2cf50a0f5dbf6c73bdbd776d3446f6fe7bb4b5a44d962ce3d414aebb1ced0",
+    "aesmc_advsimd.xml": "aa3f2d2edbaff8241c7d5c3d1e1e83925b399aee20bcb44f760ec8a9ef7c9a72",
+    "bcax_advsimd.xml": "a16fcc33cff17580a7d508f7383b746467981e6c86f9bc4a2ca12f0f27d91dfa",
+    "crc32.xml": "f8a11b345afa1322118a16ae6e4551865c0bd1de2df8a5c237cd8e72c60ac48d",
+    "crc32c.xml": "64547e5815d0f1a918a1bba0dbf1e9817086cb216af284c393f3bd8905860c40",
+    "eor3_advsimd.xml": "3c037d6676e021602101c66177ac4d98deef743c6fd4a5b2d3fe408c91abd20f",
+    "rax1_advsimd.xml": "2322f945154b584724b1d80ff0d0f042bf1154b72043d9949a091e19d7b695fe",
+    "sha1c_advsimd.xml": "e29468a29eec217303d0f5583092b832ab0fa4f8ef44d0e4deaa5c9fb929cf2a",
+    "sha1h_advsimd.xml": "fdfe50718406bd918269ce82d0cd8150b99b9b82e88ebd1c17835b3dd297ad54",
+    "sha1m_advsimd.xml": "76f10bce6a8ef44850eea41f2806bd52f6535dd8e44e293fac1421edd2774a8e",
+    "sha1p_advsimd.xml": "7aea39b3201710a3838cdd9a0a7a9cc416f0cf28cb2a2810b82d769bfa581005",
+    "sha1su0_advsimd.xml": "2001fe68125f7b6f3cd908ef7c6b059ce9e0cb7ee06941fed214b2c86a7dd34a",
+    "sha1su1_advsimd.xml": "51d747cdba67d1b2277ea15311dd367813c66cf3a0db3d32f6683dd3d42a8c1d",
+    "sha256h2_advsimd.xml": "b38ee1c671a11ebb95a95679830fb62bfe10affc181b3f36558f7307870d1b1a",
+    "sha256h_advsimd.xml": "73039df7e89089255ac07a6c1b2aec1a6d8e341cf6e18e663398e133d1de13b3",
+    "sha256su0_advsimd.xml": "685ee6a11eaef9521c903f958673575716ab8bd02e5e2c736f273324f1324061",
+    "sha256su1_advsimd.xml": "0b49244f2f57b702271ae43d0f7df0d48713f9a1d96dcc784a768111095993fe",
+    "sha512h2_advsimd.xml": "a002a091792f58996ab7d8ea52e704deebdc74cb96b11c11115a9c1f7ca192b8",
+    "sha512h_advsimd.xml": "aaab17a858475b811bf52ec98cd56258c975cbd9ce38805340bdfe2de35094ea",
+    "sha512su0_advsimd.xml": "e895dc6cda17bfc900160cde6bea9f849dc8da8ad930a39c68f9879305723218",
+    "sha512su1_advsimd.xml": "087f6ffcc3adf9f596c686970bd8d6f7b06d5103fcc9f9643962a010f1c1efd4",
+    "sm3partw1_advsimd.xml": "714bfe3de6102470a05a66ad5b5145b0fa078a2cfab84a2d02dd76db7b13cb32",
+    "sm3partw2_advsimd.xml": "fa48423a5c95bef5736a3990e13ad72e16d095081dacb0db3b7263a69890d8ed",
+    "sm3ss1_advsimd.xml": "d4f7e0fc6780fae00da0712e4e53610402f8667e6e2d1af876a32294bd5c85b8",
+    "sm3tt1a_advsimd.xml": "618ea69efa092135734ccf7ab52c7bf1ffc03687108ef2d29c0d5c3ddb89fbc8",
+    "sm3tt1b_advsimd.xml": "ff260fefe9dc59942ffe3b945d89500b2f2785b983368453ad149fdb1b3e43bb",
+    "sm3tt2a_advsimd.xml": "e1153996cac1f118d50ccbb11ff2eeeedc746e928e597cbd82882ffc9abb08b5",
+    "sm3tt2b_advsimd.xml": "b514af1673184ddec7385a51a302f982ac92dfb408eaeb1c2adf8e75c42ca342",
+    "sm4e_advsimd.xml": "7702d2b5d6ad3047b7f7861e92223afe7fe355c73ac067d33c3bee7ab9ef4f8c",
+    "sm4ekey_advsimd.xml": "794844851d9510e9995a05ea0daf5a16d81388946cae82b4c361b53174ee1eab",
+    "xar_advsimd.xml": "4ef5034358fe13f7625fbd93e8388bd1756e943c19c28b14fd1eaeb6e5d264ac"
+  }
+}
