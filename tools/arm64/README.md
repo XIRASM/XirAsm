@@ -1,22 +1,28 @@
 # A64 Generation
 
-`rules/b1.json` through `rules/b4.json` and `rules/e1.json` through `rules/e4.json`
+`rules/b1.json` through `rules/b4.json` and `rules/e1.json` through `rules/e5.json`
 contain normalized forms tied to the pinned
 Arm source inventory. `normalize_a64.py` adapts the translation rules without
 executing their Python source. It records every selected XML entry and rule
 alternative, checks field ownership, and rejects unresolved mappings.
+E5 uses the companion `normalize_a64_e5.py` and `generate_a64_e5.py` because
+MOPS/CSSC are emitted in separate generated files while sharing the public entry points.
 
 ```text
 python tools/arm64/normalize_a64.py --batch B2 --inventory <inventory.json> --xml <a64-xml-directory> --rules <translation-rules-directory> --output tools/arm64/rules/b2.json
 python tools/arm64/generate_a64.py
 python tools/arm64/generate_a64.py --check
+python tools/arm64/generate_a64_e5.py --check
 python tests/isa/arm/test_a64_generation.py
 python tests/isa/arm/check_a64_generated.py --sync --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/check_a64_e5_generated.py --clang <clang> --objcopy <llvm-objcopy>
 ```
 
-The emitter reads all eight batches together and gives each mnemonic one API and
-macro owner (conditional branches use `b.eq`, `b.ne`, etc.). `arm/a64.inc` and `arm/a64-macros.inc` are the shared entry
-points. The earlier B2 entry points forward to them.
+The shared emitter reads B1-B4/E1-E4 together. E5 remains a separate generated
+artifact, but `arm/a64.inc` and `arm/a64-macros.inc` import both sets. Conflicting
+CSSC scalar mnemonics (`abs`, `cnt`, `smax`, `smin`, `umax`, `umin`) are selected
+by operand shape in the existing natural macro owner; `cssc_*` names remain
+compatibility aliases. The earlier B2 entry points forward to the shared entries.
 
 The differential runner checks direct calls and macros against Clang, samples
 register roles, enumerates finite immediate domains, and verifies rejection,
@@ -102,11 +108,13 @@ inventory queue. `extension-batches.json` adds disjoint, explicit record sets:
 | E2 | LSE, LRCPC/LRCPC2, LOR | 257 | 257 |
 | E3 | FP16, DotProd, RDM, FHM, FCMA, BF16, I8MM, FRINTTS, JSCVT | 217 | 333 |
 | E4 | PAuth, BTI, MTE/MTE2, FlagM/FlagM2, SB, DGH, RAS, BFC | 86 | 137 |
+| E5 | MOPS, MOPS_GO/MTE set-go forms, CSSC | 154 | 154 |
 
-The combined library has 1743 source records, 4358 forms and 778 mnemonic owners.
-The normalizer and differential runner accept `--batch E1` through `--batch E4`.
-The same default entry points include all batches. No native compiler ISA backend
-or Python runtime is needed to use the shipped DSL includes.
+The combined library has 1897 source records and 4514 forms. B1-B4/E1-E4 have
+778 mnemonic owners; E5 adds 139 API names and 133 new standard mnemonic owners,
+plus six `cssc_*` compatibility aliases. The same default entry points include
+all batches. No native compiler ISA backend or Python runtime is needed to use
+the shipped DSL includes.
 
 Dot-product element groups use natural `v2.4b[index]` / `v2.2h[index]` syntax,
 or `a64_lane("v2.4b", index)` / `a64_lane("v2.2h", index)`. These descriptors
@@ -117,6 +125,9 @@ ordinary load/store overlap restrictions must not be applied indiscriminately.
 `check_a64_extension_edges.py` contains independent extension, register-pair,
 grouped-lane, capture and writeback regressions. SVE/SME, A32/T32 and newer
 optional features outside the explicit extension batches remain out of scope.
+`check_a64_e5_generated.py` independently compares every E5 form with Clang,
+checks the shared CSSC mnemonic dispatch, and rejects malformed MOPS decoration,
+out-of-range immediates and architecturally constrained register overlaps.
 
 The shared source reader remains part of the production pipeline. It requires
 Python 3.11 or later and the dependencies in `requirements.txt`. Supply the
@@ -134,7 +145,7 @@ Use a dedicated output directory outside the source package. The inventory
 preserves complete A64 instruction and alias identities, ancestry, constraints,
 assembly grammar, operations and feature expressions. It includes a historical
 five-form `pilot.json` mapping artifact; current encoding coverage comes from
-the B1-B4/E1-E4 rules and generated manifest, not that pilot artifact.
+the B1-B4/E1-E5 rules and generated manifests, not that pilot artifact.
 
 A32/T32 are outside this pipeline. Unknown conditions and deferred records remain
 visible. The reader checks source drift, malformed structures, missing
@@ -142,5 +153,6 @@ references and contradictory fields. Should-be bits remain distinct from hard
 fixed bits; unspecified bits are not silently filled with zero.
 
 The retired hand-written encoder and its pilot emitter are no longer shipped.
-Current generation uses only `normalize_a64.py` and `generate_a64.py`.
+Current generation uses `normalize_a64.py`/`generate_a64.py` plus the E5
+companions `normalize_a64_e5.py`/`generate_a64_e5.py`.
 See `NOTICE` and `MPL-2.0.txt` for source and adaptation notices.

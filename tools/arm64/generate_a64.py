@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import struct
 
+from e5_rules import CSSC_SCALAR_CONFLICTS
 from source import canonical, digest, require
 
 HERE = Path(__file__).resolve().parent
@@ -83,6 +84,8 @@ def register_source():
         lines.append(f'map.set_mut(a64_registers, "v{reg}.2h", list.of(55, {reg}))')
     lines.append('map.set_mut(a64_registers, "sp", list.of(34, 31))')
     lines.append('map.set_mut(a64_registers, "wsp", list.of(38, 31))')
+    lines.append('map.set_mut(a64_registers, "fp", list.of(3, 29))')
+    lines.append('map.set_mut(a64_registers, "lr", list.of(3, 30))')
     for index, size in enumerate("bhsd"):
         for reg in range(32):
             lines.append(f'map.set_mut(a64_lanes, "v{reg}.{size}", list.of({18+index}, {reg}))')
@@ -101,15 +104,25 @@ def register_source():
     return "\n".join(lines)
 
 
-def render(batches):
+def render(batches, e5=None):
     for batch in batches:
         validate(batch)
+    if e5 is None:
+        e5 = json.loads((HERE / "rules/e5.json").read_bytes())
+    require(e5.get("batch") == "E5", "E5", "invalid dispatch source")
+    e5_dispatch = defaultdict(list)
+    for form in e5["forms"]:
+        if form["mnemonic"] in CSSC_SCALAR_CONFLICTS:
+            e5_dispatch[form["mnemonic"]].append(form)
     records = [r for b in batches for r in b['planned_records']]
     require(len(records) == len(set(records)), 'batches', 'overlapping source sets')
     data = {"format_version": 1, "batch": "+".join(b["batch"] for b in batches), "source_lock": batches[0]["source_lock"],
             "planned_records": [r for b in batches for r in b["planned_records"]],
             "forms": [f for b in batches for f in b["forms"]], "blocked_records": [],
-            "inputs": {b["batch"]: digest(canonical(b)) for b in batches}}
+            "inputs": {**{b["batch"]: digest(canonical(b)) for b in batches},
+                       "E5-dispatch": digest(canonical({
+                           mnemonic: forms for mnemonic, forms in sorted(e5_dispatch.items())
+                       }))}}
     groups = defaultdict(list)
     for form in data["forms"]:
         groups[form["mnemonic"]].append(form)
@@ -209,15 +222,33 @@ def render(batches):
             code += [f'        assert(false, "a64 {mnemonic}: operand value out of range")', "        return 0;", "    }"]
         literal = any(o["kind"] == "target" for f in forms for o in f["operands"])
         page = "true" if mnemonic == "adrp" else "false"
-        code += [f'    assert(false, "a64 {mnemonic}: invalid operand classes, arrangements or count")',
-                 "    return 0;", "}", f"fn a64_{mnemonic}(args: list) {{",
-                 *(["    if a64_has_target(args) {",
+        supports_lo12 = mnemonic == "add" or any(
+            operand["kind"] == "mem_off" for form in forms for operand in form["operands"]
+        )
+        if supports_lo12:
+            body = ["    if a64_has_lo12(args) {",
+                    f"        a64_{mnemonic}_shape(a64_lo12_values(args, false))",
+                    "        defer {",
+                    f"            store.u32(here(), a64_{mnemonic}_word(a64_lo12_values(args, true)))",
+                    "        }", "        emit.u32(0)"]
+            if literal:
+                body += ["    } else if a64_has_target(args) {",
+                         f"        a64_{mnemonic}_shape(a64_literal_values(args, 0, false, {page}))",
+                         "        defer {",
+                         f"            store.u32(here(), a64_{mnemonic}_word(a64_literal_values(args, here(), true, {page})))",
+                         "        }", "        emit.u32(0)"]
+            body += ["    } else {", f"        emit.u32(a64_{mnemonic}_word(args))", "    }"]
+        elif literal:
+            body = ["    if a64_has_target(args) {",
                     f"        a64_{mnemonic}_shape(a64_literal_values(args, 0, false, {page}))",
                     "        defer {",
                     f"            store.u32(here(), a64_{mnemonic}_word(a64_literal_values(args, here(), true, {page})))",
                     "        }", "        emit.u32(0)", "    } else {",
-                    f"        emit.u32(a64_{mnemonic}_word(args))", "    }"] if literal else
-                   [f"    emit.u32(a64_{mnemonic}_word(args))"]), "}", ""]
+                    f"        emit.u32(a64_{mnemonic}_word(args))", "    }"]
+        else:
+            body = [f"    emit.u32(a64_{mnemonic}_word(args))"]
+        code += [f'    assert(false, "a64 {mnemonic}: invalid operand classes, arrangements or count")',
+                 "    return 0;", "}", f"fn a64_{mnemonic}(args: list) {{", *body, "}", ""]
         code += [f"fn a64_{mnemonic}_shape(args: list) {{",
                  "    const key: u64 = a64_signature(a64_flatten(args))",
                  f'    assert({" || ".join(f"key == {key}" for key in sorted(by_key))}, "a64 {mnemonic}: invalid operand classes, arrangements or count")', "}", ""]
@@ -229,6 +260,18 @@ def render(batches):
                 macros += [f'macro b.{condition}(target) {{',
                            f'    const parsed: list = a64_operands(list.of(target), false, false, true, true, "b_cond_target")',
                            f'    a64_b_cond(list.of(a64_cond("{condition}"), list.get(parsed, 0)))', '}', '']
+        elif mnemonic in e5_dispatch:
+            e5_keys = sorted({signature(form["operands"]) for form in e5_dispatch[mnemonic]})
+            macros += [f"macro {mnemonic}(...args) {{",
+                       f'    const shaped: list = a64_operands(args, {floating}, {zero_float}, false, {literal_arg}, "{mnemonic}")',
+                       "    const key: u64 = a64_signature(a64_flatten(shaped))",
+                       f'    if {" || ".join(f"key == {key}" for key in e5_keys)} {{',
+                       f"        a64_e5_{mnemonic}_shape(shaped)",
+                       f'        a64_e5_{mnemonic}(a64_operands(args, {floating}, {zero_float}, true, {literal_arg}, "{mnemonic}"))',
+                       "    } else {",
+                       f"        a64_{mnemonic}_shape(shaped)",
+                       f'        a64_{mnemonic}(a64_operands(args, {floating}, {zero_float}, true, {literal_arg}, "{mnemonic}"))',
+                       "    }", "}", ""]
         else:
             macros += [f"macro {mnemonic}(...args) {{",
                        f'    a64_{mnemonic}_shape(a64_operands(args, {floating}, {zero_float}, false, {literal_arg}, "{mnemonic}"))',
@@ -251,15 +294,22 @@ def render(batches):
     generated['a64/generated/names.inc'] += 'let a64_system_registers: map = map.new()\n' + ''.join(
         f'map.set_mut(a64_system_registers, "{name}", list.of({entry["value"]}, {entry["access"]}))\n'
         for name, entry in sorted(registers.items()))
-    generated["a64.inc"] = 'import("arm/a64/operands.inc")\nimport("arm/a64/memory.inc")\nimport("arm/a64/scalar.inc")\nimport("arm/a64/generated/instructions.inc")\n'
-    generated["a64-macros.inc"] = 'import("arm/a64.inc")\nimport("arm/a64/generated/instructions-macros.inc")\n'
+    generated["a64.inc"] = ('import("arm/a64/operands.inc")\n'
+                            'import("arm/a64/memory.inc")\n'
+                            'import("arm/a64/scalar.inc")\n'
+                            'import("arm/a64/mops.inc")\n'
+                            'import("arm/a64/generated/instructions.inc")\n'
+                            'import("arm/a64/generated/instructions-e5.inc")\n')
+    generated["a64-macros.inc"] = ('import("arm/a64.inc")\n'
+                                   'import("arm/a64/generated/instructions-macros.inc")\n'
+                                   'import("arm/a64/generated/instructions-e5-macros.inc")\n')
     generated["a64-b2.inc"] = 'import("arm/a64.inc")\n'
     generated["a64-b2-macros.inc"] = 'import("arm/a64-macros.inc")\n'
     generated["a64/generated/lanes-immediates.inc"] = 'import("arm/a64/generated/instructions.inc")\n'
     generated["a64/generated/lanes-immediates-macros.inc"] = 'import("arm/a64/generated/instructions-macros.inc")\n'
     notice = (HERE / "NOTICE").read_text(encoding="utf-8")
     notice += ("\nOperand translation rules are adapted from dynasm-rs, under MPL-2.0.\n"
-               "The adapted sources are tools/arm64/normalize_a64.py, b4_rules.py, extension_rules.py, and rules/b1.json through rules/b4.json and rules/e1.json through rules/e4.json.\n"
+               "The adapted sources are tools/arm64/normalize_a64.py, normalize_a64_e5.py, b4_rules.py, extension_rules.py, e5_rules.py, rules/b1.json through rules/b4.json, and rules/e1.json through rules/e5.json.\n"
                "See tools/arm64/MPL-2.0.txt for the license.\n")
     generated["a64/generated/NOTICE"] = notice
     artifacts = {name: text.encode("ascii") for name, text in generated.items()}
@@ -287,7 +337,8 @@ def main():
     args = parser.parse_args()
     batches = [json.loads(path.read_bytes()) for path in args.rules]
     require([b["batch"] for b in batches] == ["B1", "B2", "B3", "B4", "E1", "E2", "E3", "E4"], "rules", "expected B1-B4 and E1-E4 in order")
-    artifacts = render(batches)
+    e5 = json.loads((HERE / "rules/e5.json").read_bytes())
+    artifacts = render(batches, e5)
     for name, value in artifacts.items():
         path = args.output / name
         if args.check:

@@ -53,6 +53,47 @@ fn a64_address(address: u64) -> list {
     return list.of(37, address);
 }
 
+fn a64_lo12(name: string) -> list {
+    return list.of(56, name);
+}
+
+fn a64_mem_lo12(base: string, name: string) -> list {
+    return list.of(57, a64_base(base), name);
+}
+
+fn a64_has_lo12(args: list) -> bool {
+    for arg in args {
+        const kind: u64 = list.get(arg, 0)
+        if kind == 56 || kind == 57 {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn a64_lo12_values(args: list, evaluate: bool) -> list {
+    let result: list = list.new()
+    for arg in args {
+        const kind: u64 = list.get(arg, 0)
+        if kind == 56 {
+            let value: u64 = 0
+            if evaluate {
+                value = label_addr(list.get(arg, 1)) & 4095
+            }
+            list.push_mut(result, a64_imm(value))
+        } else if kind == 57 {
+            let value: u64 = 0
+            if evaluate {
+                value = label_addr(list.get(arg, 2)) & 4095
+            }
+            list.push_mut(result, list.of(26, list.get(arg, 1), value))
+        } else {
+            list.push_mut(result, arg)
+        }
+    }
+    return result;
+}
+
 fn a64_has_target(args: list) -> bool {
     if len(args) == 0 {
         return false;
@@ -113,6 +154,14 @@ fn a64_parse_memory(arg: operand, evaluate: bool) -> list {
     }
     const offset: operand = a64_clean(list.get(parts, 1))
     const index: string = lower(operand.text(offset))
+    if contains(index, ":lo12:") {
+        assert(a64_is_lo12(offset), "a64: invalid :lo12: label modifier")
+        assert(!pre && len(parts) == 2, "a64: :lo12: memory offset cannot write back or use a modifier")
+        if evaluate {
+            return a64_mem_lo12(base, a64_lo12_name(offset));
+        }
+        return a64_mem(base, 0);
+    }
     if map.has(a64_registers, index) {
         assert(!pre, "a64: register offset cannot write back")
         let extend: string = "lsl"

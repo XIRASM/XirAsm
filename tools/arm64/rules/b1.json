@@ -20640,7 +20640,7 @@
         }
       ],
       "record_id": "2026-06_rel/A64/simd_dp/asimdmisc/FCVTN_asimdmisc_N",
-      "rule": "tl_advsimd.py:1411",
+      "rule": "arm-fcvtn-narrow-v1",
       "should_be_mask": 0,
       "should_be_value": 0,
       "source_pointer": "/instructions/2/children/7/children/20/children/14"
@@ -20713,7 +20713,7 @@
         }
       ],
       "record_id": "2026-06_rel/A64/simd_dp/asimdmisc/FCVTN_asimdmisc_N",
-      "rule": "tl_advsimd.py:1421",
+      "rule": "arm-fcvtn-narrow-v1",
       "should_be_mask": 0,
       "should_be_value": 0,
       "source_pointer": "/instructions/2/children/7/children/20/children/14"
@@ -85276,6 +85276,152 @@
       "should_be_mask": 0,
       "should_be_value": 0,
       "source_pointer": "/instructions/2/children/7/children/14/children/5"
+    },
+    {
+      "base": 237070336,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/20/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AdvSIMD"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/20/children/14/condition"
+        }
+      ],
+      "encoding_id": "FCVTN_asimdmisc_N",
+      "features": [
+        "FEAT_AdvSIMD"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 3217030144,
+      "fixed_value": 237070336,
+      "id": "b1-1088",
+      "mnemonic": "fcvtn",
+      "operands": [
+        {
+          "kind": "v4h"
+        },
+        {
+          "kind": "v4s"
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/asimdmisc/FCVTN_asimdmisc_N",
+      "rule": "arm-fcvtn-narrow-v1",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/20/children/14"
+    },
+    {
+      "base": 1310812160,
+      "conditions": [
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Bool",
+            "value": true
+          },
+          "source": "/instructions/2/children/7/children/20/condition"
+        },
+        {
+          "expression": {
+            "_type": "AST.Function",
+            "arguments": [
+              {
+                "_type": "AST.Identifier",
+                "value": "FEAT_AdvSIMD"
+              }
+            ],
+            "name": "IsFeatureImplemented",
+            "parameters": []
+          },
+          "source": "/instructions/2/children/7/children/20/children/14/condition"
+        }
+      ],
+      "encoding_id": "FCVTN_asimdmisc_N",
+      "features": [
+        "FEAT_AdvSIMD"
+      ],
+      "fields": [
+        {
+          "lsb": 0,
+          "operand": 0,
+          "width": 5
+        },
+        {
+          "lsb": 5,
+          "operand": 1,
+          "width": 5
+        }
+      ],
+      "fixed_mask": 3217030144,
+      "fixed_value": 237070336,
+      "id": "b1-1089",
+      "mnemonic": "fcvtn2",
+      "operands": [
+        {
+          "kind": "v8h"
+        },
+        {
+          "kind": "v4s"
+        }
+      ],
+      "record_id": "2026-06_rel/A64/simd_dp/asimdmisc/FCVTN_asimdmisc_N",
+      "rule": "arm-fcvtn-narrow-v1",
+      "should_be_mask": 0,
+      "should_be_value": 0,
+      "source_pointer": "/instructions/2/children/7/children/20/children/14"
     }
   ],
   "inventory_sha256": "db619f98fe4e0eaca095a68aab14c7ef902ab999828dbc6051e42a6e519380da",

@@ -404,9 +404,12 @@ movi v0.4s, #marked(255), lsl #marked(8)
 fmov d0, #marked_fp(1.5)
 tbl v0.16b, {v31.16b-v1.16b}, v2.16b
 fcmp d0, #marked_fp(0.0)
+stp fp, lr, [sp, #-16]!
+mov fp, sp
+ldp fp, lr, [sp], #16
 assert(sym.unique("evaluations") == "evaluations__6", "operand evaluated more than once")
 '''
-    expected_asm = 'fmla v0.4s, v1.4s, v2.s[1]\nshl d0, d1, #3\nmovi v0.4s, #255, lsl #8\nfmov d0, #1.5\ntbl v0.16b, {v31.16b, v0.16b, v1.16b}, v2.16b\nfcmp d0, #0.0\n'
+    expected_asm = 'fmla v0.4s, v1.4s, v2.s[1]\nshl d0, d1, #3\nmovi v0.4s, #255, lsl #8\nfmov d0, #1.5\ntbl v0.16b, {v31.16b, v0.16b, v1.16b}, v2.16b\nfcmp d0, #0.0\nstp fp, lr, [sp, #-16]!\nmov fp, sp\nldp fp, lr, [sp], #16\n'
     asm, binary = out / "capture.asm", out / "capture.bin"
     ref, obj, expected = out / "capture.s", out / "capture.o", out / "capture.expected"
     asm.write_text(source, encoding="ascii")

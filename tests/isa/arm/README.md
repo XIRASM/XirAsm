@@ -11,6 +11,7 @@ python tests/isa/arm/check_a64_generated.py --sync --clang <clang> --objcopy <ll
 python tests/isa/arm/check_a64_b3_edges.py --clang <clang> --objcopy <llvm-objcopy>
 python tests/isa/arm/check_a64_b4_edges.py --clang <clang> --objcopy <llvm-objcopy>
 python tests/isa/arm/check_a64_extension_edges.py --clang <clang> --objcopy <llvm-objcopy>
+python tests/isa/arm/check_a64_e5_generated.py --clang <clang> --objcopy <llvm-objcopy>
 python tests/isa/arm/test_official_inventory.py
 ```
 
@@ -30,11 +31,15 @@ records the exact official-source exceptions where Clang accepts an operand
 that XIRASM rejects. Generation regressions check structural rules; inventory
 tests exercise the pinned source reader separately.
 
-B1-B4 cover 1144 source records and 3592 forms. E1-E4 add 599 source records
-and 766 forms, for 1743 records and 4358 forms in total. The extension edge
+B1-B4 cover 1144 source records and 3594 forms. E1-E4 add 599 source records
+and 766 forms; E5 adds 154 MOPS/CSSC records and forms, for 1897 records and
+4514 forms in total. The extension edge
 runner checks fixed crypto, LSE register-pair, FP16, grouped-lane, PAC/MTE and
 capture cases. The B4 edge runner independently
 checks scalar aliases, register roles, system access, branches and page targets.
+The E5 differential runner uses Clang rather than manifest-derived bytes, checks
+standard CSSC names alongside the existing NEON owners, and validates MOPS
+decoration and register-overlap rejections.
 Source feature metadata and
 Clang byte comparisons do not establish execution on a particular A64 device.
 

@@ -203,6 +203,20 @@ fn a64_number(arg: operand) -> operand {
     return clean;
 }
 
+fn a64_is_lo12(arg: operand) -> bool {
+    const captured: operand = a64_number(arg)
+    const parsed: map = match.tokens("=: =lo12 =: label:name", lower(trim(operand.text(captured))))
+    return map.get(parsed, "ok");
+}
+
+fn a64_lo12_name(arg: operand) -> string {
+    const captured: operand = a64_number(arg)
+    const parsed: map = match.tokens("=: =lo12 =: label:name", lower(trim(operand.text(captured))))
+    assert(map.get(parsed, "ok"), "a64: invalid :lo12: label modifier")
+    const captures: map = map.get(parsed, "captures")
+    return map.get(captures, "label");
+}
+
 fn a64_list_register(name: string) -> list {
     const clean: string = lower(trim(name))
     if map.has(a64_lanes, clean) {
@@ -259,6 +273,14 @@ fn a64_operands(args: list, floating: bool, zero_float: bool, evaluate: bool, li
             list.push_mut(result, a64_control(name))
         } else if mnemonic == "isb" && name == "sy" {
             list.push_mut(result, a64_imm(15))
+        } else if !starts_with(name, "[") && contains(name, ":lo12:") {
+            assert(a64_is_lo12(arg), "a64: invalid :lo12: label modifier")
+            assert(mnemonic == "add", "a64: :lo12: immediate modifier is only valid for ADD")
+            if evaluate {
+                list.push_mut(result, a64_lo12(a64_lo12_name(arg)))
+            } else {
+                list.push_mut(result, a64_imm(0))
+            }
         } else if !literal && map.has(a64_names, name) {
             list.push_mut(result, a64_name(name))
         } else if map.has(a64_registers, name) {

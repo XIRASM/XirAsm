@@ -1,8 +1,15 @@
 // Generated statement macros; one owner per mnemonic.
 
 macro abs(...args) {
-    a64_abs_shape(a64_operands(args, false, false, false, false, "abs"))
-    a64_abs(a64_operands(args, false, false, true, false, "abs"))
+    const shaped: list = a64_operands(args, false, false, false, false, "abs")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 263170 || key == 263683 {
+        a64_e5_abs_shape(shaped)
+        a64_e5_abs(a64_operands(args, false, false, true, false, "abs"))
+    } else {
+        a64_abs_shape(shaped)
+        a64_abs(a64_operands(args, false, false, true, false, "abs"))
+    }
 }
 
 macro adc(...args) {
@@ -616,8 +623,15 @@ macro cneg(...args) {
 }
 
 macro cnt(...args) {
-    a64_cnt_shape(a64_operands(args, false, false, false, false, "cnt"))
-    a64_cnt(a64_operands(args, false, false, true, false, "cnt"))
+    const shaped: list = a64_operands(args, false, false, false, false, "cnt")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 263170 || key == 263683 {
+        a64_e5_cnt_shape(shaped)
+        a64_e5_cnt(a64_operands(args, false, false, true, false, "cnt"))
+    } else {
+        a64_cnt_shape(shaped)
+        a64_cnt(a64_operands(args, false, false, true, false, "cnt"))
+    }
 }
 
 macro crc32b(...args) {
@@ -2616,8 +2630,15 @@ macro smaddl(...args) {
 }
 
 macro smax(...args) {
-    a64_smax_shape(a64_operands(args, false, false, false, false, "smax"))
-    a64_smax(a64_operands(args, false, false, true, false, "smax"))
+    const shaped: list = a64_operands(args, false, false, false, false, "smax")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 134743040 || key == 134743042 || key == 135005696 || key == 135005699 {
+        a64_e5_smax_shape(shaped)
+        a64_e5_smax(a64_operands(args, false, false, true, false, "smax"))
+    } else {
+        a64_smax_shape(shaped)
+        a64_smax(a64_operands(args, false, false, true, false, "smax"))
+    }
 }
 
 macro smaxp(...args) {
@@ -2636,8 +2657,15 @@ macro smc(...args) {
 }
 
 macro smin(...args) {
-    a64_smin_shape(a64_operands(args, false, false, false, false, "smin"))
-    a64_smin(a64_operands(args, false, false, true, false, "smin"))
+    const shaped: list = a64_operands(args, false, false, false, false, "smin")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 134743040 || key == 134743042 || key == 135005696 || key == 135005699 {
+        a64_e5_smin_shape(shaped)
+        a64_e5_smin(a64_operands(args, false, false, true, false, "smin"))
+    } else {
+        a64_smin_shape(shaped)
+        a64_smin(a64_operands(args, false, false, true, false, "smin"))
+    }
 }
 
 macro sminp(...args) {
@@ -3661,8 +3689,15 @@ macro umaddl(...args) {
 }
 
 macro umax(...args) {
-    a64_umax_shape(a64_operands(args, false, false, false, false, "umax"))
-    a64_umax(a64_operands(args, false, false, true, false, "umax"))
+    const shaped: list = a64_operands(args, false, false, false, false, "umax")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 134743040 || key == 134743042 || key == 135005696 || key == 135005699 {
+        a64_e5_umax_shape(shaped)
+        a64_e5_umax(a64_operands(args, false, false, true, false, "umax"))
+    } else {
+        a64_umax_shape(shaped)
+        a64_umax(a64_operands(args, false, false, true, false, "umax"))
+    }
 }
 
 macro umaxp(...args) {
@@ -3676,8 +3711,15 @@ macro umaxv(...args) {
 }
 
 macro umin(...args) {
-    a64_umin_shape(a64_operands(args, false, false, false, false, "umin"))
-    a64_umin(a64_operands(args, false, false, true, false, "umin"))
+    const shaped: list = a64_operands(args, false, false, false, false, "umin")
+    const key: u64 = a64_signature(a64_flatten(shaped))
+    if key == 134743040 || key == 134743042 || key == 135005696 || key == 135005699 {
+        a64_e5_umin_shape(shaped)
+        a64_e5_umin(a64_operands(args, false, false, true, false, "umin"))
+    } else {
+        a64_umin_shape(shaped)
+        a64_umin(a64_operands(args, false, false, true, false, "umin"))
+    }
 }
 
 macro uminp(...args) {

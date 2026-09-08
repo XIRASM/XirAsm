@@ -1465,7 +1465,15 @@ fn a64_add_word(args: list) -> u64 {
     return 0;
 }
 fn a64_add(args: list) {
-    emit.u32(a64_add_word(args))
+    if a64_has_lo12(args) {
+        a64_add_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_add_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_add_word(args))
+    }
 }
 
 fn a64_add_shape(args: list) {
@@ -4926,7 +4934,15 @@ fn a64_cas_word(args: list) -> u64 {
     return 0;
 }
 fn a64_cas(args: list) {
-    emit.u32(a64_cas_word(args))
+    if a64_has_lo12(args) {
+        a64_cas_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_cas_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_cas_word(args))
+    }
 }
 
 fn a64_cas_shape(args: list) {
@@ -4965,7 +4981,15 @@ fn a64_casa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casa(args: list) {
-    emit.u32(a64_casa_word(args))
+    if a64_has_lo12(args) {
+        a64_casa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casa_word(args))
+    }
 }
 
 fn a64_casa_shape(args: list) {
@@ -4992,7 +5016,15 @@ fn a64_casab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casab(args: list) {
-    emit.u32(a64_casab_word(args))
+    if a64_has_lo12(args) {
+        a64_casab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casab_word(args))
+    }
 }
 
 fn a64_casab_shape(args: list) {
@@ -5019,7 +5051,15 @@ fn a64_casah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casah(args: list) {
-    emit.u32(a64_casah_word(args))
+    if a64_has_lo12(args) {
+        a64_casah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casah_word(args))
+    }
 }
 
 fn a64_casah_shape(args: list) {
@@ -5058,7 +5098,15 @@ fn a64_casal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casal(args: list) {
-    emit.u32(a64_casal_word(args))
+    if a64_has_lo12(args) {
+        a64_casal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casal_word(args))
+    }
 }
 
 fn a64_casal_shape(args: list) {
@@ -5085,7 +5133,15 @@ fn a64_casalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casalb(args: list) {
-    emit.u32(a64_casalb_word(args))
+    if a64_has_lo12(args) {
+        a64_casalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casalb_word(args))
+    }
 }
 
 fn a64_casalb_shape(args: list) {
@@ -5112,7 +5168,15 @@ fn a64_casalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casalh(args: list) {
-    emit.u32(a64_casalh_word(args))
+    if a64_has_lo12(args) {
+        a64_casalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casalh_word(args))
+    }
 }
 
 fn a64_casalh_shape(args: list) {
@@ -5139,7 +5203,15 @@ fn a64_casb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casb(args: list) {
-    emit.u32(a64_casb_word(args))
+    if a64_has_lo12(args) {
+        a64_casb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casb_word(args))
+    }
 }
 
 fn a64_casb_shape(args: list) {
@@ -5166,7 +5238,15 @@ fn a64_cash_word(args: list) -> u64 {
     return 0;
 }
 fn a64_cash(args: list) {
-    emit.u32(a64_cash_word(args))
+    if a64_has_lo12(args) {
+        a64_cash_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_cash_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_cash_word(args))
+    }
 }
 
 fn a64_cash_shape(args: list) {
@@ -5205,7 +5285,15 @@ fn a64_casl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casl(args: list) {
-    emit.u32(a64_casl_word(args))
+    if a64_has_lo12(args) {
+        a64_casl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casl_word(args))
+    }
 }
 
 fn a64_casl_shape(args: list) {
@@ -5232,7 +5320,15 @@ fn a64_caslb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_caslb(args: list) {
-    emit.u32(a64_caslb_word(args))
+    if a64_has_lo12(args) {
+        a64_caslb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_caslb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_caslb_word(args))
+    }
 }
 
 fn a64_caslb_shape(args: list) {
@@ -5259,7 +5355,15 @@ fn a64_caslh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_caslh(args: list) {
-    emit.u32(a64_caslh_word(args))
+    if a64_has_lo12(args) {
+        a64_caslh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_caslh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_caslh_word(args))
+    }
 }
 
 fn a64_caslh_shape(args: list) {
@@ -5302,7 +5406,15 @@ fn a64_casp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_casp(args: list) {
-    emit.u32(a64_casp_word(args))
+    if a64_has_lo12(args) {
+        a64_casp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_casp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_casp_word(args))
+    }
 }
 
 fn a64_casp_shape(args: list) {
@@ -5345,7 +5457,15 @@ fn a64_caspa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_caspa(args: list) {
-    emit.u32(a64_caspa_word(args))
+    if a64_has_lo12(args) {
+        a64_caspa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_caspa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_caspa_word(args))
+    }
 }
 
 fn a64_caspa_shape(args: list) {
@@ -5388,7 +5508,15 @@ fn a64_caspal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_caspal(args: list) {
-    emit.u32(a64_caspal_word(args))
+    if a64_has_lo12(args) {
+        a64_caspal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_caspal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_caspal_word(args))
+    }
 }
 
 fn a64_caspal_shape(args: list) {
@@ -5431,7 +5559,15 @@ fn a64_caspl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_caspl(args: list) {
-    emit.u32(a64_caspl_word(args))
+    if a64_has_lo12(args) {
+        a64_caspl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_caspl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_caspl_word(args))
+    }
 }
 
 fn a64_caspl_shape(args: list) {
@@ -12666,6 +12802,16 @@ fn a64_fcvtmu_shape(args: list) {
 fn a64_fcvtn_word(args: list) -> u64 {
     const flat: list = a64_flatten(args)
     const key: u64 = a64_signature(flat)
+    if key == 267790 {
+        const p0: integer = list.get(list.get(flat, 0), 1)
+        const p1: integer = list.get(list.get(flat, 1), 1)
+        // b1-1088: FCVTN_asimdmisc_N
+        if true {
+            return 0x0e216800 | ((p0 & 31) << 0) | ((p1 & 31) << 5);
+        }
+        assert(false, "a64 fcvtn: operand value out of range")
+        return 0;
+    }
     if key == 268816 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
@@ -12685,12 +12831,22 @@ fn a64_fcvtn(args: list) {
 
 fn a64_fcvtn_shape(args: list) {
     const key: u64 = a64_signature(a64_flatten(args))
-    assert(key == 268816, "a64 fcvtn: invalid operand classes, arrangements or count")
+    assert(key == 267790 || key == 268816, "a64 fcvtn: invalid operand classes, arrangements or count")
 }
 
 fn a64_fcvtn2_word(args: list) -> u64 {
     const flat: list = a64_flatten(args)
     const key: u64 = a64_signature(flat)
+    if key == 268302 {
+        const p0: integer = list.get(list.get(flat, 0), 1)
+        const p1: integer = list.get(list.get(flat, 1), 1)
+        // b1-1089: FCVTN_asimdmisc_N
+        if true {
+            return 0x4e216800 | ((p0 & 31) << 0) | ((p1 & 31) << 5);
+        }
+        assert(false, "a64 fcvtn2: operand value out of range")
+        return 0;
+    }
     if key == 269328 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
@@ -12710,7 +12866,7 @@ fn a64_fcvtn2(args: list) {
 
 fn a64_fcvtn2_shape(args: list) {
     const key: u64 = a64_signature(a64_flatten(args))
-    assert(key == 269328, "a64 fcvtn2: invalid operand classes, arrangements or count")
+    assert(key == 268302 || key == 269328, "a64 fcvtn2: invalid operand classes, arrangements or count")
 }
 
 fn a64_fcvtns_word(args: list) -> u64 {
@@ -19919,7 +20075,15 @@ fn a64_ld1_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld1(args: list) {
-    emit.u32(a64_ld1_word(args))
+    if a64_has_lo12(args) {
+        a64_ld1_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld1_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld1_word(args))
+    }
 }
 
 fn a64_ld1_shape(args: list) {
@@ -20214,7 +20378,15 @@ fn a64_ld1r_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld1r(args: list) {
-    emit.u32(a64_ld1r_word(args))
+    if a64_has_lo12(args) {
+        a64_ld1r_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld1r_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld1r_word(args))
+    }
 }
 
 fn a64_ld1r_shape(args: list) {
@@ -20626,7 +20798,15 @@ fn a64_ld2_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld2(args: list) {
-    emit.u32(a64_ld2_word(args))
+    if a64_has_lo12(args) {
+        a64_ld2_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld2_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld2_word(args))
+    }
 }
 
 fn a64_ld2_shape(args: list) {
@@ -20921,7 +21101,15 @@ fn a64_ld2r_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld2r(args: list) {
-    emit.u32(a64_ld2r_word(args))
+    if a64_has_lo12(args) {
+        a64_ld2r_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld2r_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld2r_word(args))
+    }
 }
 
 fn a64_ld2r_shape(args: list) {
@@ -21333,7 +21521,15 @@ fn a64_ld3_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld3(args: list) {
-    emit.u32(a64_ld3_word(args))
+    if a64_has_lo12(args) {
+        a64_ld3_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld3_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld3_word(args))
+    }
 }
 
 fn a64_ld3_shape(args: list) {
@@ -21628,7 +21824,15 @@ fn a64_ld3r_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld3r(args: list) {
-    emit.u32(a64_ld3r_word(args))
+    if a64_has_lo12(args) {
+        a64_ld3r_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld3r_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld3r_word(args))
+    }
 }
 
 fn a64_ld3r_shape(args: list) {
@@ -22040,7 +22244,15 @@ fn a64_ld4_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld4(args: list) {
-    emit.u32(a64_ld4_word(args))
+    if a64_has_lo12(args) {
+        a64_ld4_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld4_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld4_word(args))
+    }
 }
 
 fn a64_ld4_shape(args: list) {
@@ -22335,7 +22547,15 @@ fn a64_ld4r_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ld4r(args: list) {
-    emit.u32(a64_ld4r_word(args))
+    if a64_has_lo12(args) {
+        a64_ld4r_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ld4r_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ld4r_word(args))
+    }
 }
 
 fn a64_ld4r_shape(args: list) {
@@ -22374,7 +22594,15 @@ fn a64_ldadd_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldadd(args: list) {
-    emit.u32(a64_ldadd_word(args))
+    if a64_has_lo12(args) {
+        a64_ldadd_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldadd_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldadd_word(args))
+    }
 }
 
 fn a64_ldadd_shape(args: list) {
@@ -22413,7 +22641,15 @@ fn a64_ldadda_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldadda(args: list) {
-    emit.u32(a64_ldadda_word(args))
+    if a64_has_lo12(args) {
+        a64_ldadda_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldadda_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldadda_word(args))
+    }
 }
 
 fn a64_ldadda_shape(args: list) {
@@ -22440,7 +22676,15 @@ fn a64_ldaddab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddab(args: list) {
-    emit.u32(a64_ldaddab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddab_word(args))
+    }
 }
 
 fn a64_ldaddab_shape(args: list) {
@@ -22467,7 +22711,15 @@ fn a64_ldaddah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddah(args: list) {
-    emit.u32(a64_ldaddah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddah_word(args))
+    }
 }
 
 fn a64_ldaddah_shape(args: list) {
@@ -22506,7 +22758,15 @@ fn a64_ldaddal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddal(args: list) {
-    emit.u32(a64_ldaddal_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddal_word(args))
+    }
 }
 
 fn a64_ldaddal_shape(args: list) {
@@ -22533,7 +22793,15 @@ fn a64_ldaddalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddalb(args: list) {
-    emit.u32(a64_ldaddalb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddalb_word(args))
+    }
 }
 
 fn a64_ldaddalb_shape(args: list) {
@@ -22560,7 +22828,15 @@ fn a64_ldaddalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddalh(args: list) {
-    emit.u32(a64_ldaddalh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddalh_word(args))
+    }
 }
 
 fn a64_ldaddalh_shape(args: list) {
@@ -22587,7 +22863,15 @@ fn a64_ldaddb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddb(args: list) {
-    emit.u32(a64_ldaddb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddb_word(args))
+    }
 }
 
 fn a64_ldaddb_shape(args: list) {
@@ -22614,7 +22898,15 @@ fn a64_ldaddh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddh(args: list) {
-    emit.u32(a64_ldaddh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddh_word(args))
+    }
 }
 
 fn a64_ldaddh_shape(args: list) {
@@ -22653,7 +22945,15 @@ fn a64_ldaddl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddl(args: list) {
-    emit.u32(a64_ldaddl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddl_word(args))
+    }
 }
 
 fn a64_ldaddl_shape(args: list) {
@@ -22680,7 +22980,15 @@ fn a64_ldaddlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddlb(args: list) {
-    emit.u32(a64_ldaddlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddlb_word(args))
+    }
 }
 
 fn a64_ldaddlb_shape(args: list) {
@@ -22707,7 +23015,15 @@ fn a64_ldaddlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaddlh(args: list) {
-    emit.u32(a64_ldaddlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaddlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaddlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaddlh_word(args))
+    }
 }
 
 fn a64_ldaddlh_shape(args: list) {
@@ -22744,7 +23060,15 @@ fn a64_ldapr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapr(args: list) {
-    emit.u32(a64_ldapr_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapr_word(args))
+    }
 }
 
 fn a64_ldapr_shape(args: list) {
@@ -22770,7 +23094,15 @@ fn a64_ldaprb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaprb(args: list) {
-    emit.u32(a64_ldaprb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaprb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaprb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaprb_word(args))
+    }
 }
 
 fn a64_ldaprb_shape(args: list) {
@@ -22796,7 +23128,15 @@ fn a64_ldaprh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaprh(args: list) {
-    emit.u32(a64_ldaprh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaprh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaprh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaprh_word(args))
+    }
 }
 
 fn a64_ldaprh_shape(args: list) {
@@ -22833,7 +23173,15 @@ fn a64_ldapur_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapur(args: list) {
-    emit.u32(a64_ldapur_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapur_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapur_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapur_word(args))
+    }
 }
 
 fn a64_ldapur_shape(args: list) {
@@ -22859,7 +23207,15 @@ fn a64_ldapurb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapurb(args: list) {
-    emit.u32(a64_ldapurb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapurb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapurb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapurb_word(args))
+    }
 }
 
 fn a64_ldapurb_shape(args: list) {
@@ -22885,7 +23241,15 @@ fn a64_ldapurh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapurh(args: list) {
-    emit.u32(a64_ldapurh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapurh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapurh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapurh_word(args))
+    }
 }
 
 fn a64_ldapurh_shape(args: list) {
@@ -22922,7 +23286,15 @@ fn a64_ldapursb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapursb(args: list) {
-    emit.u32(a64_ldapursb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapursb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapursb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapursb_word(args))
+    }
 }
 
 fn a64_ldapursb_shape(args: list) {
@@ -22959,7 +23331,15 @@ fn a64_ldapursh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapursh(args: list) {
-    emit.u32(a64_ldapursh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapursh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapursh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapursh_word(args))
+    }
 }
 
 fn a64_ldapursh_shape(args: list) {
@@ -22985,7 +23365,15 @@ fn a64_ldapursw_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldapursw(args: list) {
-    emit.u32(a64_ldapursw_word(args))
+    if a64_has_lo12(args) {
+        a64_ldapursw_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldapursw_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldapursw_word(args))
+    }
 }
 
 fn a64_ldapursw_shape(args: list) {
@@ -23022,7 +23410,15 @@ fn a64_ldar_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldar(args: list) {
-    emit.u32(a64_ldar_word(args))
+    if a64_has_lo12(args) {
+        a64_ldar_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldar_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldar_word(args))
+    }
 }
 
 fn a64_ldar_shape(args: list) {
@@ -23048,7 +23444,15 @@ fn a64_ldarb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldarb(args: list) {
-    emit.u32(a64_ldarb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldarb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldarb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldarb_word(args))
+    }
 }
 
 fn a64_ldarb_shape(args: list) {
@@ -23074,7 +23478,15 @@ fn a64_ldarh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldarh(args: list) {
-    emit.u32(a64_ldarh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldarh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldarh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldarh_word(args))
+    }
 }
 
 fn a64_ldarh_shape(args: list) {
@@ -23113,7 +23525,15 @@ fn a64_ldaxp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaxp(args: list) {
-    emit.u32(a64_ldaxp_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaxp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaxp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaxp_word(args))
+    }
 }
 
 fn a64_ldaxp_shape(args: list) {
@@ -23150,7 +23570,15 @@ fn a64_ldaxr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaxr(args: list) {
-    emit.u32(a64_ldaxr_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaxr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaxr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaxr_word(args))
+    }
 }
 
 fn a64_ldaxr_shape(args: list) {
@@ -23176,7 +23604,15 @@ fn a64_ldaxrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaxrb(args: list) {
-    emit.u32(a64_ldaxrb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaxrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaxrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaxrb_word(args))
+    }
 }
 
 fn a64_ldaxrb_shape(args: list) {
@@ -23202,7 +23638,15 @@ fn a64_ldaxrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldaxrh(args: list) {
-    emit.u32(a64_ldaxrh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldaxrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldaxrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldaxrh_word(args))
+    }
 }
 
 fn a64_ldaxrh_shape(args: list) {
@@ -23241,7 +23685,15 @@ fn a64_ldclr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclr(args: list) {
-    emit.u32(a64_ldclr_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclr_word(args))
+    }
 }
 
 fn a64_ldclr_shape(args: list) {
@@ -23280,7 +23732,15 @@ fn a64_ldclra_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclra(args: list) {
-    emit.u32(a64_ldclra_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclra_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclra_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclra_word(args))
+    }
 }
 
 fn a64_ldclra_shape(args: list) {
@@ -23307,7 +23767,15 @@ fn a64_ldclrab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrab(args: list) {
-    emit.u32(a64_ldclrab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrab_word(args))
+    }
 }
 
 fn a64_ldclrab_shape(args: list) {
@@ -23334,7 +23802,15 @@ fn a64_ldclrah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrah(args: list) {
-    emit.u32(a64_ldclrah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrah_word(args))
+    }
 }
 
 fn a64_ldclrah_shape(args: list) {
@@ -23373,7 +23849,15 @@ fn a64_ldclral_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclral(args: list) {
-    emit.u32(a64_ldclral_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclral_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclral_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclral_word(args))
+    }
 }
 
 fn a64_ldclral_shape(args: list) {
@@ -23400,7 +23884,15 @@ fn a64_ldclralb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclralb(args: list) {
-    emit.u32(a64_ldclralb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclralb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclralb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclralb_word(args))
+    }
 }
 
 fn a64_ldclralb_shape(args: list) {
@@ -23427,7 +23919,15 @@ fn a64_ldclralh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclralh(args: list) {
-    emit.u32(a64_ldclralh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclralh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclralh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclralh_word(args))
+    }
 }
 
 fn a64_ldclralh_shape(args: list) {
@@ -23454,7 +23954,15 @@ fn a64_ldclrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrb(args: list) {
-    emit.u32(a64_ldclrb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrb_word(args))
+    }
 }
 
 fn a64_ldclrb_shape(args: list) {
@@ -23481,7 +23989,15 @@ fn a64_ldclrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrh(args: list) {
-    emit.u32(a64_ldclrh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrh_word(args))
+    }
 }
 
 fn a64_ldclrh_shape(args: list) {
@@ -23520,7 +24036,15 @@ fn a64_ldclrl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrl(args: list) {
-    emit.u32(a64_ldclrl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrl_word(args))
+    }
 }
 
 fn a64_ldclrl_shape(args: list) {
@@ -23547,7 +24071,15 @@ fn a64_ldclrlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrlb(args: list) {
-    emit.u32(a64_ldclrlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrlb_word(args))
+    }
 }
 
 fn a64_ldclrlb_shape(args: list) {
@@ -23574,7 +24106,15 @@ fn a64_ldclrlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldclrlh(args: list) {
-    emit.u32(a64_ldclrlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldclrlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldclrlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldclrlh_word(args))
+    }
 }
 
 fn a64_ldclrlh_shape(args: list) {
@@ -23613,7 +24153,15 @@ fn a64_ldeor_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeor(args: list) {
-    emit.u32(a64_ldeor_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeor_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeor_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeor_word(args))
+    }
 }
 
 fn a64_ldeor_shape(args: list) {
@@ -23652,7 +24200,15 @@ fn a64_ldeora_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeora(args: list) {
-    emit.u32(a64_ldeora_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeora_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeora_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeora_word(args))
+    }
 }
 
 fn a64_ldeora_shape(args: list) {
@@ -23679,7 +24235,15 @@ fn a64_ldeorab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorab(args: list) {
-    emit.u32(a64_ldeorab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorab_word(args))
+    }
 }
 
 fn a64_ldeorab_shape(args: list) {
@@ -23706,7 +24270,15 @@ fn a64_ldeorah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorah(args: list) {
-    emit.u32(a64_ldeorah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorah_word(args))
+    }
 }
 
 fn a64_ldeorah_shape(args: list) {
@@ -23745,7 +24317,15 @@ fn a64_ldeoral_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeoral(args: list) {
-    emit.u32(a64_ldeoral_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeoral_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeoral_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeoral_word(args))
+    }
 }
 
 fn a64_ldeoral_shape(args: list) {
@@ -23772,7 +24352,15 @@ fn a64_ldeoralb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeoralb(args: list) {
-    emit.u32(a64_ldeoralb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeoralb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeoralb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeoralb_word(args))
+    }
 }
 
 fn a64_ldeoralb_shape(args: list) {
@@ -23799,7 +24387,15 @@ fn a64_ldeoralh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeoralh(args: list) {
-    emit.u32(a64_ldeoralh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeoralh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeoralh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeoralh_word(args))
+    }
 }
 
 fn a64_ldeoralh_shape(args: list) {
@@ -23826,7 +24422,15 @@ fn a64_ldeorb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorb(args: list) {
-    emit.u32(a64_ldeorb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorb_word(args))
+    }
 }
 
 fn a64_ldeorb_shape(args: list) {
@@ -23853,7 +24457,15 @@ fn a64_ldeorh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorh(args: list) {
-    emit.u32(a64_ldeorh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorh_word(args))
+    }
 }
 
 fn a64_ldeorh_shape(args: list) {
@@ -23892,7 +24504,15 @@ fn a64_ldeorl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorl(args: list) {
-    emit.u32(a64_ldeorl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorl_word(args))
+    }
 }
 
 fn a64_ldeorl_shape(args: list) {
@@ -23919,7 +24539,15 @@ fn a64_ldeorlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorlb(args: list) {
-    emit.u32(a64_ldeorlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorlb_word(args))
+    }
 }
 
 fn a64_ldeorlb_shape(args: list) {
@@ -23946,7 +24574,15 @@ fn a64_ldeorlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldeorlh(args: list) {
-    emit.u32(a64_ldeorlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldeorlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldeorlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldeorlh_word(args))
+    }
 }
 
 fn a64_ldeorlh_shape(args: list) {
@@ -23972,7 +24608,15 @@ fn a64_ldg_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldg(args: list) {
-    emit.u32(a64_ldg_word(args))
+    if a64_has_lo12(args) {
+        a64_ldg_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldg_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldg_word(args))
+    }
 }
 
 fn a64_ldg_shape(args: list) {
@@ -23998,7 +24642,15 @@ fn a64_ldgm_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldgm(args: list) {
-    emit.u32(a64_ldgm_word(args))
+    if a64_has_lo12(args) {
+        a64_ldgm_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldgm_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldgm_word(args))
+    }
 }
 
 fn a64_ldgm_shape(args: list) {
@@ -24035,7 +24687,15 @@ fn a64_ldlar_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldlar(args: list) {
-    emit.u32(a64_ldlar_word(args))
+    if a64_has_lo12(args) {
+        a64_ldlar_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldlar_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldlar_word(args))
+    }
 }
 
 fn a64_ldlar_shape(args: list) {
@@ -24061,7 +24721,15 @@ fn a64_ldlarb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldlarb(args: list) {
-    emit.u32(a64_ldlarb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldlarb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldlarb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldlarb_word(args))
+    }
 }
 
 fn a64_ldlarb_shape(args: list) {
@@ -24087,7 +24755,15 @@ fn a64_ldlarh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldlarh(args: list) {
-    emit.u32(a64_ldlarh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldlarh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldlarh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldlarh_word(args))
+    }
 }
 
 fn a64_ldlarh_shape(args: list) {
@@ -24162,7 +24838,15 @@ fn a64_ldnp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldnp(args: list) {
-    emit.u32(a64_ldnp_word(args))
+    if a64_has_lo12(args) {
+        a64_ldnp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldnp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldnp_word(args))
+    }
 }
 
 fn a64_ldnp_shape(args: list) {
@@ -24362,7 +25046,15 @@ fn a64_ldp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldp(args: list) {
-    emit.u32(a64_ldp_word(args))
+    if a64_has_lo12(args) {
+        a64_ldp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldp_word(args))
+    }
 }
 
 fn a64_ldp_shape(args: list) {
@@ -24414,7 +25106,15 @@ fn a64_ldpsw_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldpsw(args: list) {
-    emit.u32(a64_ldpsw_word(args))
+    if a64_has_lo12(args) {
+        a64_ldpsw_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldpsw_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldpsw_word(args))
+    }
 }
 
 fn a64_ldpsw_shape(args: list) {
@@ -25081,7 +25781,13 @@ fn a64_ldr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldr(args: list) {
-    if a64_has_target(args) {
+    if a64_has_lo12(args) {
+        a64_ldr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else if a64_has_target(args) {
         a64_ldr_shape(a64_literal_values(args, 0, false, false))
         defer {
             store.u32(here(), a64_ldr_word(a64_literal_values(args, here(), true, false)))
@@ -25126,7 +25832,15 @@ fn a64_ldraa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldraa(args: list) {
-    emit.u32(a64_ldraa_word(args))
+    if a64_has_lo12(args) {
+        a64_ldraa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldraa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldraa_word(args))
+    }
 }
 
 fn a64_ldraa_shape(args: list) {
@@ -25163,7 +25877,15 @@ fn a64_ldrab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrab(args: list) {
-    emit.u32(a64_ldrab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldrab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldrab_word(args))
+    }
 }
 
 fn a64_ldrab_shape(args: list) {
@@ -25264,7 +25986,15 @@ fn a64_ldrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrb(args: list) {
-    emit.u32(a64_ldrb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldrb_word(args))
+    }
 }
 
 fn a64_ldrb_shape(args: list) {
@@ -25365,7 +26095,15 @@ fn a64_ldrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrh(args: list) {
-    emit.u32(a64_ldrh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldrh_word(args))
+    }
 }
 
 fn a64_ldrh_shape(args: list) {
@@ -25552,7 +26290,15 @@ fn a64_ldrsb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrsb(args: list) {
-    emit.u32(a64_ldrsb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldrsb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrsb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldrsb_word(args))
+    }
 }
 
 fn a64_ldrsb_shape(args: list) {
@@ -25739,7 +26485,15 @@ fn a64_ldrsh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrsh(args: list) {
-    emit.u32(a64_ldrsh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldrsh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrsh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldrsh_word(args))
+    }
 }
 
 fn a64_ldrsh_shape(args: list) {
@@ -25850,7 +26604,13 @@ fn a64_ldrsw_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldrsw(args: list) {
-    if a64_has_target(args) {
+    if a64_has_lo12(args) {
+        a64_ldrsw_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldrsw_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else if a64_has_target(args) {
         a64_ldrsw_shape(a64_literal_values(args, 0, false, false))
         defer {
             store.u32(here(), a64_ldrsw_word(a64_literal_values(args, here(), true, false)))
@@ -25897,7 +26657,15 @@ fn a64_ldset_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldset(args: list) {
-    emit.u32(a64_ldset_word(args))
+    if a64_has_lo12(args) {
+        a64_ldset_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldset_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldset_word(args))
+    }
 }
 
 fn a64_ldset_shape(args: list) {
@@ -25936,7 +26704,15 @@ fn a64_ldseta_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldseta(args: list) {
-    emit.u32(a64_ldseta_word(args))
+    if a64_has_lo12(args) {
+        a64_ldseta_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldseta_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldseta_word(args))
+    }
 }
 
 fn a64_ldseta_shape(args: list) {
@@ -25963,7 +26739,15 @@ fn a64_ldsetab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetab(args: list) {
-    emit.u32(a64_ldsetab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetab_word(args))
+    }
 }
 
 fn a64_ldsetab_shape(args: list) {
@@ -25990,7 +26774,15 @@ fn a64_ldsetah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetah(args: list) {
-    emit.u32(a64_ldsetah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetah_word(args))
+    }
 }
 
 fn a64_ldsetah_shape(args: list) {
@@ -26029,7 +26821,15 @@ fn a64_ldsetal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetal(args: list) {
-    emit.u32(a64_ldsetal_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetal_word(args))
+    }
 }
 
 fn a64_ldsetal_shape(args: list) {
@@ -26056,7 +26856,15 @@ fn a64_ldsetalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetalb(args: list) {
-    emit.u32(a64_ldsetalb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetalb_word(args))
+    }
 }
 
 fn a64_ldsetalb_shape(args: list) {
@@ -26083,7 +26891,15 @@ fn a64_ldsetalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetalh(args: list) {
-    emit.u32(a64_ldsetalh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetalh_word(args))
+    }
 }
 
 fn a64_ldsetalh_shape(args: list) {
@@ -26110,7 +26926,15 @@ fn a64_ldsetb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetb(args: list) {
-    emit.u32(a64_ldsetb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetb_word(args))
+    }
 }
 
 fn a64_ldsetb_shape(args: list) {
@@ -26137,7 +26961,15 @@ fn a64_ldseth_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldseth(args: list) {
-    emit.u32(a64_ldseth_word(args))
+    if a64_has_lo12(args) {
+        a64_ldseth_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldseth_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldseth_word(args))
+    }
 }
 
 fn a64_ldseth_shape(args: list) {
@@ -26176,7 +27008,15 @@ fn a64_ldsetl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetl(args: list) {
-    emit.u32(a64_ldsetl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetl_word(args))
+    }
 }
 
 fn a64_ldsetl_shape(args: list) {
@@ -26203,7 +27043,15 @@ fn a64_ldsetlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetlb(args: list) {
-    emit.u32(a64_ldsetlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetlb_word(args))
+    }
 }
 
 fn a64_ldsetlb_shape(args: list) {
@@ -26230,7 +27078,15 @@ fn a64_ldsetlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsetlh(args: list) {
-    emit.u32(a64_ldsetlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsetlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsetlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsetlh_word(args))
+    }
 }
 
 fn a64_ldsetlh_shape(args: list) {
@@ -26269,7 +27125,15 @@ fn a64_ldsmax_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmax(args: list) {
-    emit.u32(a64_ldsmax_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmax_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmax_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmax_word(args))
+    }
 }
 
 fn a64_ldsmax_shape(args: list) {
@@ -26308,7 +27172,15 @@ fn a64_ldsmaxa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxa(args: list) {
-    emit.u32(a64_ldsmaxa_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxa_word(args))
+    }
 }
 
 fn a64_ldsmaxa_shape(args: list) {
@@ -26335,7 +27207,15 @@ fn a64_ldsmaxab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxab(args: list) {
-    emit.u32(a64_ldsmaxab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxab_word(args))
+    }
 }
 
 fn a64_ldsmaxab_shape(args: list) {
@@ -26362,7 +27242,15 @@ fn a64_ldsmaxah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxah(args: list) {
-    emit.u32(a64_ldsmaxah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxah_word(args))
+    }
 }
 
 fn a64_ldsmaxah_shape(args: list) {
@@ -26401,7 +27289,15 @@ fn a64_ldsmaxal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxal(args: list) {
-    emit.u32(a64_ldsmaxal_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxal_word(args))
+    }
 }
 
 fn a64_ldsmaxal_shape(args: list) {
@@ -26428,7 +27324,15 @@ fn a64_ldsmaxalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxalb(args: list) {
-    emit.u32(a64_ldsmaxalb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxalb_word(args))
+    }
 }
 
 fn a64_ldsmaxalb_shape(args: list) {
@@ -26455,7 +27359,15 @@ fn a64_ldsmaxalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxalh(args: list) {
-    emit.u32(a64_ldsmaxalh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxalh_word(args))
+    }
 }
 
 fn a64_ldsmaxalh_shape(args: list) {
@@ -26482,7 +27394,15 @@ fn a64_ldsmaxb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxb(args: list) {
-    emit.u32(a64_ldsmaxb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxb_word(args))
+    }
 }
 
 fn a64_ldsmaxb_shape(args: list) {
@@ -26509,7 +27429,15 @@ fn a64_ldsmaxh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxh(args: list) {
-    emit.u32(a64_ldsmaxh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxh_word(args))
+    }
 }
 
 fn a64_ldsmaxh_shape(args: list) {
@@ -26548,7 +27476,15 @@ fn a64_ldsmaxl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxl(args: list) {
-    emit.u32(a64_ldsmaxl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxl_word(args))
+    }
 }
 
 fn a64_ldsmaxl_shape(args: list) {
@@ -26575,7 +27511,15 @@ fn a64_ldsmaxlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxlb(args: list) {
-    emit.u32(a64_ldsmaxlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxlb_word(args))
+    }
 }
 
 fn a64_ldsmaxlb_shape(args: list) {
@@ -26602,7 +27546,15 @@ fn a64_ldsmaxlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmaxlh(args: list) {
-    emit.u32(a64_ldsmaxlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmaxlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmaxlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmaxlh_word(args))
+    }
 }
 
 fn a64_ldsmaxlh_shape(args: list) {
@@ -26641,7 +27593,15 @@ fn a64_ldsmin_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmin(args: list) {
-    emit.u32(a64_ldsmin_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmin_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmin_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmin_word(args))
+    }
 }
 
 fn a64_ldsmin_shape(args: list) {
@@ -26680,7 +27640,15 @@ fn a64_ldsmina_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsmina(args: list) {
-    emit.u32(a64_ldsmina_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsmina_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsmina_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsmina_word(args))
+    }
 }
 
 fn a64_ldsmina_shape(args: list) {
@@ -26707,7 +27675,15 @@ fn a64_ldsminab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminab(args: list) {
-    emit.u32(a64_ldsminab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminab_word(args))
+    }
 }
 
 fn a64_ldsminab_shape(args: list) {
@@ -26734,7 +27710,15 @@ fn a64_ldsminah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminah(args: list) {
-    emit.u32(a64_ldsminah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminah_word(args))
+    }
 }
 
 fn a64_ldsminah_shape(args: list) {
@@ -26773,7 +27757,15 @@ fn a64_ldsminal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminal(args: list) {
-    emit.u32(a64_ldsminal_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminal_word(args))
+    }
 }
 
 fn a64_ldsminal_shape(args: list) {
@@ -26800,7 +27792,15 @@ fn a64_ldsminalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminalb(args: list) {
-    emit.u32(a64_ldsminalb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminalb_word(args))
+    }
 }
 
 fn a64_ldsminalb_shape(args: list) {
@@ -26827,7 +27827,15 @@ fn a64_ldsminalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminalh(args: list) {
-    emit.u32(a64_ldsminalh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminalh_word(args))
+    }
 }
 
 fn a64_ldsminalh_shape(args: list) {
@@ -26854,7 +27862,15 @@ fn a64_ldsminb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminb(args: list) {
-    emit.u32(a64_ldsminb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminb_word(args))
+    }
 }
 
 fn a64_ldsminb_shape(args: list) {
@@ -26881,7 +27897,15 @@ fn a64_ldsminh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminh(args: list) {
-    emit.u32(a64_ldsminh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminh_word(args))
+    }
 }
 
 fn a64_ldsminh_shape(args: list) {
@@ -26920,7 +27944,15 @@ fn a64_ldsminl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminl(args: list) {
-    emit.u32(a64_ldsminl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminl_word(args))
+    }
 }
 
 fn a64_ldsminl_shape(args: list) {
@@ -26947,7 +27979,15 @@ fn a64_ldsminlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminlb(args: list) {
-    emit.u32(a64_ldsminlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminlb_word(args))
+    }
 }
 
 fn a64_ldsminlb_shape(args: list) {
@@ -26974,7 +28014,15 @@ fn a64_ldsminlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldsminlh(args: list) {
-    emit.u32(a64_ldsminlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldsminlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldsminlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldsminlh_word(args))
+    }
 }
 
 fn a64_ldsminlh_shape(args: list) {
@@ -27011,7 +28059,15 @@ fn a64_ldtr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtr(args: list) {
-    emit.u32(a64_ldtr_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtr_word(args))
+    }
 }
 
 fn a64_ldtr_shape(args: list) {
@@ -27037,7 +28093,15 @@ fn a64_ldtrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtrb(args: list) {
-    emit.u32(a64_ldtrb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtrb_word(args))
+    }
 }
 
 fn a64_ldtrb_shape(args: list) {
@@ -27063,7 +28127,15 @@ fn a64_ldtrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtrh(args: list) {
-    emit.u32(a64_ldtrh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtrh_word(args))
+    }
 }
 
 fn a64_ldtrh_shape(args: list) {
@@ -27100,7 +28172,15 @@ fn a64_ldtrsb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtrsb(args: list) {
-    emit.u32(a64_ldtrsb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtrsb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtrsb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtrsb_word(args))
+    }
 }
 
 fn a64_ldtrsb_shape(args: list) {
@@ -27137,7 +28217,15 @@ fn a64_ldtrsh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtrsh(args: list) {
-    emit.u32(a64_ldtrsh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtrsh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtrsh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtrsh_word(args))
+    }
 }
 
 fn a64_ldtrsh_shape(args: list) {
@@ -27163,7 +28251,15 @@ fn a64_ldtrsw_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldtrsw(args: list) {
-    emit.u32(a64_ldtrsw_word(args))
+    if a64_has_lo12(args) {
+        a64_ldtrsw_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldtrsw_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldtrsw_word(args))
+    }
 }
 
 fn a64_ldtrsw_shape(args: list) {
@@ -27202,7 +28298,15 @@ fn a64_ldumax_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumax(args: list) {
-    emit.u32(a64_ldumax_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumax_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumax_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumax_word(args))
+    }
 }
 
 fn a64_ldumax_shape(args: list) {
@@ -27241,7 +28345,15 @@ fn a64_ldumaxa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxa(args: list) {
-    emit.u32(a64_ldumaxa_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxa_word(args))
+    }
 }
 
 fn a64_ldumaxa_shape(args: list) {
@@ -27268,7 +28380,15 @@ fn a64_ldumaxab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxab(args: list) {
-    emit.u32(a64_ldumaxab_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxab_word(args))
+    }
 }
 
 fn a64_ldumaxab_shape(args: list) {
@@ -27295,7 +28415,15 @@ fn a64_ldumaxah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxah(args: list) {
-    emit.u32(a64_ldumaxah_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxah_word(args))
+    }
 }
 
 fn a64_ldumaxah_shape(args: list) {
@@ -27334,7 +28462,15 @@ fn a64_ldumaxal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxal(args: list) {
-    emit.u32(a64_ldumaxal_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxal_word(args))
+    }
 }
 
 fn a64_ldumaxal_shape(args: list) {
@@ -27361,7 +28497,15 @@ fn a64_ldumaxalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxalb(args: list) {
-    emit.u32(a64_ldumaxalb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxalb_word(args))
+    }
 }
 
 fn a64_ldumaxalb_shape(args: list) {
@@ -27388,7 +28532,15 @@ fn a64_ldumaxalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxalh(args: list) {
-    emit.u32(a64_ldumaxalh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxalh_word(args))
+    }
 }
 
 fn a64_ldumaxalh_shape(args: list) {
@@ -27415,7 +28567,15 @@ fn a64_ldumaxb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxb(args: list) {
-    emit.u32(a64_ldumaxb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxb_word(args))
+    }
 }
 
 fn a64_ldumaxb_shape(args: list) {
@@ -27442,7 +28602,15 @@ fn a64_ldumaxh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxh(args: list) {
-    emit.u32(a64_ldumaxh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxh_word(args))
+    }
 }
 
 fn a64_ldumaxh_shape(args: list) {
@@ -27481,7 +28649,15 @@ fn a64_ldumaxl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxl(args: list) {
-    emit.u32(a64_ldumaxl_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxl_word(args))
+    }
 }
 
 fn a64_ldumaxl_shape(args: list) {
@@ -27508,7 +28684,15 @@ fn a64_ldumaxlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxlb(args: list) {
-    emit.u32(a64_ldumaxlb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxlb_word(args))
+    }
 }
 
 fn a64_ldumaxlb_shape(args: list) {
@@ -27535,7 +28719,15 @@ fn a64_ldumaxlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumaxlh(args: list) {
-    emit.u32(a64_ldumaxlh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumaxlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumaxlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumaxlh_word(args))
+    }
 }
 
 fn a64_ldumaxlh_shape(args: list) {
@@ -27574,7 +28766,15 @@ fn a64_ldumin_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumin(args: list) {
-    emit.u32(a64_ldumin_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumin_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumin_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumin_word(args))
+    }
 }
 
 fn a64_ldumin_shape(args: list) {
@@ -27613,7 +28813,15 @@ fn a64_ldumina_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldumina(args: list) {
-    emit.u32(a64_ldumina_word(args))
+    if a64_has_lo12(args) {
+        a64_ldumina_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldumina_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldumina_word(args))
+    }
 }
 
 fn a64_ldumina_shape(args: list) {
@@ -27640,7 +28848,15 @@ fn a64_lduminab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminab(args: list) {
-    emit.u32(a64_lduminab_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminab_word(args))
+    }
 }
 
 fn a64_lduminab_shape(args: list) {
@@ -27667,7 +28883,15 @@ fn a64_lduminah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminah(args: list) {
-    emit.u32(a64_lduminah_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminah_word(args))
+    }
 }
 
 fn a64_lduminah_shape(args: list) {
@@ -27706,7 +28930,15 @@ fn a64_lduminal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminal(args: list) {
-    emit.u32(a64_lduminal_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminal_word(args))
+    }
 }
 
 fn a64_lduminal_shape(args: list) {
@@ -27733,7 +28965,15 @@ fn a64_lduminalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminalb(args: list) {
-    emit.u32(a64_lduminalb_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminalb_word(args))
+    }
 }
 
 fn a64_lduminalb_shape(args: list) {
@@ -27760,7 +29000,15 @@ fn a64_lduminalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminalh(args: list) {
-    emit.u32(a64_lduminalh_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminalh_word(args))
+    }
 }
 
 fn a64_lduminalh_shape(args: list) {
@@ -27787,7 +29035,15 @@ fn a64_lduminb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminb(args: list) {
-    emit.u32(a64_lduminb_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminb_word(args))
+    }
 }
 
 fn a64_lduminb_shape(args: list) {
@@ -27814,7 +29070,15 @@ fn a64_lduminh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminh(args: list) {
-    emit.u32(a64_lduminh_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminh_word(args))
+    }
 }
 
 fn a64_lduminh_shape(args: list) {
@@ -27853,7 +29117,15 @@ fn a64_lduminl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminl(args: list) {
-    emit.u32(a64_lduminl_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminl_word(args))
+    }
 }
 
 fn a64_lduminl_shape(args: list) {
@@ -27880,7 +29152,15 @@ fn a64_lduminlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminlb(args: list) {
-    emit.u32(a64_lduminlb_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminlb_word(args))
+    }
 }
 
 fn a64_lduminlb_shape(args: list) {
@@ -27907,7 +29187,15 @@ fn a64_lduminlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_lduminlh(args: list) {
-    emit.u32(a64_lduminlh_word(args))
+    if a64_has_lo12(args) {
+        a64_lduminlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_lduminlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_lduminlh_word(args))
+    }
 }
 
 fn a64_lduminlh_shape(args: list) {
@@ -27999,7 +29287,15 @@ fn a64_ldur_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldur(args: list) {
-    emit.u32(a64_ldur_word(args))
+    if a64_has_lo12(args) {
+        a64_ldur_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldur_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldur_word(args))
+    }
 }
 
 fn a64_ldur_shape(args: list) {
@@ -28025,7 +29321,15 @@ fn a64_ldurb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldurb(args: list) {
-    emit.u32(a64_ldurb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldurb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldurb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldurb_word(args))
+    }
 }
 
 fn a64_ldurb_shape(args: list) {
@@ -28051,7 +29355,15 @@ fn a64_ldurh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldurh(args: list) {
-    emit.u32(a64_ldurh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldurh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldurh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldurh_word(args))
+    }
 }
 
 fn a64_ldurh_shape(args: list) {
@@ -28088,7 +29400,15 @@ fn a64_ldursb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldursb(args: list) {
-    emit.u32(a64_ldursb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldursb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldursb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldursb_word(args))
+    }
 }
 
 fn a64_ldursb_shape(args: list) {
@@ -28125,7 +29445,15 @@ fn a64_ldursh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldursh(args: list) {
-    emit.u32(a64_ldursh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldursh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldursh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldursh_word(args))
+    }
 }
 
 fn a64_ldursh_shape(args: list) {
@@ -28151,7 +29479,15 @@ fn a64_ldursw_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldursw(args: list) {
-    emit.u32(a64_ldursw_word(args))
+    if a64_has_lo12(args) {
+        a64_ldursw_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldursw_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldursw_word(args))
+    }
 }
 
 fn a64_ldursw_shape(args: list) {
@@ -28190,7 +29526,15 @@ fn a64_ldxp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldxp(args: list) {
-    emit.u32(a64_ldxp_word(args))
+    if a64_has_lo12(args) {
+        a64_ldxp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldxp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldxp_word(args))
+    }
 }
 
 fn a64_ldxp_shape(args: list) {
@@ -28227,7 +29571,15 @@ fn a64_ldxr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldxr(args: list) {
-    emit.u32(a64_ldxr_word(args))
+    if a64_has_lo12(args) {
+        a64_ldxr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldxr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldxr_word(args))
+    }
 }
 
 fn a64_ldxr_shape(args: list) {
@@ -28253,7 +29605,15 @@ fn a64_ldxrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldxrb(args: list) {
-    emit.u32(a64_ldxrb_word(args))
+    if a64_has_lo12(args) {
+        a64_ldxrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldxrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldxrb_word(args))
+    }
 }
 
 fn a64_ldxrb_shape(args: list) {
@@ -28279,7 +29639,15 @@ fn a64_ldxrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_ldxrh(args: list) {
-    emit.u32(a64_ldxrh_word(args))
+    if a64_has_lo12(args) {
+        a64_ldxrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_ldxrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_ldxrh_word(args))
+    }
 }
 
 fn a64_ldxrh_shape(args: list) {
@@ -31496,7 +32864,13 @@ fn a64_prfm_word(args: list) -> u64 {
     return 0;
 }
 fn a64_prfm(args: list) {
-    if a64_has_target(args) {
+    if a64_has_lo12(args) {
+        a64_prfm_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_prfm_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else if a64_has_target(args) {
         a64_prfm_shape(a64_literal_values(args, 0, false, false))
         defer {
             store.u32(here(), a64_prfm_word(a64_literal_values(args, here(), true, false)))
@@ -31530,7 +32904,15 @@ fn a64_prfum_word(args: list) -> u64 {
     return 0;
 }
 fn a64_prfum(args: list) {
-    emit.u32(a64_prfum_word(args))
+    if a64_has_lo12(args) {
+        a64_prfum_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_prfum_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_prfum_word(args))
+    }
 }
 
 fn a64_prfum_shape(args: list) {
@@ -41442,7 +42824,15 @@ fn a64_st1_word(args: list) -> u64 {
     return 0;
 }
 fn a64_st1(args: list) {
-    emit.u32(a64_st1_word(args))
+    if a64_has_lo12(args) {
+        a64_st1_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_st1_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_st1_word(args))
+    }
 }
 
 fn a64_st1_shape(args: list) {
@@ -41854,7 +43244,15 @@ fn a64_st2_word(args: list) -> u64 {
     return 0;
 }
 fn a64_st2(args: list) {
-    emit.u32(a64_st2_word(args))
+    if a64_has_lo12(args) {
+        a64_st2_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_st2_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_st2_word(args))
+    }
 }
 
 fn a64_st2_shape(args: list) {
@@ -41937,7 +43335,15 @@ fn a64_st2g_word(args: list) -> u64 {
     return 0;
 }
 fn a64_st2g(args: list) {
-    emit.u32(a64_st2g_word(args))
+    if a64_has_lo12(args) {
+        a64_st2g_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_st2g_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_st2g_word(args))
+    }
 }
 
 fn a64_st2g_shape(args: list) {
@@ -42349,7 +43755,15 @@ fn a64_st3_word(args: list) -> u64 {
     return 0;
 }
 fn a64_st3(args: list) {
-    emit.u32(a64_st3_word(args))
+    if a64_has_lo12(args) {
+        a64_st3_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_st3_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_st3_word(args))
+    }
 }
 
 fn a64_st3_shape(args: list) {
@@ -42761,7 +44175,15 @@ fn a64_st4_word(args: list) -> u64 {
     return 0;
 }
 fn a64_st4(args: list) {
-    emit.u32(a64_st4_word(args))
+    if a64_has_lo12(args) {
+        a64_st4_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_st4_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_st4_word(args))
+    }
 }
 
 fn a64_st4_shape(args: list) {
@@ -42798,7 +44220,15 @@ fn a64_stadd_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stadd(args: list) {
-    emit.u32(a64_stadd_word(args))
+    if a64_has_lo12(args) {
+        a64_stadd_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stadd_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stadd_word(args))
+    }
 }
 
 fn a64_stadd_shape(args: list) {
@@ -42824,7 +44254,15 @@ fn a64_staddb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_staddb(args: list) {
-    emit.u32(a64_staddb_word(args))
+    if a64_has_lo12(args) {
+        a64_staddb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_staddb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_staddb_word(args))
+    }
 }
 
 fn a64_staddb_shape(args: list) {
@@ -42850,7 +44288,15 @@ fn a64_staddh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_staddh(args: list) {
-    emit.u32(a64_staddh_word(args))
+    if a64_has_lo12(args) {
+        a64_staddh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_staddh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_staddh_word(args))
+    }
 }
 
 fn a64_staddh_shape(args: list) {
@@ -42887,7 +44333,15 @@ fn a64_staddl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_staddl(args: list) {
-    emit.u32(a64_staddl_word(args))
+    if a64_has_lo12(args) {
+        a64_staddl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_staddl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_staddl_word(args))
+    }
 }
 
 fn a64_staddl_shape(args: list) {
@@ -42913,7 +44367,15 @@ fn a64_staddlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_staddlb(args: list) {
-    emit.u32(a64_staddlb_word(args))
+    if a64_has_lo12(args) {
+        a64_staddlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_staddlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_staddlb_word(args))
+    }
 }
 
 fn a64_staddlb_shape(args: list) {
@@ -42939,7 +44401,15 @@ fn a64_staddlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_staddlh(args: list) {
-    emit.u32(a64_staddlh_word(args))
+    if a64_has_lo12(args) {
+        a64_staddlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_staddlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_staddlh_word(args))
+    }
 }
 
 fn a64_staddlh_shape(args: list) {
@@ -42976,7 +44446,15 @@ fn a64_stclr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclr(args: list) {
-    emit.u32(a64_stclr_word(args))
+    if a64_has_lo12(args) {
+        a64_stclr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclr_word(args))
+    }
 }
 
 fn a64_stclr_shape(args: list) {
@@ -43002,7 +44480,15 @@ fn a64_stclrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclrb(args: list) {
-    emit.u32(a64_stclrb_word(args))
+    if a64_has_lo12(args) {
+        a64_stclrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclrb_word(args))
+    }
 }
 
 fn a64_stclrb_shape(args: list) {
@@ -43028,7 +44514,15 @@ fn a64_stclrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclrh(args: list) {
-    emit.u32(a64_stclrh_word(args))
+    if a64_has_lo12(args) {
+        a64_stclrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclrh_word(args))
+    }
 }
 
 fn a64_stclrh_shape(args: list) {
@@ -43065,7 +44559,15 @@ fn a64_stclrl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclrl(args: list) {
-    emit.u32(a64_stclrl_word(args))
+    if a64_has_lo12(args) {
+        a64_stclrl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclrl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclrl_word(args))
+    }
 }
 
 fn a64_stclrl_shape(args: list) {
@@ -43091,7 +44593,15 @@ fn a64_stclrlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclrlb(args: list) {
-    emit.u32(a64_stclrlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stclrlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclrlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclrlb_word(args))
+    }
 }
 
 fn a64_stclrlb_shape(args: list) {
@@ -43117,7 +44627,15 @@ fn a64_stclrlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stclrlh(args: list) {
-    emit.u32(a64_stclrlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stclrlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stclrlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stclrlh_word(args))
+    }
 }
 
 fn a64_stclrlh_shape(args: list) {
@@ -43154,7 +44672,15 @@ fn a64_steor_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steor(args: list) {
-    emit.u32(a64_steor_word(args))
+    if a64_has_lo12(args) {
+        a64_steor_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steor_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steor_word(args))
+    }
 }
 
 fn a64_steor_shape(args: list) {
@@ -43180,7 +44706,15 @@ fn a64_steorb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steorb(args: list) {
-    emit.u32(a64_steorb_word(args))
+    if a64_has_lo12(args) {
+        a64_steorb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steorb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steorb_word(args))
+    }
 }
 
 fn a64_steorb_shape(args: list) {
@@ -43206,7 +44740,15 @@ fn a64_steorh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steorh(args: list) {
-    emit.u32(a64_steorh_word(args))
+    if a64_has_lo12(args) {
+        a64_steorh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steorh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steorh_word(args))
+    }
 }
 
 fn a64_steorh_shape(args: list) {
@@ -43243,7 +44785,15 @@ fn a64_steorl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steorl(args: list) {
-    emit.u32(a64_steorl_word(args))
+    if a64_has_lo12(args) {
+        a64_steorl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steorl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steorl_word(args))
+    }
 }
 
 fn a64_steorl_shape(args: list) {
@@ -43269,7 +44819,15 @@ fn a64_steorlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steorlb(args: list) {
-    emit.u32(a64_steorlb_word(args))
+    if a64_has_lo12(args) {
+        a64_steorlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steorlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steorlb_word(args))
+    }
 }
 
 fn a64_steorlb_shape(args: list) {
@@ -43295,7 +44853,15 @@ fn a64_steorlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_steorlh(args: list) {
-    emit.u32(a64_steorlh_word(args))
+    if a64_has_lo12(args) {
+        a64_steorlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_steorlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_steorlh_word(args))
+    }
 }
 
 fn a64_steorlh_shape(args: list) {
@@ -43378,7 +44944,15 @@ fn a64_stg_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stg(args: list) {
-    emit.u32(a64_stg_word(args))
+    if a64_has_lo12(args) {
+        a64_stg_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stg_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stg_word(args))
+    }
 }
 
 fn a64_stg_shape(args: list) {
@@ -43404,7 +44978,15 @@ fn a64_stgm_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stgm(args: list) {
-    emit.u32(a64_stgm_word(args))
+    if a64_has_lo12(args) {
+        a64_stgm_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stgm_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stgm_word(args))
+    }
 }
 
 fn a64_stgm_shape(args: list) {
@@ -43456,7 +45038,15 @@ fn a64_stgp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stgp(args: list) {
-    emit.u32(a64_stgp_word(args))
+    if a64_has_lo12(args) {
+        a64_stgp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stgp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stgp_word(args))
+    }
 }
 
 fn a64_stgp_shape(args: list) {
@@ -43493,7 +45083,15 @@ fn a64_stllr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stllr(args: list) {
-    emit.u32(a64_stllr_word(args))
+    if a64_has_lo12(args) {
+        a64_stllr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stllr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stllr_word(args))
+    }
 }
 
 fn a64_stllr_shape(args: list) {
@@ -43519,7 +45117,15 @@ fn a64_stllrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stllrb(args: list) {
-    emit.u32(a64_stllrb_word(args))
+    if a64_has_lo12(args) {
+        a64_stllrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stllrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stllrb_word(args))
+    }
 }
 
 fn a64_stllrb_shape(args: list) {
@@ -43545,7 +45151,15 @@ fn a64_stllrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stllrh(args: list) {
-    emit.u32(a64_stllrh_word(args))
+    if a64_has_lo12(args) {
+        a64_stllrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stllrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stllrh_word(args))
+    }
 }
 
 fn a64_stllrh_shape(args: list) {
@@ -43582,7 +45196,15 @@ fn a64_stlr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlr(args: list) {
-    emit.u32(a64_stlr_word(args))
+    if a64_has_lo12(args) {
+        a64_stlr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlr_word(args))
+    }
 }
 
 fn a64_stlr_shape(args: list) {
@@ -43608,7 +45230,15 @@ fn a64_stlrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlrb(args: list) {
-    emit.u32(a64_stlrb_word(args))
+    if a64_has_lo12(args) {
+        a64_stlrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlrb_word(args))
+    }
 }
 
 fn a64_stlrb_shape(args: list) {
@@ -43634,7 +45264,15 @@ fn a64_stlrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlrh(args: list) {
-    emit.u32(a64_stlrh_word(args))
+    if a64_has_lo12(args) {
+        a64_stlrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlrh_word(args))
+    }
 }
 
 fn a64_stlrh_shape(args: list) {
@@ -43671,7 +45309,15 @@ fn a64_stlur_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlur(args: list) {
-    emit.u32(a64_stlur_word(args))
+    if a64_has_lo12(args) {
+        a64_stlur_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlur_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlur_word(args))
+    }
 }
 
 fn a64_stlur_shape(args: list) {
@@ -43697,7 +45343,15 @@ fn a64_stlurb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlurb(args: list) {
-    emit.u32(a64_stlurb_word(args))
+    if a64_has_lo12(args) {
+        a64_stlurb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlurb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlurb_word(args))
+    }
 }
 
 fn a64_stlurb_shape(args: list) {
@@ -43723,7 +45377,15 @@ fn a64_stlurh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlurh(args: list) {
-    emit.u32(a64_stlurh_word(args))
+    if a64_has_lo12(args) {
+        a64_stlurh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlurh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlurh_word(args))
+    }
 }
 
 fn a64_stlurh_shape(args: list) {
@@ -43764,7 +45426,15 @@ fn a64_stlxp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlxp(args: list) {
-    emit.u32(a64_stlxp_word(args))
+    if a64_has_lo12(args) {
+        a64_stlxp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlxp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlxp_word(args))
+    }
 }
 
 fn a64_stlxp_shape(args: list) {
@@ -43803,7 +45473,15 @@ fn a64_stlxr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlxr(args: list) {
-    emit.u32(a64_stlxr_word(args))
+    if a64_has_lo12(args) {
+        a64_stlxr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlxr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlxr_word(args))
+    }
 }
 
 fn a64_stlxr_shape(args: list) {
@@ -43830,7 +45508,15 @@ fn a64_stlxrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlxrb(args: list) {
-    emit.u32(a64_stlxrb_word(args))
+    if a64_has_lo12(args) {
+        a64_stlxrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlxrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlxrb_word(args))
+    }
 }
 
 fn a64_stlxrb_shape(args: list) {
@@ -43857,7 +45543,15 @@ fn a64_stlxrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stlxrh(args: list) {
-    emit.u32(a64_stlxrh_word(args))
+    if a64_has_lo12(args) {
+        a64_stlxrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stlxrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stlxrh_word(args))
+    }
 }
 
 fn a64_stlxrh_shape(args: list) {
@@ -43932,7 +45626,15 @@ fn a64_stnp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stnp(args: list) {
-    emit.u32(a64_stnp_word(args))
+    if a64_has_lo12(args) {
+        a64_stnp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stnp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stnp_word(args))
+    }
 }
 
 fn a64_stnp_shape(args: list) {
@@ -44132,7 +45834,15 @@ fn a64_stp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stp(args: list) {
-    emit.u32(a64_stp_word(args))
+    if a64_has_lo12(args) {
+        a64_stp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stp_word(args))
+    }
 }
 
 fn a64_stp_shape(args: list) {
@@ -44749,7 +46459,15 @@ fn a64_str_word(args: list) -> u64 {
     return 0;
 }
 fn a64_str(args: list) {
-    emit.u32(a64_str_word(args))
+    if a64_has_lo12(args) {
+        a64_str_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_str_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_str_word(args))
+    }
 }
 
 fn a64_str_shape(args: list) {
@@ -44850,7 +46568,15 @@ fn a64_strb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_strb(args: list) {
-    emit.u32(a64_strb_word(args))
+    if a64_has_lo12(args) {
+        a64_strb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_strb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_strb_word(args))
+    }
 }
 
 fn a64_strb_shape(args: list) {
@@ -44951,7 +46677,15 @@ fn a64_strh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_strh(args: list) {
-    emit.u32(a64_strh_word(args))
+    if a64_has_lo12(args) {
+        a64_strh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_strh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_strh_word(args))
+    }
 }
 
 fn a64_strh_shape(args: list) {
@@ -44988,7 +46722,15 @@ fn a64_stset_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stset(args: list) {
-    emit.u32(a64_stset_word(args))
+    if a64_has_lo12(args) {
+        a64_stset_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stset_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stset_word(args))
+    }
 }
 
 fn a64_stset_shape(args: list) {
@@ -45014,7 +46756,15 @@ fn a64_stsetb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsetb(args: list) {
-    emit.u32(a64_stsetb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsetb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsetb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsetb_word(args))
+    }
 }
 
 fn a64_stsetb_shape(args: list) {
@@ -45040,7 +46790,15 @@ fn a64_stseth_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stseth(args: list) {
-    emit.u32(a64_stseth_word(args))
+    if a64_has_lo12(args) {
+        a64_stseth_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stseth_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stseth_word(args))
+    }
 }
 
 fn a64_stseth_shape(args: list) {
@@ -45077,7 +46835,15 @@ fn a64_stsetl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsetl(args: list) {
-    emit.u32(a64_stsetl_word(args))
+    if a64_has_lo12(args) {
+        a64_stsetl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsetl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsetl_word(args))
+    }
 }
 
 fn a64_stsetl_shape(args: list) {
@@ -45103,7 +46869,15 @@ fn a64_stsetlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsetlb(args: list) {
-    emit.u32(a64_stsetlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsetlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsetlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsetlb_word(args))
+    }
 }
 
 fn a64_stsetlb_shape(args: list) {
@@ -45129,7 +46903,15 @@ fn a64_stsetlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsetlh(args: list) {
-    emit.u32(a64_stsetlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stsetlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsetlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsetlh_word(args))
+    }
 }
 
 fn a64_stsetlh_shape(args: list) {
@@ -45166,7 +46948,15 @@ fn a64_stsmax_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmax(args: list) {
-    emit.u32(a64_stsmax_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmax_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmax_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmax_word(args))
+    }
 }
 
 fn a64_stsmax_shape(args: list) {
@@ -45192,7 +46982,15 @@ fn a64_stsmaxb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmaxb(args: list) {
-    emit.u32(a64_stsmaxb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmaxb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmaxb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmaxb_word(args))
+    }
 }
 
 fn a64_stsmaxb_shape(args: list) {
@@ -45218,7 +47016,15 @@ fn a64_stsmaxh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmaxh(args: list) {
-    emit.u32(a64_stsmaxh_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmaxh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmaxh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmaxh_word(args))
+    }
 }
 
 fn a64_stsmaxh_shape(args: list) {
@@ -45255,7 +47061,15 @@ fn a64_stsmaxl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmaxl(args: list) {
-    emit.u32(a64_stsmaxl_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmaxl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmaxl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmaxl_word(args))
+    }
 }
 
 fn a64_stsmaxl_shape(args: list) {
@@ -45281,7 +47095,15 @@ fn a64_stsmaxlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmaxlb(args: list) {
-    emit.u32(a64_stsmaxlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmaxlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmaxlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmaxlb_word(args))
+    }
 }
 
 fn a64_stsmaxlb_shape(args: list) {
@@ -45307,7 +47129,15 @@ fn a64_stsmaxlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmaxlh(args: list) {
-    emit.u32(a64_stsmaxlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmaxlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmaxlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmaxlh_word(args))
+    }
 }
 
 fn a64_stsmaxlh_shape(args: list) {
@@ -45344,7 +47174,15 @@ fn a64_stsmin_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsmin(args: list) {
-    emit.u32(a64_stsmin_word(args))
+    if a64_has_lo12(args) {
+        a64_stsmin_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsmin_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsmin_word(args))
+    }
 }
 
 fn a64_stsmin_shape(args: list) {
@@ -45370,7 +47208,15 @@ fn a64_stsminb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsminb(args: list) {
-    emit.u32(a64_stsminb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsminb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsminb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsminb_word(args))
+    }
 }
 
 fn a64_stsminb_shape(args: list) {
@@ -45396,7 +47242,15 @@ fn a64_stsminh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsminh(args: list) {
-    emit.u32(a64_stsminh_word(args))
+    if a64_has_lo12(args) {
+        a64_stsminh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsminh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsminh_word(args))
+    }
 }
 
 fn a64_stsminh_shape(args: list) {
@@ -45433,7 +47287,15 @@ fn a64_stsminl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsminl(args: list) {
-    emit.u32(a64_stsminl_word(args))
+    if a64_has_lo12(args) {
+        a64_stsminl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsminl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsminl_word(args))
+    }
 }
 
 fn a64_stsminl_shape(args: list) {
@@ -45459,7 +47321,15 @@ fn a64_stsminlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsminlb(args: list) {
-    emit.u32(a64_stsminlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stsminlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsminlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsminlb_word(args))
+    }
 }
 
 fn a64_stsminlb_shape(args: list) {
@@ -45485,7 +47355,15 @@ fn a64_stsminlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stsminlh(args: list) {
-    emit.u32(a64_stsminlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stsminlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stsminlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stsminlh_word(args))
+    }
 }
 
 fn a64_stsminlh_shape(args: list) {
@@ -45522,7 +47400,15 @@ fn a64_sttr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_sttr(args: list) {
-    emit.u32(a64_sttr_word(args))
+    if a64_has_lo12(args) {
+        a64_sttr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_sttr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_sttr_word(args))
+    }
 }
 
 fn a64_sttr_shape(args: list) {
@@ -45548,7 +47434,15 @@ fn a64_sttrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_sttrb(args: list) {
-    emit.u32(a64_sttrb_word(args))
+    if a64_has_lo12(args) {
+        a64_sttrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_sttrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_sttrb_word(args))
+    }
 }
 
 fn a64_sttrb_shape(args: list) {
@@ -45574,7 +47468,15 @@ fn a64_sttrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_sttrh(args: list) {
-    emit.u32(a64_sttrh_word(args))
+    if a64_has_lo12(args) {
+        a64_sttrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_sttrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_sttrh_word(args))
+    }
 }
 
 fn a64_sttrh_shape(args: list) {
@@ -45611,7 +47513,15 @@ fn a64_stumax_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumax(args: list) {
-    emit.u32(a64_stumax_word(args))
+    if a64_has_lo12(args) {
+        a64_stumax_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumax_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumax_word(args))
+    }
 }
 
 fn a64_stumax_shape(args: list) {
@@ -45637,7 +47547,15 @@ fn a64_stumaxb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumaxb(args: list) {
-    emit.u32(a64_stumaxb_word(args))
+    if a64_has_lo12(args) {
+        a64_stumaxb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumaxb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumaxb_word(args))
+    }
 }
 
 fn a64_stumaxb_shape(args: list) {
@@ -45663,7 +47581,15 @@ fn a64_stumaxh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumaxh(args: list) {
-    emit.u32(a64_stumaxh_word(args))
+    if a64_has_lo12(args) {
+        a64_stumaxh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumaxh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumaxh_word(args))
+    }
 }
 
 fn a64_stumaxh_shape(args: list) {
@@ -45700,7 +47626,15 @@ fn a64_stumaxl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumaxl(args: list) {
-    emit.u32(a64_stumaxl_word(args))
+    if a64_has_lo12(args) {
+        a64_stumaxl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumaxl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumaxl_word(args))
+    }
 }
 
 fn a64_stumaxl_shape(args: list) {
@@ -45726,7 +47660,15 @@ fn a64_stumaxlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumaxlb(args: list) {
-    emit.u32(a64_stumaxlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stumaxlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumaxlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumaxlb_word(args))
+    }
 }
 
 fn a64_stumaxlb_shape(args: list) {
@@ -45752,7 +47694,15 @@ fn a64_stumaxlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumaxlh(args: list) {
-    emit.u32(a64_stumaxlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stumaxlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumaxlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumaxlh_word(args))
+    }
 }
 
 fn a64_stumaxlh_shape(args: list) {
@@ -45789,7 +47739,15 @@ fn a64_stumin_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stumin(args: list) {
-    emit.u32(a64_stumin_word(args))
+    if a64_has_lo12(args) {
+        a64_stumin_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stumin_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stumin_word(args))
+    }
 }
 
 fn a64_stumin_shape(args: list) {
@@ -45815,7 +47773,15 @@ fn a64_stuminb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stuminb(args: list) {
-    emit.u32(a64_stuminb_word(args))
+    if a64_has_lo12(args) {
+        a64_stuminb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stuminb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stuminb_word(args))
+    }
 }
 
 fn a64_stuminb_shape(args: list) {
@@ -45841,7 +47807,15 @@ fn a64_stuminh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stuminh(args: list) {
-    emit.u32(a64_stuminh_word(args))
+    if a64_has_lo12(args) {
+        a64_stuminh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stuminh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stuminh_word(args))
+    }
 }
 
 fn a64_stuminh_shape(args: list) {
@@ -45878,7 +47852,15 @@ fn a64_stuminl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stuminl(args: list) {
-    emit.u32(a64_stuminl_word(args))
+    if a64_has_lo12(args) {
+        a64_stuminl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stuminl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stuminl_word(args))
+    }
 }
 
 fn a64_stuminl_shape(args: list) {
@@ -45904,7 +47886,15 @@ fn a64_stuminlb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stuminlb(args: list) {
-    emit.u32(a64_stuminlb_word(args))
+    if a64_has_lo12(args) {
+        a64_stuminlb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stuminlb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stuminlb_word(args))
+    }
 }
 
 fn a64_stuminlb_shape(args: list) {
@@ -45930,7 +47920,15 @@ fn a64_stuminlh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stuminlh(args: list) {
-    emit.u32(a64_stuminlh_word(args))
+    if a64_has_lo12(args) {
+        a64_stuminlh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stuminlh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stuminlh_word(args))
+    }
 }
 
 fn a64_stuminlh_shape(args: list) {
@@ -46022,7 +48020,15 @@ fn a64_stur_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stur(args: list) {
-    emit.u32(a64_stur_word(args))
+    if a64_has_lo12(args) {
+        a64_stur_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stur_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stur_word(args))
+    }
 }
 
 fn a64_stur_shape(args: list) {
@@ -46048,7 +48054,15 @@ fn a64_sturb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_sturb(args: list) {
-    emit.u32(a64_sturb_word(args))
+    if a64_has_lo12(args) {
+        a64_sturb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_sturb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_sturb_word(args))
+    }
 }
 
 fn a64_sturb_shape(args: list) {
@@ -46074,7 +48088,15 @@ fn a64_sturh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_sturh(args: list) {
-    emit.u32(a64_sturh_word(args))
+    if a64_has_lo12(args) {
+        a64_sturh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_sturh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_sturh_word(args))
+    }
 }
 
 fn a64_sturh_shape(args: list) {
@@ -46115,7 +48137,15 @@ fn a64_stxp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stxp(args: list) {
-    emit.u32(a64_stxp_word(args))
+    if a64_has_lo12(args) {
+        a64_stxp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stxp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stxp_word(args))
+    }
 }
 
 fn a64_stxp_shape(args: list) {
@@ -46154,7 +48184,15 @@ fn a64_stxr_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stxr(args: list) {
-    emit.u32(a64_stxr_word(args))
+    if a64_has_lo12(args) {
+        a64_stxr_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stxr_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stxr_word(args))
+    }
 }
 
 fn a64_stxr_shape(args: list) {
@@ -46181,7 +48219,15 @@ fn a64_stxrb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stxrb(args: list) {
-    emit.u32(a64_stxrb_word(args))
+    if a64_has_lo12(args) {
+        a64_stxrb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stxrb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stxrb_word(args))
+    }
 }
 
 fn a64_stxrb_shape(args: list) {
@@ -46208,7 +48254,15 @@ fn a64_stxrh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stxrh(args: list) {
-    emit.u32(a64_stxrh_word(args))
+    if a64_has_lo12(args) {
+        a64_stxrh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stxrh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stxrh_word(args))
+    }
 }
 
 fn a64_stxrh_shape(args: list) {
@@ -46291,7 +48345,15 @@ fn a64_stz2g_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stz2g(args: list) {
-    emit.u32(a64_stz2g_word(args))
+    if a64_has_lo12(args) {
+        a64_stz2g_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stz2g_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stz2g_word(args))
+    }
 }
 
 fn a64_stz2g_shape(args: list) {
@@ -46374,7 +48436,15 @@ fn a64_stzg_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stzg(args: list) {
-    emit.u32(a64_stzg_word(args))
+    if a64_has_lo12(args) {
+        a64_stzg_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stzg_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stzg_word(args))
+    }
 }
 
 fn a64_stzg_shape(args: list) {
@@ -46400,7 +48470,15 @@ fn a64_stzgm_word(args: list) -> u64 {
     return 0;
 }
 fn a64_stzgm(args: list) {
-    emit.u32(a64_stzgm_word(args))
+    if a64_has_lo12(args) {
+        a64_stzgm_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_stzgm_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_stzgm_word(args))
+    }
 }
 
 fn a64_stzgm_shape(args: list) {
@@ -48854,7 +50932,15 @@ fn a64_swp_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swp(args: list) {
-    emit.u32(a64_swp_word(args))
+    if a64_has_lo12(args) {
+        a64_swp_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swp_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swp_word(args))
+    }
 }
 
 fn a64_swp_shape(args: list) {
@@ -48893,7 +50979,15 @@ fn a64_swpa_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpa(args: list) {
-    emit.u32(a64_swpa_word(args))
+    if a64_has_lo12(args) {
+        a64_swpa_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpa_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpa_word(args))
+    }
 }
 
 fn a64_swpa_shape(args: list) {
@@ -48920,7 +51014,15 @@ fn a64_swpab_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpab(args: list) {
-    emit.u32(a64_swpab_word(args))
+    if a64_has_lo12(args) {
+        a64_swpab_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpab_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpab_word(args))
+    }
 }
 
 fn a64_swpab_shape(args: list) {
@@ -48947,7 +51049,15 @@ fn a64_swpah_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpah(args: list) {
-    emit.u32(a64_swpah_word(args))
+    if a64_has_lo12(args) {
+        a64_swpah_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpah_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpah_word(args))
+    }
 }
 
 fn a64_swpah_shape(args: list) {
@@ -48986,7 +51096,15 @@ fn a64_swpal_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpal(args: list) {
-    emit.u32(a64_swpal_word(args))
+    if a64_has_lo12(args) {
+        a64_swpal_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpal_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpal_word(args))
+    }
 }
 
 fn a64_swpal_shape(args: list) {
@@ -49013,7 +51131,15 @@ fn a64_swpalb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpalb(args: list) {
-    emit.u32(a64_swpalb_word(args))
+    if a64_has_lo12(args) {
+        a64_swpalb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpalb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpalb_word(args))
+    }
 }
 
 fn a64_swpalb_shape(args: list) {
@@ -49040,7 +51166,15 @@ fn a64_swpalh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpalh(args: list) {
-    emit.u32(a64_swpalh_word(args))
+    if a64_has_lo12(args) {
+        a64_swpalh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpalh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpalh_word(args))
+    }
 }
 
 fn a64_swpalh_shape(args: list) {
@@ -49067,7 +51201,15 @@ fn a64_swpb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpb(args: list) {
-    emit.u32(a64_swpb_word(args))
+    if a64_has_lo12(args) {
+        a64_swpb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpb_word(args))
+    }
 }
 
 fn a64_swpb_shape(args: list) {
@@ -49094,7 +51236,15 @@ fn a64_swph_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swph(args: list) {
-    emit.u32(a64_swph_word(args))
+    if a64_has_lo12(args) {
+        a64_swph_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swph_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swph_word(args))
+    }
 }
 
 fn a64_swph_shape(args: list) {
@@ -49133,7 +51283,15 @@ fn a64_swpl_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swpl(args: list) {
-    emit.u32(a64_swpl_word(args))
+    if a64_has_lo12(args) {
+        a64_swpl_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swpl_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swpl_word(args))
+    }
 }
 
 fn a64_swpl_shape(args: list) {
@@ -49160,7 +51318,15 @@ fn a64_swplb_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swplb(args: list) {
-    emit.u32(a64_swplb_word(args))
+    if a64_has_lo12(args) {
+        a64_swplb_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swplb_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swplb_word(args))
+    }
 }
 
 fn a64_swplb_shape(args: list) {
@@ -49187,7 +51353,15 @@ fn a64_swplh_word(args: list) -> u64 {
     return 0;
 }
 fn a64_swplh(args: list) {
-    emit.u32(a64_swplh_word(args))
+    if a64_has_lo12(args) {
+        a64_swplh_shape(a64_lo12_values(args, false))
+        defer {
+            store.u32(here(), a64_swplh_word(a64_lo12_values(args, true)))
+        }
+        emit.u32(0)
+    } else {
+        emit.u32(a64_swplh_word(args))
+    }
 }
 
 fn a64_swplh_shape(args: list) {

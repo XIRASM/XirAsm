@@ -27,5 +27,5 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Operand translation rules are adapted from dynasm-rs, under MPL-2.0.
-The adapted sources are tools/arm64/normalize_a64.py, b4_rules.py, extension_rules.py, and rules/b1.json through rules/b4.json and rules/e1.json through rules/e4.json.
+The adapted sources are tools/arm64/normalize_a64.py, normalize_a64_e5.py, b4_rules.py, extension_rules.py, e5_rules.py, rules/b1.json through rules/b4.json, and rules/e1.json through rules/e5.json.
 See tools/arm64/MPL-2.0.txt for the license.

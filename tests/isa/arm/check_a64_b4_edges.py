@@ -119,6 +119,19 @@ adrp x4, #4096
 .word 0
 '''
 
+LO12 = '''origin(0x400000)
+adrp x1, value
+add x1, x1, :lo12:value
+ldr w0, [x1, #:lo12:value]
+value:
+emit.u32(7)
+'''
+LO12_ORACLE = '''adrp x1, #0
+add x1, x1, #12
+ldr w0, [x1, #12]
+.word 7
+'''
+
 NEGATIVES = [
     'add x0, xzr, #1', 'add xzr, x0, #1', 'adds sp, x0, #1',
     'mov sp, xzr', 'mov xzr, sp', 'mov x0, #0x123456789abcdef0',
@@ -157,6 +170,7 @@ def verify(args, out):
     for name, source, oracle in (
         ('scalar', '\n'.join(a for a, b in PAIRS), '\n'.join(b for a, b in PAIRS)),
         ('targets', TARGETS, TARGET_ORACLE), ('pages', PAGES, PAGE_ORACLE),
+        ('lo12', LO12, LO12_ORACLE),
         ('system-names', '\n'.join(named_source), '\n'.join(named_oracle)),
     ):
         asm, binary, ref, obj, expected = [out / f'{name}.{ext}' for ext in ('asm', 'bin', 's', 'o', 'expected')]
@@ -175,7 +189,7 @@ def verify(args, out):
         assert result.returncode and not binary.exists(), f'accepted invalid input: {source}'
         assert 'panic' not in result.stderr.lower(), result.stderr
     report = {'status': 'passed', 'scalar_words': len(PAIRS), 'target_words': 14,
-              'page_words': 5, 'negative_cases': len(NEGATIVES),
+              'page_words': 5, 'lo12_words': 4, 'negative_cases': len(NEGATIVES),
               'system_names': len(names), 'system_name_words': len(named_source)}
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='ascii')
     print(report, flush=True)

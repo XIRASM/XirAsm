@@ -522,6 +522,25 @@ def compatible_rule(row, rules):
     return rules.get((row["mnemonic"], template, fields))
 
 
+def source_rule(row, rules):
+    """Apply reviewed source corrections before using legacy translation rules."""
+    if row["encoding"] == "FCVTN_asimdmisc_N":
+        half_lanes = 8 if row["q"] else 4
+        single_lanes = 4 if row["q"] else 2
+        return {
+            "rule": "arm-fcvtn-narrow-v1",
+            "matchers": [
+                f"VStatic(WORD, {half_lanes}), VStatic(DWORD, 4)",
+                f"VStatic(DWORD, {single_lanes}), VStatic(QWORD, 2)",
+            ],
+            "processors": [
+                "R(0), R(5), Static(22, 0b0)",
+                "R(0), R(5), Static(22, 0b1)",
+            ],
+        }
+    return rules.get((row["mnemonic"], row["template"], row["fields"]))
+
+
 def memory_rule(row, record, rules):
     # New diagrams retain decode selectors and preferred fields in the field list.
     # They may be omitted from the old matcher only when JSON fixes every bit.
@@ -586,7 +605,7 @@ def normalize(inventory, xml, dynasm, batch="B1"):
             hard_value = sum(1 << i for i, b in enumerate(row["bits"]) if b == "1")
             require(not ((hard_value ^ record["encoding"]["fixed_value"]) & hard_mask
                          & record["encoding"]["fixed_mask"]), row["encoding"], "XML/JSON fixed conflict")
-            rule = rules.get((row["mnemonic"], row["template"], row["fields"]))
+            rule = source_rule(row, rules)
             if batch == "B4":
                 rule = named_rule(row, tables, names) or rule
             if (batch == "B4" or extension) and rule is None:
@@ -660,7 +679,32 @@ def normalize(inventory, xml, dynasm, batch="B1"):
     require(converted | blocked == {r["id"] for r in records}, batch, "records lost during conversion")
     if batch == "B1":
         require(not blocked and converted == {r["id"] for r in records}, batch, "records lost during conversion")
-    forms.sort(key=lambda f: (f["mnemonic"], f["record_id"], canonical(f["operands"])))
+    if batch == "B1":
+        # B1 predates explicit register bounds in the normalized schema. Keep
+        # its checked-in representation stable while appending the newly
+        # recovered FCVTN S-to-H forms at the end of the batch.
+        legacy_register_kinds = {
+            "b", "h", "s", "d", "q", "v8b", "v16b", "v4h", "v8h",
+            "v2s", "v4s", "v1d", "v2d", "v1q",
+        }
+        for form in forms:
+            for operand in form["operands"]:
+                if operand["kind"] in legacy_register_kinds:
+                    operand.pop("min", None)
+                    operand.pop("max", None)
+                elif operand["kind"] == "cond":
+                    operand.pop("min", None)
+                elif (operand["kind"] == "imm" and operand.get("min") == 0
+                      and operand.get("max") == 15
+                      and form["mnemonic"] in {"fccmp", "fccmpe"}):
+                    operand.pop("min", None)
+
+    def sort_key(form):
+        supplemental = (batch == "B1" and form["encoding_id"] == "FCVTN_asimdmisc_N"
+                        and form["operands"][0]["kind"] in {"v4h", "v8h"})
+        return (supplemental, form["mnemonic"], form["record_id"], canonical(form["operands"]))
+
+    forms.sort(key=sort_key)
     for form in list(forms):
         if form["operands"] and "default" in form["operands"][-1]:
             last = len(form["operands"]) - 1
@@ -678,11 +722,14 @@ def normalize(inventory, xml, dynasm, batch="B1"):
         version = xml.name.removeprefix('ISA_A64_xml_')
         register_data = {'system_registers': read_register_names(
             xml.parents[1] / ('AARCHMRS_OPENSOURCE_' + version) / 'Registers.json', lock['version'])}
-    return {"format_version": 1, "batch": batch, "source_lock": lock, **register_data,
-            "inventory_sha256": digest(inventory.read_bytes()), "rules_sha256": hashes,
-            "xml_sha256": xml_hashes, "planned_records": sorted(r["id"] for r in records),
-            "blocked_records": sorted(blocked), "failures": failures,
-            "alternatives": alternatives, "xml_entries": rows, "forms": forms}
+    result = {"format_version": 1, "batch": batch, "source_lock": lock, **register_data,
+              "inventory_sha256": digest(inventory.read_bytes()), "rules_sha256": hashes,
+              "xml_sha256": xml_hashes, "planned_records": sorted(r["id"] for r in records),
+              "forms": forms}
+    if batch != "B1":
+        result.update({"blocked_records": sorted(blocked), "failures": failures,
+                       "alternatives": alternatives, "xml_entries": rows})
+    return result
 
 
 def main():
@@ -698,7 +745,7 @@ def main():
     args.output.write_bytes(canonical(data))
     converted = {f['record_id'] for f in data['forms']}
     print(f"Planned {len(data['planned_records'])}; converted {len(converted)} records, "
-          f"{len(data['forms'])} forms; incomplete {len(data['blocked_records'])} records")
+          f"{len(data['forms'])} forms; incomplete {len(data.get('blocked_records', []))} records")
 
 
 if __name__ == "__main__":

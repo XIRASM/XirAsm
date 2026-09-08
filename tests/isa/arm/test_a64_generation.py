@@ -8,7 +8,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/arm64"))
-from generate_a64 import signature, validate
+from generate_a64 import render, signature, validate
+from generate_a64_e5 import validate_e5
 from normalize_a64 import compile_form, expressions, rule_alternatives
 from source import InputError
 
@@ -35,6 +36,18 @@ class GenerationChecks(unittest.TestCase):
         self.assertEqual(self.rules["xml_entries"], 212)
         self.assertEqual(len(set(self.rules["planned_records"])), 191)
         self.assertEqual({a["status"] for a in self.rules["alternatives"]}, {"converted"})
+
+    def test_b1_fcvtn_covers_both_narrowing_modes(self):
+        rules = json.loads((ROOT / "tools/arm64/rules/b1.json").read_bytes())
+        forms = {}
+        for mnemonic in ("fcvtn", "fcvtn2"):
+            forms[mnemonic] = {
+                tuple(operand["kind"] for operand in candidate["operands"])
+                for candidate in rules["forms"]
+                if candidate["mnemonic"] == mnemonic
+            }
+        self.assertEqual(forms["fcvtn"], {("v4h", "v4s"), ("v2s", "v2d")})
+        self.assertEqual(forms["fcvtn2"], {("v8h", "v4s"), ("v4s", "v2d")})
 
     def test_b3_source_set_and_memory_constraints_complete(self):
         rules = json.loads((ROOT / "tools/arm64/rules/b3.json").read_bytes())
@@ -81,6 +94,37 @@ class GenerationChecks(unittest.TestCase):
             if batch.startswith('e'):
                 self.assertEqual(records, set(plans[batch.upper()]['planned_records']))
         self.assertEqual(len(seen), 1743)
+
+    def test_e5_batch_complete_and_disjoint(self):
+        previous = set()
+        for batch in ("b1", "b2", "b3", "b4", "e1", "e2", "e3", "e4"):
+            data = json.loads((ROOT / f"tools/arm64/rules/{batch}.json").read_bytes())
+            previous.update(data["planned_records"])
+        e5 = json.loads((ROOT / "tools/arm64/rules/e5.json").read_bytes())
+        validate_e5(e5)
+        records = set(e5["planned_records"])
+        self.assertEqual(len(records), 154)
+        self.assertEqual(len(e5["forms"]), 154)
+        self.assertFalse(previous & records)
+        for form in e5["forms"]:
+            if form["mnemonic"].startswith("setgo"):
+                self.assertEqual(len(form.get("constraints", [])), 1)
+            elif form["mnemonic"].startswith(("set", "cpy")):
+                self.assertEqual(len(form.get("constraints", [])), 3)
+
+    def test_shared_generator_preserves_e5_entrypoints(self):
+        batches = [
+            json.loads((ROOT / f"tools/arm64/rules/{batch}.json").read_bytes())
+            for batch in ("b1", "b2", "b3", "b4", "e1", "e2", "e3", "e4")
+        ]
+        artifacts = render(batches)
+        self.assertIn(b'import("arm/a64/mops.inc")', artifacts["a64.inc"])
+        self.assertIn(b'import("arm/a64/generated/instructions-e5.inc")', artifacts["a64.inc"])
+        self.assertIn(
+            b'import("arm/a64/generated/instructions-e5-macros.inc")',
+            artifacts["a64-macros.inc"],
+        )
+        self.assertIn(b"a64_e5_abs_shape(shaped)", artifacts["a64/generated/instructions-macros.inc"])
 
     def test_grouped_lanes_have_distinct_signatures(self):
         kinds = ('lane_b', 'lane_h', 'lane_s', 'lane_4b', 'lane_2h', 'v2h')
