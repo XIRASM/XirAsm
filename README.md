@@ -34,6 +34,19 @@ code, reusable format logic, or precise binary layout.
   Windows and Linux programs; format facades handle ordinary PE, COFF, ELF, and
   Mach-O work without requiring users to construct every header by hand.
 
+## Download
+
+Every release is also published as prebuilt packages, so a toolchain is only
+needed to change XIRASM itself:
+
+- Windows x86-64 (ZIP) and Linux x86-64 (statically linked TAR.GZ);
+- macOS Apple Silicon (TAR.GZ);
+- the VS Code extension and language server (VSIX).
+
+Get the current release from [the project site](https://xirasm-site.pages.dev/#downloads).
+Each archive carries the executable, the `include` library, the test corpus, and
+the English and Chinese documentation.
+
 ## Build a Native Program
 
 Build XIRASM with Zig 0.17:

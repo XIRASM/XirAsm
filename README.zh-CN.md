@@ -27,6 +27,17 @@ APK 一起构建出来。简单程序就是普通汇编；只有在项目需要�
 - **从源码到原生程序的路径足够短：** 工程模板可直接生成 Windows/Linux 项目，
   常规 PE、COFF、ELF 与 Mach-O 由高层格式接口完成，不要求用户手工拼出每个文件头。
 
+## 下载
+
+每个版本同时提供预编译包，只有要修改 XIRASM 本身时才需要自己装工具链：
+
+- Windows x86-64（ZIP）与 Linux x86-64（静态链接 TAR.GZ）；
+- macOS Apple Silicon（TAR.GZ）；
+- VS Code 扩展与语言服务器（VSIX）。
+
+从[项目网站](https://xirasm-site.pages.dev/#downloads)获取当前版本。每个包内含可执行
+文件、`include` 库、测试用例以及中英文文档。
+
 ## 几步生成原生程序
 
 使用 Zig 0.17 构建 XIRASM：
