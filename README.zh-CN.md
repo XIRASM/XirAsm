@@ -6,26 +6,28 @@
 直接生成 Windows、Linux、macOS 与 Android 上的可用产物；需要时，再用
 编译期语言把构建过程变成程序。**
 
-XIRASM 使用自然的 ISA 指令文本，可以直接生成 flat binary、Windows PE/COFF、
-Linux ELF、macOS Mach-O 与完整 SPIR-V 模块，也能顺带把包住这些代码的 Android
-APK 一起构建出来。简单程序就是普通汇编；只有在项目需要生成代码、复用格式逻辑
-或精确控制二进制布局时，才需要使用类型化的编译期语言。
+XIRASM 是一个把活干完的汇编器。你写的是普通汇编文本，拿到的是一个能直接跑的文件——
+Windows 的 PE、Linux 的 ELF、macOS 的 Mach-O、flat 二进制、SPIR-V 模块，或者一个能装的
+安卓 APK。从源码到产物中间没有别的东西：导入表、重定位记录和对齐，都由格式层自己写出来。
+
+当项目开始超出复制粘贴的范围时，再动用它的编译期语言。那不是文本宏：它是一门在汇编期
+运行的类型化语言，产物里不会留下任何痕迹。
 
 - **四类指令集：** x86 16/32/64 位模式、AArch64、RV32/RV64 与 SPIR-V 1.6。
-- **直接得到可用产物：** EXE、DLL、共享库、目标文件、Mach-O 镜像、flat binary、
-  SPIR-V 模块，以及可直接安装的 Android APK，而不是停在中间表示或实验输出。
-- **能落到真机上的 AArch64：** `arm/a64-macros.inc` 提供 AArch64 指令文本，格式层
-  再把编码结果带进 ELF64 可执行文件、PIE、目标文件与 Android 共享库，以及
-  PE64/COFF64 镜像和 Mach-O arm64 的可执行文件、dylib 与目标文件，并各自带上
-  对应的重定位和导入桩。
+- **产物开箱能跑：** PE32/PE64 可执行文件与 DLL、COFF32/COFF64 目标文件、ELF32/ELF64
+  可执行文件、ELF64 PIE 与共享库、Mach-O 64 可执行文件与 dylib 与目标文件、flat 二进制、
+  SPIR-V 模块，以及能直接安装的安卓 APK。
+- **链接器那份活已经做完了：** 导入表、导出表、基址重定位、PLT/GOT 槽位、动态符号表和
+  dyld 桩都由格式层写出来，所以一个源文件就能变成一个可运行镜像。
+- **能落到真机上的 AArch64：** `arm/a64-macros.inc` 提供 AArch64 指令文本，格式层再把
+  编码结果带进 ELF64 可执行文件、PIE、目标文件与 Android 共享库，以及 PE64/COFF64 镜像
+  和 Mach-O arm64 的可执行文件、dylib 与目标文件，并各自带上对应的重定位和导入桩。
 - **不需要 Java 构建链的 Android：** APK 写出器生成 ZIP 容器、二进制
-  `AndroidManifest.xml`，以及由资源目录编译出的 `resources.arsc`，并能装载同一份
-  源码汇编出的 NativeActivity 共享库。`@android:style/Theme.DeviceDefault` 这类
-  平台资源 ID 来自生成好的框架目录表。
-- **现代元编程能力：** 类型值、函数、集合、模块、结构化控制流和精确源码诊断，
-  不再依赖脆弱的文本宏堆叠。
-- **从源码到原生程序的路径足够短：** 工程模板可直接生成 Windows/Linux 项目，
-  常规 PE、COFF、ELF 与 Mach-O 由高层格式接口完成，不要求用户手工拼出每个文件头。
+  `AndroidManifest.xml`，以及由资源目录编译出的 `resources.arsc`，并能装载同一份源码
+  汇编出的 NativeActivity 共享库。`@android:style/Theme.DeviceDefault` 这类平台资源 ID
+  来自生成好的框架目录表。
+- **是一门语言，不是宏层：** 类型值、函数、集合、模块、结构化控制流，以及定位到源码的
+  诊断。工程模板一条命令就能给你一个可构建的 Windows、Linux 或裸机程序。
 
 ## 下载
 
@@ -42,7 +44,7 @@ Release 正文列出每个包的 SHA-256。每个包内含可执行文件、`inc
 
 ## 几步生成原生程序
 
-使用 Zig 0.17 构建 XIRASM：
+使用 Zig 0.17 构建 XIRASM，或者直接拿上面的预编译包：
 
 ```text
 zig build -Doptimize=ReleaseSafe
@@ -56,11 +58,11 @@ cd hello
 xirasm build
 ```
 
-Linux 项目改用 `--os linux --abi sysv`。生成目录已经包含源码和
-`xirasm.toml`，后续进入目录执行 `xirasm build` 即可。
+生成目录自带源码和 `xirasm.toml`，之后进目录执行 `xirasm build` 就行。Linux 上把参数换成
+`--os linux --abi sysv`，同样的命令产出的是 ELF 可执行文件。
 
-CLI 子命令写在选项之前：应使用 `xirasm build --timings`，不要写成
-`xirasm --timings build`。
+有一条 CLI 规则值得先知道：子命令写在选项之前，用 `xirasm build --timings`，
+不要写成 `xirasm --timings build`。
 
 ## 汇编仍然是汇编
 
@@ -104,42 +106,42 @@ xirasm hello.asm --target x86-64 -o hello.bin
 
 ## 一套工具，多种目标
 
-| CLI 目标 | 输出模型 |
-| --- | --- |
-| `x86-64`、`x64`、`x86_64` | 64 位 x86 指令与原生/flat 输出 |
-| `x86`、`x86-32` | 32 位 x86 指令与原生/flat 输出 |
-| `rv64`、`riscv64` | RV64 指令 |
-| `rv32`、`riscv32` | RV32 指令 |
-| `spv`、`spirv` | 完整 SPIR-V 1.6 模块 |
+| 指令集 | 怎么选 | 产出什么 |
+| --- | --- | --- |
+| x86，16/32/64 位 | `--target x86-64` 或 `--target x86` | PE32/PE64、COFF32/COFF64、ELF32/ELF64、flat 镜像 |
+| AArch64 | 在源码里 `import("arm/a64-macros.inc")` | ELF64 可执行文件、PIE、共享库与目标文件、PE64、COFF64、Mach-O arm64、Android 库 |
+| RISC-V RV64/RV32 | `--target rv64` 或 `--target rv32` | flat 镜像与 RISC-V 指令流 |
+| SPIR-V 1.6 | `--target spv` | 给 GPU 与 IR 工具用的完整模块 |
 
-AArch64 指令文本来自生成好的 include 层，而不是 CLI 目标：
-`import("arm/a64-macros.inc")` 之后即可汇编 `mov x8, #93` 与 `svc #0`，由格式
-接口决定结果是 ELF64 镜像、PE64 镜像、目标文件还是 Mach-O 镜像。
+AArch64 是唯一不挂在目标开关上的那个，这点值得说清楚：它的指令层是一个 include，不是
+CLI 选项。引入之后，`mov x8, #93` 和 `svc #0` 与别的指令一样汇编；至于结果变成 ELF64
+镜像、PE64 镜像、目标文件还是 Mach-O 镜像，由格式接口决定。目前 PE、COFF、ELF 与 Mach-O
+的封装覆盖 x86-64 和 AArch64；RISC-V 与 SPIR-V 对应的是指令流和模块。
 
-切换目标时，工程模型和编译期语言保持一致。用户不必为 x86 学一套宏系统，再为
-RISC-V 或 SPIR-V 学另一套代码生成方式。
+四类目标的工程模型和编译期语言是同一套。不必为 x86 学一套宏系统，再为 RISC-V 学另一套
+生成方式。
 
 ## 支持的输出格式
 
-XIRASM 可以直接生成：
-
-| 平台或用途 | 格式 |
+| 平台 | XIRASM 会写出什么 |
 | --- | --- |
-| Windows | x86 与 ARM64 的 PE32/PE64 可执行文件与 DLL；x86 与 ARM64 的 COFF32/COFF64 目标文件 |
-| Linux | ELF32/ELF64 可执行文件；x86-64 与 AArch64 的 ELF64 PIE 与共享库；ELF32/ELF64 目标文件 |
-| macOS | x86_64 与 arm64 的 Mach-O 64 可执行文件、dylib 与目标文件，含 dyld 导入、桩与导出表 |
-| Android | APK 归档：ZIP 容器、二进制清单、编译后的资源表、assets 与按 ABI 划分的原生库 |
+| Windows | x86 与 ARM64 的 PE32/PE64 可执行文件与 DLL，含导入表、导出表、资源与 `.reloc` 基址重定位（DIR64 与 HIGHLOW）；x86-64 与 ARM64 的 COFF32/COFF64 目标文件，带对应重定位 |
+| Linux | ELF32/ELF64 可执行文件，x86-64 与 AArch64 的 ELF64 PIE 与共享库，以及 ELF32/ELF64 目标文件。共享库导入在 x86-64 走 `.plt`/`.got.plt` 与 `R_X86_64_JUMP_SLOT`，在 AArch64 走 `.got` 与 `R_AARCH64_GLOB_DAT`，另配动态符号表与哈希；可执行文件的导入走 `.rela.plt` 与 PLT 桩 |
+| macOS | x86_64 与 arm64 的 Mach-O 64 可执行文件、dylib 与目标文件，含 dyld 导入（桩与槽位）和导出 trie |
+| Android | APK 归档：ZIP 容器、二进制清单、由 `res/` 目录编译出的 `resources.arsc`、assets（可选 DEFLATE）与按 ABI 划分的原生库 |
 | 裸机与工具开发 | flat binary 与应用专用二进制 |
 | GPU 与 IR 工具 | 完整 SPIR-V 1.6 模块 |
 
-常规 PE、COFF 与 ELF 项目使用格式库的高层封装：
+常规 PE、COFF、ELF 与 Mach-O 项目使用格式库的高层封装：
 
 ```asm
 import("format/format.inc");
 ```
 
-如果自定义加载器、文件格式或研究工具需要特殊布局，同一门语言还提供 region、label、
-alignment、finalizer 与直接格式辅助接口。常见任务保持简单，底层控制也没有被藏起来。
+这个库不是编译器内部机制，而是 XIRASM 源码本身：`include/format/` 下 34 个 `.inc`，
+外加一份生成的资源 ID 目录表，覆盖 PE、COFF、ELF、Mach-O、ZIP 以及 APK 需要的各个部分。
+可以读、可以改，也可以挑一个当作自己格式的起点。自定义加载器或文件格式需要特殊布局时，
+region、label、对齐、fixup 与 finalizer 都在同一层可用。
 
 ## 构建 Android APK
 
@@ -159,9 +161,17 @@ apk_emit(app)
 
 产物可以直接安装运行：没有 DEX、没有 Java 源文件，也不依赖任何第三方运行时，
 Activity 就是 NativeActivity，入口是共享库自己导出的 `ANativeActivity_onCreate`。
-`tests/format/android_gl_demo/` 是一份完整的 GLES2 渲染器加上包住它的归档，两者
-都由汇编器写出，构建出 39 KB 的 APK，并能被 `aapt2` 与 `zipalign` 完整读回。签名
-仍然留在汇编器之外，SDK 命令序列见 [Android 指南](document/apk.md)。
+
+APK 写出器覆盖的范围：`apk_res_dir` 扫描 `res/` 目录并编译出 `resources.arsc`，密度与
+语言限定符都在内，所以 `values-zh` 这种目录能正常工作；assets 可以用 DEFLATE 存，
+而共享库和资源表保持不压缩并对齐，这是 Android 的硬要求——AArch64 库按 Android 15+ 的
+16 KiB 页对齐。平台自己的资源 ID（比如 `@android:style/Theme.DeviceDefault`）来自一份
+用 `aapt2` 读 `android.jar` 生成的目录表。
+
+`tests/format/android_gl_demo/` 就是证据：一份 GLES2 渲染器加包住它的归档，两者都由
+汇编器写出——6,496 字节的库装在 39 KB 的 APK 里，贴图是汇编期生成的。`aapt2` 与
+`zipalign` 能把产物完整读回。签名有意留在汇编器之外，SDK 命令序列见
+[Android 指南](document/apk.md)。
 
 ## 不只是另一套宏汇编器
 
@@ -173,11 +183,13 @@ Activity 就是 NativeActivity，入口是共享库自己导出的 `ANativeActiv
 - string、bytes、可变 list 与 map；
 - struct、union、pack、alignment 与 reserve；
 - module、import、JSON、TOML 与文件驱动生成；
+- 汇编期读文件、列目录；
+- 给格式层写出的归档条目做裸 DEFLATE 压缩；
 - 用于紧凑领域语法的 token matching；
 - assert 与定位到原始源码的诊断。
 
-因此它既适合系统程序和嵌入式二进制，也适合可执行格式、代码生成器与指令级实验；
-同时不会把普通 ISA 指令改造成一套编程语言 API。
+因此它既适合系统程序和嵌入式二进制，也适合可执行格式与指令级实验；同时不会把普通
+ISA 指令改造成一套编程语言 API。
 
 ## 验证
 
@@ -205,8 +217,10 @@ Activity 就是 NativeActivity，入口是共享库自己导出的 `ANativeActiv
 
 当前版本：**0.2.21**。参见[版本说明](document/zh/releases/0.2.21.md)。
 
-XIRASM 仍处于 1.0 之前。汇编器、语言 API、格式库、CLI 与编辑器支持目前已经可以
-实际使用，公开契约在 1.0 前仍可能继续收敛。
+XIRASM 仍处于 1.0 之前。汇编器、语言 API、格式库、CLI 与编辑器支持目前已经可以实际使用，
+公开契约在 1.0 前仍可能继续收敛。它无意取代那些成熟的宏汇编器——它们背后是几十年的工具
+积累和更大的生态；XIRASM 提供的是另一种取舍：四类指令集共用一套语言模型、一个可以读和改
+的格式层，以及中间不带链接器的整镜像输出。
 
 ## 许可证
 

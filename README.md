@@ -6,17 +6,24 @@
 assembly, emit usable binaries for Windows, Linux, macOS, and Android, and make
 the build programmable when you need more.**
 
-XIRASM assembles natural ISA text and directly produces flat binaries, Windows
-PE/COFF, Linux ELF, macOS Mach-O, and complete SPIR-V modules. It also builds
-the Android APK around the code it just assembled. Start with ordinary assembly.
-Reach for its typed compile-time language only when a project needs generated
-code, reusable format logic, or precise binary layout.
+XIRASM is an assembler that finishes the job. You write ordinary assembly text,
+and what comes out is a file you can run: a Windows PE, a Linux ELF, a macOS
+Mach-O image, a flat binary, a SPIR-V module, or an installable Android APK.
+Nothing sits between the source and that file — the format layer writes the import
+tables, the relocation records, and the alignment itself.
+
+Reach for the compile-time language when a project outgrows copy-and-paste. It is
+not a text-macro layer: it is a typed language that runs while assembling and
+leaves nothing behind in the output.
 
 - **Four instruction sets:** x86 in 16/32/64-bit modes, AArch64, RV32/RV64, and
   SPIR-V 1.6.
-- **Useful output, not an intermediate experiment:** executables, DLLs, shared
-  libraries, object files, Mach-O images, flat binaries, SPIR-V modules, and
-  installable Android APKs.
+- **Output that runs:** PE32/PE64 executables and DLLs, COFF32/COFF64 objects,
+  ELF32/ELF64 executables, ELF64 PIE and shared libraries, Mach-O 64 executables,
+  dylibs and objects, flat binaries, SPIR-V modules, and installable Android APKs.
+- **The linker's share of the work is already done:** import tables, export
+  tables, base relocations, PLT/GOT slots, dynamic symbol tables, and dyld stubs
+  are written by the format layer, so one source file can become a runnable image.
 - **AArch64 that reaches a real device:** `arm/a64-macros.inc` brings AArch64
   instruction text, and the format layer carries the encoded bytes into ELF64
   executables, PIE, objects, and Android shared libraries, PE64/COFF64 images,
@@ -27,17 +34,15 @@ code, reusable format logic, or precise binary layout.
   tree, and it can carry the NativeActivity shared library assembled from the
   same source. Platform resource IDs such as
   `@android:style/Theme.DeviceDefault` come from a generated framework catalog.
-- **Modern metaprogramming:** typed values, functions, collections, modules,
-  structured control flow, and source-located diagnostics instead of a fragile
-  text-macro layer.
-- **A short path to native output:** project templates provide ready-to-build
-  Windows and Linux programs; format facades handle ordinary PE, COFF, ELF, and
-  Mach-O work without requiring users to construct every header by hand.
+- **A language, not a macro layer:** typed values, functions, collections,
+  modules, structured control flow, and source-located diagnostics. Project
+  templates give you a working Windows, Linux, or bare-metal program in one
+  command.
 
 ## Download
 
-Every release is also published as prebuilt packages, so a toolchain is only
-needed to change XIRASM itself:
+Every release is published as prebuilt packages as well, so a toolchain is only
+needed if you want to change XIRASM itself:
 
 - Windows x86-64 (ZIP) and Linux x86-64 (statically linked TAR.GZ);
 - macOS Apple Silicon (TAR.GZ);
@@ -50,7 +55,7 @@ lists the SHA-256 of every package. Each archive carries the executable, the
 
 ## Build a Native Program
 
-Build XIRASM with Zig 0.17:
+Build XIRASM with Zig 0.17, or start from a package above:
 
 ```text
 zig build -Doptimize=ReleaseSafe
@@ -65,11 +70,12 @@ cd hello
 xirasm build
 ```
 
-For Linux, use `--os linux --abi sysv`. The generated project contains its
-source and `xirasm.toml`, so the next build is just `xirasm build`.
+The generated project carries its own source and `xirasm.toml`, so after that the
+build is just `xirasm build`. On Linux, `--os linux --abi sysv` produces an ELF
+executable from the same commands.
 
-CLI subcommands precede their options: use `xirasm build --timings`, not
-`xirasm --timings build`.
+One CLI rule worth knowing up front: subcommands come before their options, so it
+is `xirasm build --timings`, not `xirasm --timings build`.
 
 ## Assembly Stays Assembly
 
@@ -115,45 +121,48 @@ xirasm hello.asm --target x86-64 -o hello.bin
 
 ## One Tool, Multiple Targets
 
-| CLI target | Output model |
-| --- | --- |
-| `x86-64`, `x64`, `x86_64` | 64-bit x86 instructions and native/flat outputs |
-| `x86`, `x86-32` | 32-bit x86 instructions and native/flat outputs |
-| `rv64`, `riscv64` | RV64 instructions |
-| `rv32`, `riscv32` | RV32 instructions |
-| `spv`, `spirv` | Complete SPIR-V 1.6 modules |
+| Instruction set | How you select it | What it produces |
+| --- | --- | --- |
+| x86, 16/32/64-bit | `--target x86-64` or `--target x86` | PE32/PE64, COFF32/COFF64, ELF32/ELF64, flat images |
+| AArch64 | `import("arm/a64-macros.inc")` in the source | ELF64 executables, PIE, shared libraries and objects, PE64, COFF64, Mach-O arm64, Android libraries |
+| RISC-V RV64/RV32 | `--target rv64` or `--target rv32` | flat images and RISC-V instruction streams |
+| SPIR-V 1.6 | `--target spv` | complete modules for GPU and IR tooling |
 
-AArch64 instruction text comes from the generated include layer rather than a
-CLI target: `import("arm/a64-macros.inc")` makes `mov x8, #93` and `svc #0`
-assemble, and the format facade decides whether the result becomes an ELF64
-image, a PE64 image, an object file, or a Mach-O image.
+AArch64 is the one that does not fit a target flag, so it is worth being plain
+about it: the instruction layer is an include, not a CLI option. Once imported,
+`mov x8, #93` and `svc #0` assemble like any other instruction, and the format
+facade decides whether the result becomes an ELF64 image, a PE64 image, an object
+file, or a Mach-O image. The PE, COFF, ELF, and Mach-O facades cover x86-64 and
+AArch64 today; RISC-V and SPIR-V are assembled to instruction streams and modules.
 
-The same project model and compile-time language apply across targets. You do
-not have to learn one macro system for x86 and another generation language for
-RISC-V or SPIR-V.
+The project model and the compile-time language are the same across all four. You
+do not learn one macro system for x86 and a different generation language for
+RISC-V.
 
 ## Output Formats
 
-XIRASM can directly produce:
-
-| Platform or use | Formats |
+| Platform | What XIRASM writes |
 | --- | --- |
-| Windows | PE32/PE64 executables and DLLs for x86 and ARM64; COFF32/COFF64 objects for x86 and ARM64 |
-| Linux | ELF32/ELF64 executables; ELF64 PIE and shared libraries (x86-64 and AArch64); ELF32/ELF64 objects |
-| macOS | Mach-O 64 executables, dylibs, and objects for x86_64 and arm64, with dyld imports, stubs, and export tables |
-| Android | APK archives: ZIP container, binary manifest, compiled resource table, assets, and per-ABI native libraries |
+| Windows | PE32/PE64 executables and DLLs for x86 and ARM64, with import tables, export tables, resources, and `.reloc` base relocations (DIR64 and HIGHLOW); COFF32/COFF64 objects carrying x86-64 and ARM64 relocations |
+| Linux | ELF32/ELF64 executables, ELF64 PIE and shared libraries for x86-64 and AArch64, and ELF32/ELF64 objects. Shared-library imports get `.plt`/`.got.plt` with `R_X86_64_JUMP_SLOT` on x86-64 and `.got` with `R_AARCH64_GLOB_DAT` on AArch64, plus the dynamic symbol table and hash; executables get `.rela.plt` and PLT stubs |
+| macOS | Mach-O 64 executables, dylibs, and objects for x86_64 and arm64, with dyld imports (stubs and slots) and export tries |
+| Android | APK archives: ZIP container, binary manifest, `resources.arsc` compiled from a `res/` tree, assets (optionally DEFLATE), and per-ABI native libraries |
 | Bare metal and tooling | Flat and application-specific binaries |
 | GPU and IR tooling | Complete SPIR-V 1.6 modules |
 
-Normal PE, COFF, and ELF projects use the format library's high-level facades:
+Normal PE, COFF, ELF, and Mach-O projects use the format library's high-level
+facades:
 
 ```asm
 import("format/format.inc");
 ```
 
-When a loader, file format, or research tool needs an unusual layout, the same
-language also exposes regions, labels, alignment, finalizers, and direct format
-helpers. The common path stays short; low-level control remains available.
+That library is not compiler machinery. It is XIRASM source: 34 `.inc` files under
+`include/format/`, plus a generated resource-ID catalog, covering PE, COFF, ELF,
+Mach-O, ZIP, and the pieces an APK needs. You can read it, change it, or copy one
+as the starting point for a format of your own. When a loader or file format needs
+an unusual layout, regions, labels, alignment, fixups, and finalizers are
+available at the same level.
 
 ## Build an Android APK
 
@@ -174,11 +183,21 @@ apk_emit(app)
 
 The archive installs and runs with no DEX, no Java source, and no third-party
 runtime: the activity is a NativeActivity whose entry point is the shared
-library's own `ANativeActivity_onCreate`. `tests/format/android_gl_demo/` is a
-complete GLES2 renderer and the archive around it, both written by the
-assembler, and it builds to a 39 KB APK that reads back cleanly through `aapt2`
-and `zipalign`. Signing stays outside the assembler; see the
-[Android guide](document/apk.md) for the SDK command sequence.
+library's own `ANativeActivity_onCreate`.
+
+What the APK writer covers: `apk_res_dir` scans a `res/` tree and compiles it into
+`resources.arsc`, density and locale qualifiers included, so a `values-zh`
+directory works; assets can be stored with DEFLATE while the shared libraries and
+the resource table stay uncompressed and aligned, which is what Android requires —
+AArch64 libraries are aligned for Android 15+ 16 KiB pages. The platform's own
+resource IDs, `@android:style/Theme.DeviceDefault` among them, come from a
+catalog generated by reading `android.jar` through `aapt2`.
+
+`tests/format/android_gl_demo/` is the proof: a GLES2 renderer and the archive
+around it, both written by the assembler — 6,496 bytes of library inside a 39 KB
+APK, with the texture generated at assembly time. `aapt2` and `zipalign` read the
+result back cleanly. Signing stays outside the assembler on purpose; the
+[Android guide](document/apk.md) has the SDK command sequence.
 
 ## More Than a Macro Assembler
 
@@ -190,12 +209,14 @@ copy-and-paste and textual substitution:
 - strings, byte sequences, mutable lists and maps;
 - structs, unions, packing, alignment, and reserve operations;
 - modules, imports, JSON, TOML, and file-driven generation;
+- reading files and listing directories while assembling;
+- raw DEFLATE compression for the archive entries the format layer writes;
 - token matching for compact domain-specific source forms;
 - assertions and diagnostics tied to the original source location.
 
-This makes XIRASM useful for systems programs, executable-format work,
-embedded binaries, code generators, and instruction-level experiments without
-turning ordinary instruction text into a programming-language API.
+That is what makes XIRASM useful for systems programs, executable-format work,
+embedded binaries, and instruction-level experiments, without turning ordinary
+instruction text into a programming-language API.
 
 ## Validation
 
@@ -227,9 +248,12 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 Current version: **0.2.21**. See the [release notes](document/releases/0.2.21.md).
 
-XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI,
-and editor support are usable now, while public contracts may still be refined
-before 1.0.
+XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI, and
+editor support are usable today, and public contracts may still be refined before
+1.0. It is not meant to take the place of the established macro assemblers — they
+carry decades of tooling and far larger ecosystems. What XIRASM offers instead is
+four instruction sets under one language model, a format layer you can read and
+change, and whole-image output with no linker in the middle.
 
 ## License
 
