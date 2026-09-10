@@ -431,6 +431,45 @@ adb logcat | findstr /i "PackageManager linker AndroidRuntime DEBUG"
 常见原因：设备 ABI 与 APK 里的 `lib/<abi>` 不匹配、入口符号没有导出、依赖库缺失、
 签名无效，或者设备没有被 `adb` 识别。
 
+## 平台结构体：这里给的是字段偏移
+
+平台回传的结构体（`ANativeActivity`、`ANativeWindow_Buffer`、`ASensorEvent`…）在目录里
+**没有**对应的 XIRASM `struct` 类型声明；`os/android/defs/*.inc` 给的是**布局常量**：
+结构体大小，以及每个字段的偏移。
+
+| 表面 | 形式 |
+| --- | --- |
+| 结构体大小 | `android_layout_<Struct>_size64` / `_size32` |
+| 字段偏移 | `android_layout_<Struct>_<字段>_offset64` / `_offset32` |
+
+用法是把偏移直接放进寻址，不需要任何类型声明：
+
+```asm
+import("os/android/defs/native_window.inc")
+import("arm/a64-macros.inc")
+
+// ANativeWindow_lock 填好的缓冲区：宽、高、行距、像素格式、像素指针
+ldr w3, [x0, #android_layout_ANativeWindow_Buffer_width_offset64]
+ldr w4, [x0, #android_layout_ANativeWindow_Buffer_height_offset64]
+ldr w5, [x0, #android_layout_ANativeWindow_Buffer_stride_offset64]
+ldr w6, [x0, #android_layout_ANativeWindow_Buffer_format_offset64]
+ldr x7, [x0, #android_layout_ANativeWindow_Buffer_bits_offset64]
+```
+
+三点要知道：
+
+- **两种数据模型**：`_offset64` 对应 arm64 与 x86-64（LP64），`_offset32` 对应 armv7 与 i686
+  （ILP32）。成员里有指针或 `size_t` 的结构体，两者大小不同，所以两套都给出。
+- **匿名成员已经展平**：C11 里能直接写成 `event->x_uncalib` 的成员，常量名也就是那个字段名。
+- **信息是完整的**：目前共 **25 个结构体、161 个字段偏移**，两种模型齐全，
+  `tests/os/validate_android_constants.py` 会把每个数字改写成 `_Static_assert` 交给 clang 编译核对。
+  **"没有 struct 类型声明"不等于"没有结构体信息"**。
+
+为什么不是 `struct` 类型（如实说明）：生成器当前只产出常量。Meta 的 `struct` / `packed struct`
+配合 `sizeof` / `offset_of` 是另一种形态，而平台布局是 **ABI 相关**的——同一个结构体在 LP64 与
+ILP32 下大小不同，类型化就得为两种模型各生成一套声明，或按目标条件选择。**把平台结构体规范成
+真实结构体类型是后续工作**；在那之前，用偏移常量直接寻址是等价且零成本的做法。
+
 ## 能力边界
 
 已经内建并经过实机验证：ZIP 容器与 CRC-32、二进制清单、`resources.arsc`（字符串、

@@ -95,6 +95,11 @@ assert(android_native_window_WINDOW_FORMAT_RGBA_8888 == 1, "the legacy RGBA form
 
 `import("os/android/defs.inc")` 一次导入全部 33 个分区；日常源码只 import 自己用到的头文件。
 
+> 注意这里给的是**布局常量**，不是 XIRASM `struct` 类型声明：结构体大小加每字段的偏移，
+> 直接用 `[base + 偏移]` 寻址。为什么这样、以及信息是否完整，见
+> [Android 打包指南](apk.md) 的"平台结构体：这里给的是字段偏移"一节；把平台结构体规范成
+> 真实结构体类型属于后续工作。
+
 ## 按名字查目录
 
 工具、诊断与编辑器补全走查询路径。数据表**第一次查询时才解析**，一次解析回答任意多次查询：
