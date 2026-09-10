@@ -43,9 +43,10 @@ needed to change XIRASM itself:
 - macOS Apple Silicon (TAR.GZ);
 - the VS Code extension and language server (VSIX).
 
-Get the current release from [the project site](https://xirasm-site.pages.dev/#downloads).
-Each archive carries the executable, the `include` library, the test corpus, and
-the English and Chinese documentation.
+Get the current release from [the project site](https://xirasm-site.pages.dev/#downloads)
+or from the [GitHub release](https://github.com/XIRASM/XirAsm/releases/latest), which
+lists the SHA-256 of every package. Each archive carries the executable, the
+`include` library, the test corpus, and the English and Chinese documentation.
 
 ## Build a Native Program
 

@@ -35,8 +35,10 @@ APK 一起构建出来。简单程序就是普通汇编；只有在项目需要�
 - macOS Apple Silicon（TAR.GZ）；
 - VS Code 扩展与语言服务器（VSIX）。
 
-从[项目网站](https://xirasm-site.pages.dev/#downloads)获取当前版本。每个包内含可执行
-文件、`include` 库、测试用例以及中英文文档。
+从[项目网站](https://xirasm-site.pages.dev/#downloads)或
+[GitHub Release](https://github.com/XIRASM/XirAsm/releases/latest)获取当前版本，
+Release 正文列出每个包的 SHA-256。每个包内含可执行文件、`include` 库、测试用例以及
+中英文文档。
 
 ## 几步生成原生程序
 
