@@ -173,6 +173,13 @@ APK 写出器覆盖的范围：`apk_res_dir` 扫描 `res/` 目录并编译出 `r
 `zipalign` 能把产物完整读回。签名有意留在汇编器之外，SDK 命令序列见
 [Android 指南](document/apk.md)。
 
+平台库本身也有一份目录：`import("os/android/imports/liblog.inc")` 之后用
+`android_import_log___android_log_write`，源码里既不写库名也不写 API 级别；
+`import("os/android/defs/native_activity.inc")` 则给出平台回传的结构体布局——来自 NDK
+stub 的 **25 个库、4,416 条（符号, 库）记录**，加上来自 NDK 头文件的 **1,168 个常量与
+161 个字段偏移**，全部逐条与 `llvm-nm`、clang 核对过。两条使用路径与"数据到哪儿就不再
+为真"见 [Android 平台指南](document/os-android.md)。
+
 ## 不只是另一套宏汇编器
 
 当汇编项目开始出现大量复制、替换与生成逻辑时，XIRASM 提供的是一门真正的编译期
@@ -208,14 +215,14 @@ ISA 指令改造成一套编程语言 API。
   格式教程与语言 API 参考，适合离线阅读。
 - [中文语言指南](document/zh/language.md) - 学习汇编器与编译期语言模型。
 - [中文格式教程](document/zh/format-tutorial.md) - 使用高层封装构建 PE、COFF 与 ELF。
-- [Android 指南（英文）](document/apk.md) - 汇编 NativeActivity 库，以及包住它的
-  APK、资源表与清单。
+- [Android 指南](document/apk.md) - 汇编 NativeActivity 库，以及包住它的 APK、资源表与清单。
+- [Android 平台指南](document/os-android.md) - 用生成的 NDK 符号目录与头文件常量，取代手写的库名与偏移。
 - [中文语言 API 参考](document/zh/api-reference.md) - 查询语法与内置 API。
 - [高级格式构造指南（英文）](document/advanced-formats.md) - 直接控制特殊二进制布局。
 
 ## 状态
 
-当前版本：**0.2.21**。参见[版本说明](document/zh/releases/0.2.21.md)。
+当前版本：**0.2.22**。参见[版本说明](document/zh/releases/0.2.22.md)。
 
 XIRASM 仍处于 1.0 之前。汇编器、语言 API、格式库、CLI 与编辑器支持目前已经可以实际使用，
 公开契约在 1.0 前仍可能继续收敛。它无意取代那些成熟的宏汇编器——它们背后是几十年的工具

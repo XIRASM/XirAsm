@@ -190,8 +190,12 @@ def render(batches, e5=None):
                         conditions.append(f"p{i} == {operand['literal']}")
                     else:
                         if operand.get("min", 0) < 0 <= operand.get("max", -1):
-                            # Meta negative values are unsigned two's-complement words.
-                            conditions.append(f"(p{i} >= {operand['min']} || p{i} <= {operand['max']})")
+                            # Meta integers are unsigned two's-complement words, so a
+                            # negative lower bound has to be compared in its unsigned
+                            # form: the value is either in the negative range, which
+                            # appears as a huge unsigned number, or at most max.
+                            umin = operand["min"] & 0xFFFFFFFFFFFFFFFF
+                            conditions.append(f"(p{i} >= {umin} || p{i} <= {operand['max']})")
                         else:
                             if "min" in operand:
                                 conditions.append(f"p{i} >= {operand['min']}")
@@ -219,6 +223,15 @@ def render(batches, e5=None):
                 seen.add(identity)
                 code += [f"        // {form['id']}: {form['encoding_id']}",
                          f"        if {selector} {{", f"            return {expr};", "        }"]
+            # A value that no form accepts is usually out of range, but an operand
+            # with a required multiple is a common enough mistake to name on its own.
+            multiples = sorted({(i, operand["multiple"]) for form in alternatives
+                                for i, operand in enumerate(form["operands"])
+                                if operand.get("multiple", 1) != 1})
+            for i, multiple in multiples:
+                code += [f"        if (p{i} % {multiple}) != 0 {{",
+                         f'            assert(false, "a64 {mnemonic}: operand {i} must be a multiple of {multiple}");',
+                         "        }"]
             code += [f'        assert(false, "a64 {mnemonic}: operand value out of range")', "        return 0;", "    }"]
         literal = any(o["kind"] == "target" for f in forms for o in f["operands"])
         page = "true" if mnemonic == "adrp" else "false"

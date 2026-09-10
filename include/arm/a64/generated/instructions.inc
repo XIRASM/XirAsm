@@ -1493,6 +1493,9 @@ fn a64_addg_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 30 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0x91800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 addg: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 addg: operand value out of range")
         return 0;
     }
@@ -1504,6 +1507,9 @@ fn a64_addg_word(args: list) -> u64 {
         // e4-0002: ADDG_64_addsub_immtags
         if p0 >= 0 && p0 <= 30 && p1 >= 31 && p1 <= 31 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0x91800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 addg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 addg: operand value out of range")
         return 0;
@@ -1517,6 +1523,9 @@ fn a64_addg_word(args: list) -> u64 {
         if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 30 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0x91800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 addg: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 addg: operand value out of range")
         return 0;
     }
@@ -1528,6 +1537,9 @@ fn a64_addg_word(args: list) -> u64 {
         // e4-0000: ADDG_64_addsub_immtags
         if p0 >= 31 && p0 <= 31 && p1 >= 31 && p1 <= 31 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0x91800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 addg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 addg: operand value out of range")
         return 0;
@@ -2461,7 +2473,7 @@ fn a64_adr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0136: ADR_only_pcreladdr
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048575) {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048575) {
             return 0x10000000 | ((p0 & 31) << 0) | (((p1 >> 0) & 3) << 29) | (((p1 >> 2) & 524287) << 5);
         }
         assert(false, "a64 adr: operand value out of range")
@@ -2494,8 +2506,11 @@ fn a64_adrp_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0137: ADRP_only_pcreladdr
-        if p0 >= 0 && p0 <= 31 && (p1 >= -4294967296 || p1 <= 4294963200) && (p1 % 4096) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744069414584320 || p1 <= 4294963200) && (p1 % 4096) == 0 {
             return 0x90000000 | ((p0 & 31) << 0) | (((p1 >> 12) & 3) << 29) | (((p1 >> 14) & 524287) << 5);
+        }
+        if (p1 % 4096) != 0 {
+            assert(false, "a64 adrp: operand 1 must be a multiple of 4096");
         }
         assert(false, "a64 adrp: operand value out of range")
         return 0;
@@ -3562,8 +3577,11 @@ fn a64_b_word(args: list) -> u64 {
     if key == 545 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         // b4-0183: B_only_branch_imm
-        if (p0 >= -134217728 || p0 <= 134217724) && (p0 % 4) == 0 {
+        if (p0 >= 18446744073575333888 || p0 <= 134217724) && (p0 % 4) == 0 {
             return 0x14000000 | (((p0 >> 2) & 67108863) << 0);
+        }
+        if (p0 % 4) != 0 {
+            assert(false, "a64 b: operand 0 must be a multiple of 4");
         }
         assert(false, "a64 b: operand value out of range")
         return 0;
@@ -3595,8 +3613,11 @@ fn a64_b_cond_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0184: B_only_condbranch
-        if p0 >= 0 && p0 <= 15 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 15 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x54000000 | ((p0 & 15) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 b_cond: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 b_cond: operand value out of range")
         return 0;
@@ -4492,8 +4513,11 @@ fn a64_bl_word(args: list) -> u64 {
     if key == 545 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         // b4-0207: BL_only_branch_imm
-        if (p0 >= -134217728 || p0 <= 134217724) && (p0 % 4) == 0 {
+        if (p0 >= 18446744073575333888 || p0 <= 134217724) && (p0 % 4) == 0 {
             return 0x94000000 | (((p0 >> 2) & 67108863) << 0);
+        }
+        if (p0 % 4) != 0 {
+            assert(false, "a64 bl: operand 0 must be a multiple of 4");
         }
         assert(false, "a64 bl: operand value out of range")
         return 0;
@@ -5385,6 +5409,12 @@ fn a64_casp_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x08207c00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
         }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 casp: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 casp: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 casp: operand value out of range")
         return 0;
     }
@@ -5398,6 +5428,12 @@ fn a64_casp_word(args: list) -> u64 {
         // e2-0017: CASP_CP64_comswappr
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x48207c00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
+        }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 casp: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 casp: operand 2 must be a multiple of 2");
         }
         assert(false, "a64 casp: operand value out of range")
         return 0;
@@ -5436,6 +5472,12 @@ fn a64_caspa_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x08607c00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
         }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspa: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspa: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 caspa: operand value out of range")
         return 0;
     }
@@ -5449,6 +5491,12 @@ fn a64_caspa_word(args: list) -> u64 {
         // e2-0019: CASPA_CP64_comswappr
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x48607c00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
+        }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspa: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspa: operand 2 must be a multiple of 2");
         }
         assert(false, "a64 caspa: operand value out of range")
         return 0;
@@ -5487,6 +5535,12 @@ fn a64_caspal_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x0860fc00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
         }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspal: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspal: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 caspal: operand value out of range")
         return 0;
     }
@@ -5500,6 +5554,12 @@ fn a64_caspal_word(args: list) -> u64 {
         // e2-0021: CASPAL_CP64_comswappr
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x4860fc00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
+        }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspal: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspal: operand 2 must be a multiple of 2");
         }
         assert(false, "a64 caspal: operand value out of range")
         return 0;
@@ -5538,6 +5598,12 @@ fn a64_caspl_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x0820fc00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
         }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspl: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspl: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 caspl: operand value out of range")
         return 0;
     }
@@ -5551,6 +5617,12 @@ fn a64_caspl_word(args: list) -> u64 {
         // e2-0023: CASPL_CP64_comswappr
         if p0 >= 0 && p0 <= 31 && (p0 % 2) == 0 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p2 % 2) == 0 && p3 >= 0 && p3 <= 31 && p4 >= 0 && p4 <= 31 && p5 == 0 && p1 == p0 + 1 && p3 == p2 + 1 {
             return 0x4820fc00 | ((p0 & 31) << 16) | ((p2 & 31) << 0) | ((p4 & 31) << 5);
+        }
+        if (p0 % 2) != 0 {
+            assert(false, "a64 caspl: operand 0 must be a multiple of 2");
+        }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 caspl: operand 2 must be a multiple of 2");
         }
         assert(false, "a64 caspl: operand value out of range")
         return 0;
@@ -5582,8 +5654,11 @@ fn a64_cbnz_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0211: CBNZ_32_compbranch
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x35000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 cbnz: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 cbnz: operand value out of range")
         return 0;
@@ -5592,8 +5667,11 @@ fn a64_cbnz_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0212: CBNZ_64_compbranch
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0xb5000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 cbnz: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 cbnz: operand value out of range")
         return 0;
@@ -5625,8 +5703,11 @@ fn a64_cbz_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0213: CBZ_32_compbranch
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x34000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 cbz: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 cbz: operand value out of range")
         return 0;
@@ -5635,8 +5716,11 @@ fn a64_cbz_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b4-0214: CBZ_64_compbranch
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0xb4000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 cbz: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 cbz: operand value out of range")
         return 0;
@@ -23152,7 +23236,7 @@ fn a64_ldapur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0044: LDAPUR_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x99400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapur: operand value out of range")
@@ -23163,7 +23247,7 @@ fn a64_ldapur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0045: LDAPUR_64_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xd9400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapur: operand value out of range")
@@ -23197,7 +23281,7 @@ fn a64_ldapurb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0046: LDAPURB_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x19400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapurb: operand value out of range")
@@ -23231,7 +23315,7 @@ fn a64_ldapurh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0047: LDAPURH_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x59400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapurh: operand value out of range")
@@ -23265,7 +23349,7 @@ fn a64_ldapursb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0048: LDAPURSB_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x19c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapursb: operand value out of range")
@@ -23276,7 +23360,7 @@ fn a64_ldapursb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0049: LDAPURSB_64_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x19800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapursb: operand value out of range")
@@ -23310,7 +23394,7 @@ fn a64_ldapursh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0050: LDAPURSH_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x59c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapursh: operand value out of range")
@@ -23321,7 +23405,7 @@ fn a64_ldapursh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0051: LDAPURSH_64_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x59800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapursh: operand value out of range")
@@ -23355,7 +23439,7 @@ fn a64_ldapursw_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0052: LDAPURSW_64_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x99800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldapursw: operand value out of range")
@@ -24598,8 +24682,11 @@ fn a64_ldg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0060: LDG_64Loffset_ldsttags
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9600000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 ldg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 ldg: operand value out of range")
         return 0;
@@ -24780,8 +24867,11 @@ fn a64_ldnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0313: LDNP_32_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x28400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldnp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldnp: operand value out of range")
         return 0;
@@ -24792,8 +24882,11 @@ fn a64_ldnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0314: LDNP_64_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
             return 0xa8400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldnp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldnp: operand value out of range")
         return 0;
@@ -24804,8 +24897,11 @@ fn a64_ldnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0317: LDNP_S_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x2c400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldnp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldnp: operand value out of range")
         return 0;
@@ -24816,8 +24912,11 @@ fn a64_ldnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0315: LDNP_D_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
             return 0x6c400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldnp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldnp: operand value out of range")
         return 0;
@@ -24828,8 +24927,11 @@ fn a64_ldnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0316: LDNP_Q_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
             return 0xac400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 ldnp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 ldnp: operand value out of range")
         return 0;
@@ -24863,8 +24965,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0318: LDP_32_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x29400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24875,8 +24980,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0328: LDP_32_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x29c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24887,8 +24995,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0319: LDP_64_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
             return 0xa9400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24899,8 +25010,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0329: LDP_64_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0xa9c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24911,8 +25025,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0322: LDP_S_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x2d400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24923,8 +25040,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0332: LDP_S_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x2dc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24935,8 +25055,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0320: LDP_D_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
             return 0x6d400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24947,8 +25070,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0330: LDP_D_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && p0 != p1 {
             return 0x6dc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24959,8 +25085,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0321: LDP_Q_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
             return 0xad400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24971,8 +25100,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0331: LDP_Q_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 && p0 != p1 {
             return 0xadc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 ldp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24984,8 +25116,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0323: LDP_32_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -256 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551360 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x28c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 2) & 127) << 15);
+        }
+        if (p4 % 4) != 0 {
+            assert(false, "a64 ldp: operand 4 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -24997,8 +25132,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0324: LDP_64_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -512 || p4 <= 504) && (p4 % 8) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551104 || p4 <= 504) && (p4 % 8) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0xa8c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 3) & 127) << 15);
+        }
+        if (p4 % 8) != 0 {
+            assert(false, "a64 ldp: operand 4 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -25010,8 +25148,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0327: LDP_S_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -256 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551360 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 {
             return 0x2cc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 2) & 127) << 15);
+        }
+        if (p4 % 4) != 0 {
+            assert(false, "a64 ldp: operand 4 must be a multiple of 4");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -25023,8 +25164,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0325: LDP_D_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -512 || p4 <= 504) && (p4 % 8) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551104 || p4 <= 504) && (p4 % 8) == 0 && p0 != p1 {
             return 0x6cc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 3) & 127) << 15);
+        }
+        if (p4 % 8) != 0 {
+            assert(false, "a64 ldp: operand 4 must be a multiple of 8");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -25036,8 +25180,11 @@ fn a64_ldp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0326: LDP_Q_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -1024 || p4 <= 1008) && (p4 % 16) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709550592 || p4 <= 1008) && (p4 % 16) == 0 && p0 != p1 {
             return 0xacc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 4) & 127) << 15);
+        }
+        if (p4 % 16) != 0 {
+            assert(false, "a64 ldp: operand 4 must be a multiple of 16");
         }
         assert(false, "a64 ldp: operand value out of range")
         return 0;
@@ -25071,8 +25218,11 @@ fn a64_ldpsw_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0333: LDPSW_64_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 {
             return 0x69400000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldpsw: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldpsw: operand value out of range")
         return 0;
@@ -25083,8 +25233,11 @@ fn a64_ldpsw_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0335: LDPSW_64_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x69c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 ldpsw: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 ldpsw: operand value out of range")
         return 0;
@@ -25096,8 +25249,11 @@ fn a64_ldpsw_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0334: LDPSW_64_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -256 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551360 || p4 <= 252) && (p4 % 4) == 0 && p0 != p1 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x68c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 2) & 127) << 15);
+        }
+        if (p4 % 4) != 0 {
+            assert(false, "a64 ldpsw: operand 4 must be a multiple of 4");
         }
         assert(false, "a64 ldpsw: operand value out of range")
         return 0;
@@ -25129,8 +25285,11 @@ fn a64_ldr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0385: LDR_32_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x18000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldr: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
@@ -25139,8 +25298,11 @@ fn a64_ldr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0386: LDR_64_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x58000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldr: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
@@ -25149,8 +25311,11 @@ fn a64_ldr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0389: LDR_S_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x1c000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldr: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
@@ -25159,8 +25324,11 @@ fn a64_ldr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0387: LDR_D_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x5c000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldr: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
@@ -25169,8 +25337,11 @@ fn a64_ldr_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0388: LDR_Q_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x9c000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldr: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
@@ -25183,6 +25354,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 16380 && (p2 % 4) == 0 {
             return 0xb9400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 2) & 4095) << 10);
         }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 4");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25191,7 +25365,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0343: LDR_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25205,6 +25379,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 32760 && (p2 % 8) == 0 {
             return 0xf9400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 4095) << 10);
         }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 8");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25213,7 +25390,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0344: LDR_64_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xf8400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25235,7 +25412,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0345: LDR_B_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25249,6 +25426,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x7d400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25257,7 +25437,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0347: LDR_H_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x7c400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25271,6 +25451,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 16380 && (p2 % 4) == 0 {
             return 0xbd400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 2) & 4095) << 10);
         }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 4");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25279,7 +25462,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0349: LDR_S_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xbc400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25293,6 +25476,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 32760 && (p2 % 8) == 0 {
             return 0xfd400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 4095) << 10);
         }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 8");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25301,7 +25487,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0346: LDR_D_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xfc400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25315,6 +25501,9 @@ fn a64_ldr_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 65520 && (p2 % 16) == 0 {
             return 0x3dc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 4095) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 ldr: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 ldr: operand value out of range")
         return 0;
     }
@@ -25323,7 +25512,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0348: LDR_Q_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3cc00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25335,7 +25524,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0336: LDR_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25347,7 +25536,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0337: LDR_64_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xf8400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25359,7 +25548,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0338: LDR_B_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x3c400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25371,7 +25560,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0340: LDR_H_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x7c400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25383,7 +25572,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0342: LDR_S_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0xbc400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25395,7 +25584,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0339: LDR_D_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0xfc400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25407,7 +25596,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0341: LDR_Q_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x3cc00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25420,7 +25609,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0360: LDR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25433,7 +25622,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0357: LDR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25446,7 +25635,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0358: LDR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb860c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25459,7 +25648,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0359: LDR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb860e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25472,7 +25661,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0364: LDR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25485,7 +25674,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0361: LDR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25498,7 +25687,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0362: LDR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf860c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25511,7 +25700,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0363: LDR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf860e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25524,7 +25713,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0368: LDR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25537,7 +25726,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0365: LDR_BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25550,7 +25739,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0366: LDR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c60c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25563,7 +25752,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0367: LDR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c60e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25576,7 +25765,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0376: LDR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25589,7 +25778,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0373: LDR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25602,7 +25791,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0374: LDR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c60c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25615,7 +25804,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0375: LDR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c60e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25628,7 +25817,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0384: LDR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25641,7 +25830,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0381: LDR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25654,7 +25843,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0382: LDR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc60c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25667,7 +25856,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0383: LDR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc60e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25680,7 +25869,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0372: LDR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25693,7 +25882,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0369: LDR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25706,7 +25895,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0370: LDR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc60c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25719,7 +25908,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0371: LDR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc60e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25732,7 +25921,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0380: LDR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ce04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25745,7 +25934,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0377: LDR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ce06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25758,7 +25947,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0378: LDR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ce0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25771,7 +25960,7 @@ fn a64_ldr_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0379: LDR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ce0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 ldr: operand value out of range")
@@ -25811,8 +26000,11 @@ fn a64_ldraa_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0063: LDRAA_64_ldst_pac
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4088) && (p2 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4088) && (p2 % 8) == 0 {
             return 0xf8200400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 511) << 12) | (((p2 >> 12) & 1) << 22);
+        }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldraa: operand 2 must be a multiple of 8");
         }
         assert(false, "a64 ldraa: operand value out of range")
         return 0;
@@ -25822,8 +26014,11 @@ fn a64_ldraa_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0062: LDRAA_64W_ldst_pac
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4088) && (p2 % 8) == 0 && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4088) && (p2 % 8) == 0 && (p1 == 31 || p1 != p0) {
             return 0xf8200c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 511) << 12) | (((p2 >> 12) & 1) << 22);
+        }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldraa: operand 2 must be a multiple of 8");
         }
         assert(false, "a64 ldraa: operand value out of range")
         return 0;
@@ -25856,8 +26051,11 @@ fn a64_ldrab_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0065: LDRAB_64_ldst_pac
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4088) && (p2 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4088) && (p2 % 8) == 0 {
             return 0xf8a00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 511) << 12) | (((p2 >> 12) & 1) << 22);
+        }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldrab: operand 2 must be a multiple of 8");
         }
         assert(false, "a64 ldrab: operand value out of range")
         return 0;
@@ -25867,8 +26065,11 @@ fn a64_ldrab_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0064: LDRAB_64W_ldst_pac
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4088) && (p2 % 8) == 0 && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4088) && (p2 % 8) == 0 && (p1 == 31 || p1 != p0) {
             return 0xf8a00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 511) << 12) | (((p2 >> 12) & 1) << 22);
+        }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 ldrab: operand 2 must be a multiple of 8");
         }
         assert(false, "a64 ldrab: operand value out of range")
         return 0;
@@ -25912,7 +26113,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0391: LDRB_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -25924,7 +26125,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0390: LDRB_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -25937,7 +26138,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0396: LDRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -25950,7 +26151,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0393: LDRB_32BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -25963,7 +26164,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0394: LDRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3860c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -25976,7 +26177,7 @@ fn a64_ldrb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0395: LDRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3860e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrb: operand value out of range")
@@ -26013,6 +26214,9 @@ fn a64_ldrh_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x79400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 ldrh: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 ldrh: operand value out of range")
         return 0;
     }
@@ -26021,7 +26225,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0398: LDRH_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78400c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26033,7 +26237,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0397: LDRH_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78400400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26046,7 +26250,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0403: LDRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78604800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26059,7 +26263,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0400: LDRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78606800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26072,7 +26276,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0401: LDRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7860c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26085,7 +26289,7 @@ fn a64_ldrh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0402: LDRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7860e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrh: operand value out of range")
@@ -26130,7 +26334,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0406: LDRSB_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38c00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26152,7 +26356,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0407: LDRSB_64_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38800c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26164,7 +26368,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0404: LDRSB_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38c00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26176,7 +26380,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0405: LDRSB_64_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38800400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26189,7 +26393,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0413: LDRSB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38e04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26202,7 +26406,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0410: LDRSB_32BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38e06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26215,7 +26419,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0411: LDRSB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38e0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26228,7 +26432,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0412: LDRSB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38e0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26241,7 +26445,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0417: LDRSB_64B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38a04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26254,7 +26458,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0414: LDRSB_64BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38a06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26267,7 +26471,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0415: LDRSB_64B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38a0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26280,7 +26484,7 @@ fn a64_ldrsb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0416: LDRSB_64B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38a0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 ldrsb: operand value out of range")
@@ -26317,6 +26521,9 @@ fn a64_ldrsh_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x79c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 ldrsh: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 ldrsh: operand value out of range")
         return 0;
     }
@@ -26325,7 +26532,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0420: LDRSH_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78c00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26339,6 +26546,9 @@ fn a64_ldrsh_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x79800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 ldrsh: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 ldrsh: operand value out of range")
         return 0;
     }
@@ -26347,7 +26557,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0421: LDRSH_64_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78800c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26359,7 +26569,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0418: LDRSH_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78c00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26371,7 +26581,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0419: LDRSH_64_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78800400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26384,7 +26594,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0427: LDRSH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78e04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26397,7 +26607,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0424: LDRSH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78e06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26410,7 +26620,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0425: LDRSH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78e0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26423,7 +26633,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0426: LDRSH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78e0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26436,7 +26646,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0431: LDRSH_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78a04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26449,7 +26659,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0428: LDRSH_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78a06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26462,7 +26672,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0429: LDRSH_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78a0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26475,7 +26685,7 @@ fn a64_ldrsh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0430: LDRSH_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78a0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 ldrsh: operand value out of range")
@@ -26508,8 +26718,11 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0439: LDRSW_64_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0x98000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 ldrsw: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 ldrsw: operand value out of range")
         return 0;
@@ -26522,6 +26735,9 @@ fn a64_ldrsw_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 16380 && (p2 % 4) == 0 {
             return 0xb9800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 2) & 4095) << 10);
         }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 ldrsw: operand 2 must be a multiple of 4");
+        }
         assert(false, "a64 ldrsw: operand value out of range")
         return 0;
     }
@@ -26530,7 +26746,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0433: LDRSW_64_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8800c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -26542,7 +26758,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0432: LDRSW_64_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8800400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -26555,7 +26771,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0438: LDRSW_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8a04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -26568,7 +26784,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0435: LDRSW_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8a06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -26581,7 +26797,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0436: LDRSW_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8a0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -26594,7 +26810,7 @@ fn a64_ldrsw_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0437: LDRSW_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8a0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 ldrsw: operand value out of range")
@@ -28038,7 +28254,7 @@ fn a64_ldtr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0440: LDTR_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8400800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtr: operand value out of range")
@@ -28049,7 +28265,7 @@ fn a64_ldtr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0441: LDTR_64_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xf8400800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtr: operand value out of range")
@@ -28083,7 +28299,7 @@ fn a64_ldtrb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0442: LDTRB_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38400800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrb: operand value out of range")
@@ -28117,7 +28333,7 @@ fn a64_ldtrh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0443: LDTRH_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78400800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrh: operand value out of range")
@@ -28151,7 +28367,7 @@ fn a64_ldtrsb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0444: LDTRSB_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38c00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrsb: operand value out of range")
@@ -28162,7 +28378,7 @@ fn a64_ldtrsb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0445: LDTRSB_64_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38800800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrsb: operand value out of range")
@@ -28196,7 +28412,7 @@ fn a64_ldtrsh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0446: LDTRSH_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78c00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrsh: operand value out of range")
@@ -28207,7 +28423,7 @@ fn a64_ldtrsh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0447: LDTRSH_64_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78800800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrsh: operand value out of range")
@@ -28241,7 +28457,7 @@ fn a64_ldtrsw_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0448: LDTRSW_64_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8800800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldtrsw: operand value out of range")
@@ -29211,7 +29427,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0449: LDUR_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29222,7 +29438,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0450: LDUR_64_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xf8400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29233,7 +29449,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0451: LDUR_B_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29244,7 +29460,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0453: LDUR_H_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x7c400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29255,7 +29471,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0455: LDUR_S_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xbc400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29266,7 +29482,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0452: LDUR_D_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xfc400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29277,7 +29493,7 @@ fn a64_ldur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0454: LDUR_Q_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3cc00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldur: operand value out of range")
@@ -29311,7 +29527,7 @@ fn a64_ldurb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0456: LDURB_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldurb: operand value out of range")
@@ -29345,7 +29561,7 @@ fn a64_ldurh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0457: LDURH_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78400000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldurh: operand value out of range")
@@ -29379,7 +29595,7 @@ fn a64_ldursb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0458: LDURSB_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldursb: operand value out of range")
@@ -29390,7 +29606,7 @@ fn a64_ldursb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0459: LDURSB_64_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldursb: operand value out of range")
@@ -29424,7 +29640,7 @@ fn a64_ldursh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0460: LDURSH_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldursh: operand value out of range")
@@ -29435,7 +29651,7 @@ fn a64_ldursh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0461: LDURSH_64_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldursh: operand value out of range")
@@ -29469,7 +29685,7 @@ fn a64_ldursw_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0462: LDURSW_64_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 ldursw: operand value out of range")
@@ -32791,8 +33007,11 @@ fn a64_prfm_word(args: list) -> u64 {
         const p0: integer = list.get(list.get(flat, 0), 1)
         const p1: integer = list.get(list.get(flat, 1), 1)
         // b3-0474: PRFM_P_loadlit
-        if p0 >= 0 && p0 <= 31 && (p1 >= -1048576 || p1 <= 1048572) && (p1 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && (p1 >= 18446744073708503040 || p1 <= 1048572) && (p1 % 4) == 0 {
             return 0xd8000000 | ((p0 & 31) << 0) | (((p1 >> 2) & 524287) << 5);
+        }
+        if (p1 % 4) != 0 {
+            assert(false, "a64 prfm: operand 1 must be a multiple of 4");
         }
         assert(false, "a64 prfm: operand value out of range")
         return 0;
@@ -32805,6 +33024,9 @@ fn a64_prfm_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 32760 && (p2 % 8) == 0 {
             return 0xf9800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 4095) << 10);
         }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 prfm: operand 2 must be a multiple of 8");
+        }
         assert(false, "a64 prfm: operand value out of range")
         return 0;
     }
@@ -32815,7 +33037,7 @@ fn a64_prfm_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0473: PRFM_P_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8a04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 prfm: operand value out of range")
@@ -32828,7 +33050,7 @@ fn a64_prfm_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0470: PRFM_P_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8a06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 prfm: operand value out of range")
@@ -32841,7 +33063,7 @@ fn a64_prfm_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0471: PRFM_P_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8a0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 prfm: operand value out of range")
@@ -32854,7 +33076,7 @@ fn a64_prfm_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0472: PRFM_P_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8a0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 prfm: operand value out of range")
@@ -32894,7 +33116,7 @@ fn a64_prfum_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0475: PRFUM_P_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xf8800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 prfum: operand value out of range")
@@ -43268,8 +43490,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0093: ST2G_64Soffset_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9a00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 st2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -43279,8 +43504,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0097: ST2G_64Spre_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9a00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 st2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -43290,8 +43518,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0092: ST2G_64Soffset_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9a00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 st2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -43301,8 +43532,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0096: ST2G_64Spre_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9a00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 st2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -43313,8 +43547,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0095: ST2G_64Spost_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9a00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 st2g: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -43325,8 +43562,11 @@ fn a64_st2g_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0094: ST2G_64Spost_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9a00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 st2g: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 st2g: operand value out of range")
         return 0;
@@ -44877,8 +45117,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0099: STG_64Soffset_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9200800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -44888,8 +45131,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0103: STG_64Spre_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9200c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -44899,8 +45145,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0098: STG_64Soffset_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9200800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -44910,8 +45159,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0102: STG_64Spre_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9200c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -44922,8 +45174,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0101: STG_64Spost_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9200400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stg: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -44934,8 +45189,11 @@ fn a64_stg_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0100: STG_64Spost_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9200400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stg: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stg: operand value out of range")
         return 0;
@@ -45003,8 +45261,11 @@ fn a64_stgp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0105: STGP_64_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 {
             return 0x69000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stgp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stgp: operand value out of range")
         return 0;
@@ -45015,8 +45276,11 @@ fn a64_stgp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0107: STGP_64_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 {
             return 0x69800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stgp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stgp: operand value out of range")
         return 0;
@@ -45028,8 +45292,11 @@ fn a64_stgp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // e4-0106: STGP_64_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -1024 || p4 <= 1008) && (p4 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709550592 || p4 <= 1008) && (p4 % 16) == 0 {
             return 0x68800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 4) & 127) << 15);
+        }
+        if (p4 % 16) != 0 {
+            assert(false, "a64 stgp: operand 4 must be a multiple of 16");
         }
         assert(false, "a64 stgp: operand value out of range")
         return 0;
@@ -45288,7 +45555,7 @@ fn a64_stlur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0197: STLUR_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x99000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stlur: operand value out of range")
@@ -45299,7 +45566,7 @@ fn a64_stlur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0198: STLUR_64_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xd9000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stlur: operand value out of range")
@@ -45333,7 +45600,7 @@ fn a64_stlurb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0199: STLURB_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x19000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stlurb: operand value out of range")
@@ -45367,7 +45634,7 @@ fn a64_stlurh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e2-0200: STLURH_32_ldapstl_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x59000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stlurh: operand value out of range")
@@ -45568,8 +45835,11 @@ fn a64_stnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0693: STNP_32_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 {
             return 0x28000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stnp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stnp: operand value out of range")
         return 0;
@@ -45580,8 +45850,11 @@ fn a64_stnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0694: STNP_64_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 {
             return 0xa8000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stnp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stnp: operand value out of range")
         return 0;
@@ -45592,8 +45865,11 @@ fn a64_stnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0697: STNP_S_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 {
             return 0x2c000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stnp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stnp: operand value out of range")
         return 0;
@@ -45604,8 +45880,11 @@ fn a64_stnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0695: STNP_D_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 {
             return 0x6c000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stnp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stnp: operand value out of range")
         return 0;
@@ -45616,8 +45895,11 @@ fn a64_stnp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0696: STNP_Q_ldstnapair_offs
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 {
             return 0xac000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stnp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stnp: operand value out of range")
         return 0;
@@ -45651,8 +45933,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0698: STP_32_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 {
             return 0x29000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45663,8 +45948,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0708: STP_32_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x29800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45675,8 +45963,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0699: STP_64_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 {
             return 0xa9000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45687,8 +45978,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0709: STP_64_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0xa9800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45699,8 +45993,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0702: STP_S_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 {
             return 0x2d000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45711,8 +46008,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0712: STP_S_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -256 || p3 <= 252) && (p3 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551360 || p3 <= 252) && (p3 % 4) == 0 {
             return 0x2d800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 2) & 127) << 15);
+        }
+        if (p3 % 4) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45723,8 +46023,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0700: STP_D_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 {
             return 0x6d000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45735,8 +46038,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0710: STP_D_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -512 || p3 <= 504) && (p3 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709551104 || p3 <= 504) && (p3 % 8) == 0 {
             return 0x6d800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 3) & 127) << 15);
+        }
+        if (p3 % 8) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45747,8 +46053,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0701: STP_Q_ldstpair_off
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 {
             return 0xad000000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45759,8 +46068,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0711: STP_Q_ldstpair_pre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= -1024 || p3 <= 1008) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && (p3 >= 18446744073709550592 || p3 <= 1008) && (p3 % 16) == 0 {
             return 0xad800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p3 >> 4) & 127) << 15);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stp: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45772,8 +46084,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0703: STP_32_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -256 || p4 <= 252) && (p4 % 4) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551360 || p4 <= 252) && (p4 % 4) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0x28800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 2) & 127) << 15);
+        }
+        if (p4 % 4) != 0 {
+            assert(false, "a64 stp: operand 4 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45785,8 +46100,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0704: STP_64_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -512 || p4 <= 504) && (p4 % 8) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551104 || p4 <= 504) && (p4 % 8) == 0 && (p2 == 31 || p2 != p0) && (p2 == 31 || p2 != p1) {
             return 0xa8800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 3) & 127) << 15);
+        }
+        if (p4 % 8) != 0 {
+            assert(false, "a64 stp: operand 4 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45798,8 +46116,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0707: STP_S_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -256 || p4 <= 252) && (p4 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551360 || p4 <= 252) && (p4 % 4) == 0 {
             return 0x2c800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 2) & 127) << 15);
+        }
+        if (p4 % 4) != 0 {
+            assert(false, "a64 stp: operand 4 must be a multiple of 4");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45811,8 +46132,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0705: STP_D_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -512 || p4 <= 504) && (p4 % 8) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709551104 || p4 <= 504) && (p4 % 8) == 0 {
             return 0x6c800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 3) & 127) << 15);
+        }
+        if (p4 % 8) != 0 {
+            assert(false, "a64 stp: operand 4 must be a multiple of 8");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45824,8 +46148,11 @@ fn a64_stp_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0706: STP_Q_ldstpair_post
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= -1024 || p4 <= 1008) && (p4 % 16) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 0 && (p4 >= 18446744073709550592 || p4 <= 1008) && (p4 % 16) == 0 {
             return 0xac800000 | ((p0 & 31) << 0) | ((p1 & 31) << 10) | ((p2 & 31) << 5) | (((p4 >> 4) & 127) << 15);
+        }
+        if (p4 % 16) != 0 {
+            assert(false, "a64 stp: operand 4 must be a multiple of 16");
         }
         assert(false, "a64 stp: operand value out of range")
         return 0;
@@ -45861,6 +46188,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 16380 && (p2 % 4) == 0 {
             return 0xb9000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 2) & 4095) << 10);
         }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 4");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -45869,7 +46199,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0720: STR_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45883,6 +46213,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 32760 && (p2 % 8) == 0 {
             return 0xf9000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 4095) << 10);
         }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 8");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -45891,7 +46224,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0721: STR_64_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xf8000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45913,7 +46246,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0722: STR_B_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45927,6 +46260,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x7d000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -45935,7 +46271,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0724: STR_H_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x7c000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45949,6 +46285,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 16380 && (p2 % 4) == 0 {
             return 0xbd000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 2) & 4095) << 10);
         }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 4");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -45957,7 +46296,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0726: STR_S_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xbc000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45971,6 +46310,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 32760 && (p2 % 8) == 0 {
             return 0xfd000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 3) & 4095) << 10);
         }
+        if (p2 % 8) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 8");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -45979,7 +46321,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0723: STR_D_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xfc000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -45993,6 +46335,9 @@ fn a64_str_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 65520 && (p2 % 16) == 0 {
             return 0x3d800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 4095) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 str: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 str: operand value out of range")
         return 0;
     }
@@ -46001,7 +46346,7 @@ fn a64_str_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0725: STR_Q_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c800c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46013,7 +46358,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0713: STR_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xb8000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46025,7 +46370,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0714: STR_64_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0xf8000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46037,7 +46382,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0715: STR_B_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x3c000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46049,7 +46394,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0717: STR_H_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x7c000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46061,7 +46406,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0719: STR_S_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0xbc000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46073,7 +46418,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0716: STR_D_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0xfc000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46085,7 +46430,7 @@ fn a64_str_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0718: STR_Q_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) {
             return 0x3c800400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46098,7 +46443,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0737: STR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46111,7 +46456,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0734: STR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb8206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46124,7 +46469,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0735: STR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb820c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46137,7 +46482,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0736: STR_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xb820e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46150,7 +46495,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0741: STR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46163,7 +46508,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0738: STR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf8206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46176,7 +46521,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0739: STR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf820c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46189,7 +46534,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0740: STR_64_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xf820e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46202,7 +46547,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0745: STR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46215,7 +46560,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0742: STR_BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46228,7 +46573,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0743: STR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c20c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46241,7 +46586,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0744: STR_B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3c20e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46254,7 +46599,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0753: STR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46267,7 +46612,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0750: STR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46280,7 +46625,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0751: STR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c20c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46293,7 +46638,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0752: STR_H_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7c20e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46306,7 +46651,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0761: STR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46319,7 +46664,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0758: STR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46332,7 +46677,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0759: STR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc20c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46345,7 +46690,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0760: STR_S_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 2) && (p4 == -1 || p4 == 0 || p4 == 2) {
             return 0xbc20e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 2) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46358,7 +46703,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0749: STR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46371,7 +46716,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0746: STR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46384,7 +46729,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0747: STR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc20c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46397,7 +46742,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0748: STR_D_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 3) && (p4 == -1 || p4 == 0 || p4 == 3) {
             return 0xfc20e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 3) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46410,7 +46755,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0757: STR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ca04800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46423,7 +46768,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0754: STR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ca06800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46436,7 +46781,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0755: STR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ca0c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46449,7 +46794,7 @@ fn a64_str_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0756: STR_Q_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 4) && (p4 == -1 || p4 == 0 || p4 == 4) {
             return 0x3ca0e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 4) & 1) << 12);
         }
         assert(false, "a64 str: operand value out of range")
@@ -46494,7 +46839,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0763: STRB_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46506,7 +46851,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0762: STRB_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x38000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46519,7 +46864,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0768: STRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46532,7 +46877,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0765: STRB_32BL_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x38206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46545,7 +46890,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0766: STRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3820c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46558,7 +46903,7 @@ fn a64_strb_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0767: STRB_32B_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 0) && (p4 == -1 || p4 == 0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 0) && (p4 == -1 || p4 == 0) {
             return 0x3820e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 0) & 1) << 12);
         }
         assert(false, "a64 strb: operand value out of range")
@@ -46595,6 +46940,9 @@ fn a64_strh_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 8190 && (p2 % 2) == 0 {
             return 0x79000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 1) & 4095) << 10);
         }
+        if (p2 % 2) != 0 {
+            assert(false, "a64 strh: operand 2 must be a multiple of 2");
+        }
         assert(false, "a64 strh: operand value out of range")
         return 0;
     }
@@ -46603,7 +46951,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0770: STRH_32_ldst_immpre
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78000c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -46615,7 +46963,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // b3-0769: STRH_32_ldst_immpost
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -256 || p3 <= 255) && (p1 == 31 || p1 != p0) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709551360 || p3 <= 255) && (p1 == 31 || p1 != p0) {
             return 0x78000400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 0) & 511) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -46628,7 +46976,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0775: STRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 2 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78204800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -46641,7 +46989,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0772: STRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 3 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x78206800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -46654,7 +47002,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0773: STRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 6 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7820c800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -46667,7 +47015,7 @@ fn a64_strh_word(args: list) -> u64 {
         const p3: integer = list.get(list.get(flat, 3), 1)
         const p4: integer = list.get(list.get(flat, 4), 1)
         // b3-0774: STRH_32_ldst_regoff
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= -1 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 >= 0 && p2 <= 31 && p3 == 7 && (p4 >= 18446744073709551615 || p4 <= 1) && (p4 == -1 || p4 == 0 || p4 == 1) {
             return 0x7820e800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | ((p2 & 31) << 16) | ((a64_scale_flag(p4, 1) & 1) << 12);
         }
         assert(false, "a64 strh: operand value out of range")
@@ -47379,7 +47727,7 @@ fn a64_sttr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0776: STTR_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8000800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sttr: operand value out of range")
@@ -47390,7 +47738,7 @@ fn a64_sttr_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0777: STTR_64_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xf8000800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sttr: operand value out of range")
@@ -47424,7 +47772,7 @@ fn a64_sttrb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0778: STTRB_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38000800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sttrb: operand value out of range")
@@ -47458,7 +47806,7 @@ fn a64_sttrh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0779: STTRH_32_ldst_unpriv
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78000800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sttrh: operand value out of range")
@@ -47944,7 +48292,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0780: STUR_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xb8000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -47955,7 +48303,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0781: STUR_64_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xf8000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -47966,7 +48314,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0782: STUR_B_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -47977,7 +48325,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0784: STUR_H_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x7c000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -47988,7 +48336,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0786: STUR_S_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xbc000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -47999,7 +48347,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0783: STUR_D_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0xfc000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -48010,7 +48358,7 @@ fn a64_stur_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0785: STUR_Q_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x3c800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 stur: operand value out of range")
@@ -48044,7 +48392,7 @@ fn a64_sturb_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0787: STURB_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x38000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sturb: operand value out of range")
@@ -48078,7 +48426,7 @@ fn a64_sturh_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b3-0788: STURH_32_ldst_unscaled
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -256 || p2 <= 255) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551360 || p2 <= 255) {
             return 0x78000000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 511) << 12);
         }
         assert(false, "a64 sturh: operand value out of range")
@@ -48278,8 +48626,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0109: STZ2G_64Soffset_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9e00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48289,8 +48640,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0113: STZ2G_64Spre_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9e00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48300,8 +48654,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0108: STZ2G_64Soffset_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9e00800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48311,8 +48668,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0112: STZ2G_64Spre_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9e00c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48323,8 +48683,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0111: STZ2G_64Spost_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9e00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48335,8 +48698,11 @@ fn a64_stz2g_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0110: STZ2G_64Spost_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9e00400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stz2g: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stz2g: operand value out of range")
         return 0;
@@ -48369,8 +48735,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0115: STZG_64Soffset_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9600800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stzg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -48380,8 +48749,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0119: STZG_64Spre_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9600c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stzg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -48391,8 +48763,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0114: STZG_64Soffset_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9600800 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stzg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -48402,8 +48777,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e4-0118: STZG_64Spre_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -4096 || p2 <= 4080) && (p2 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709547520 || p2 <= 4080) && (p2 % 16) == 0 {
             return 0xd9600c00 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 511) << 12);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 stzg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -48414,8 +48792,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0117: STZG_64Spost_ldsttags
-        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9600400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stzg: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -48426,8 +48807,11 @@ fn a64_stzg_word(args: list) -> u64 {
         const p2: integer = list.get(list.get(flat, 2), 1)
         const p3: integer = list.get(list.get(flat, 3), 1)
         // e4-0116: STZG_64Spost_ldsttags
-        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= -4096 || p3 <= 4080) && (p3 % 16) == 0 {
+        if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 31 && p2 == 0 && (p3 >= 18446744073709547520 || p3 <= 4080) && (p3 % 16) == 0 {
             return 0xd9600400 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p3 >> 4) & 511) << 12);
+        }
+        if (p3 % 16) != 0 {
+            assert(false, "a64 stzg: operand 3 must be a multiple of 16");
         }
         assert(false, "a64 stzg: operand value out of range")
         return 0;
@@ -49801,6 +50185,9 @@ fn a64_subg_word(args: list) -> u64 {
         if p0 >= 0 && p0 <= 30 && p1 >= 0 && p1 <= 30 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0xd1800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 subg: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 subg: operand value out of range")
         return 0;
     }
@@ -49812,6 +50199,9 @@ fn a64_subg_word(args: list) -> u64 {
         // e4-0123: SUBG_64_addsub_immtags
         if p0 >= 0 && p0 <= 30 && p1 >= 31 && p1 <= 31 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0xd1800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 subg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 subg: operand value out of range")
         return 0;
@@ -49825,6 +50215,9 @@ fn a64_subg_word(args: list) -> u64 {
         if p0 >= 31 && p0 <= 31 && p1 >= 0 && p1 <= 30 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0xd1800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
         }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 subg: operand 2 must be a multiple of 16");
+        }
         assert(false, "a64 subg: operand value out of range")
         return 0;
     }
@@ -49836,6 +50229,9 @@ fn a64_subg_word(args: list) -> u64 {
         // e4-0121: SUBG_64_addsub_immtags
         if p0 >= 31 && p0 <= 31 && p1 >= 31 && p1 <= 31 && p2 >= 0 && p2 <= 1008 && (p2 % 16) == 0 && p3 >= 0 && p3 <= 15 {
             return 0xd1800000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 4) & 63) << 16) | ((p3 & 15) << 10);
+        }
+        if (p2 % 16) != 0 {
+            assert(false, "a64 subg: operand 2 must be a multiple of 16");
         }
         assert(false, "a64 subg: operand value out of range")
         return 0;
@@ -51721,8 +52117,11 @@ fn a64_tbnz_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b4-0725: TBNZ_only_testbranch
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -32768 || p2 <= 32764) && (p2 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709518848 || p2 <= 32764) && (p2 % 4) == 0 {
             return 0x37000000 | ((p0 & 31) << 0) | ((p1 & 31) << 19) | (((p2 >> 2) & 16383) << 5);
+        }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 tbnz: operand 2 must be a multiple of 4");
         }
         assert(false, "a64 tbnz: operand value out of range")
         return 0;
@@ -51732,8 +52131,11 @@ fn a64_tbnz_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b4-0726: TBNZ_only_testbranch
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 63 && (p2 >= -32768 || p2 <= 32764) && (p2 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 63 && (p2 >= 18446744073709518848 || p2 <= 32764) && (p2 % 4) == 0 {
             return 0x37000000 | ((p0 & 31) << 0) | (((p1 >> 0) & 31) << 19) | (((p1 >> 5) & 1) << 31) | (((p2 >> 2) & 16383) << 5);
+        }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 tbnz: operand 2 must be a multiple of 4");
         }
         assert(false, "a64 tbnz: operand value out of range")
         return 0;
@@ -51869,8 +52271,11 @@ fn a64_tbz_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b4-0727: TBZ_only_testbranch
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -32768 || p2 <= 32764) && (p2 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709518848 || p2 <= 32764) && (p2 % 4) == 0 {
             return 0x36000000 | ((p0 & 31) << 0) | ((p1 & 31) << 19) | (((p2 >> 2) & 16383) << 5);
+        }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 tbz: operand 2 must be a multiple of 4");
         }
         assert(false, "a64 tbz: operand value out of range")
         return 0;
@@ -51880,8 +52285,11 @@ fn a64_tbz_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // b4-0728: TBZ_only_testbranch
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 63 && (p2 >= -32768 || p2 <= 32764) && (p2 % 4) == 0 {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 63 && (p2 >= 18446744073709518848 || p2 <= 32764) && (p2 % 4) == 0 {
             return 0x36000000 | ((p0 & 31) << 0) | (((p1 >> 0) & 31) << 19) | (((p1 >> 5) & 1) << 31) | (((p2 >> 2) & 16383) << 5);
+        }
+        if (p2 % 4) != 0 {
+            assert(false, "a64 tbz: operand 2 must be a multiple of 4");
         }
         assert(false, "a64 tbz: operand value out of range")
         return 0;

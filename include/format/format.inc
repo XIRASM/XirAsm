@@ -1135,7 +1135,12 @@ fn format_validate_elfso_tables(plan: map, exports: list, imports: list) -> bool
         for j in range(i + 1, len(imports)) {
             const other: map = list.get(imports, j)
             assert(map.get(other, "slot") != slot_name, "ELF shared-object import slot is duplicated");
-            assert(map.get_or(other, "plt", "") != plt_name, "ELF shared-object import PLT label is duplicated");
+            // AArch64 imports carry GOT slots and no PLT label; only compare the
+            // labels the entries actually have.
+            const other_plt: string = map.get_or(other, "plt", "")
+            if plt_name != "" && other_plt != "" {
+                assert(other_plt != plt_name, "ELF shared-object import PLT label is duplicated");
+            }
         }
     }
     return true;
@@ -3160,8 +3165,9 @@ fn format_elfso_emit_dynamic64_slots(imports: list, dynstr_vaddr: u64, dynstr_si
     elfso_dyn64(elf_dt_relasz, rela_size);
     elfso_dyn64(elf_dt_relaent, elfso_import_rela64_size);
     const libraries: list = elfso_import_libraries(imports)
+    const needed_offsets: list = elfso_import_library_offsets(libraries)
     for i in range(0, len(libraries)) {
-        elfso_dyn64(elf_dt_needed, first_needed_offset + elfso_import_library_offset(libraries, i));
+        elfso_dyn64(elf_dt_needed, first_needed_offset + list.get(needed_offsets, i));
     }
     elfso_dyn64(elf_dt_soname, soname_offset);
     elfso_dyn64(elf_dt_null, 0);
@@ -3183,8 +3189,9 @@ fn format_elfso_emit_dynamic64(imports: list, dynstr_foa: u64, dynstr_size: u64,
         elfso_dyn64(elf_dt_jmprel, rela_plt_foa);
         elfso_dyn64(elf_dt_soname, soname_offset);
         const libraries: list = elfso_import_libraries(imports)
+        const needed_offsets: list = elfso_import_library_offsets(libraries)
         for i in range(0, len(libraries)) {
-            elfso_dyn64(elf_dt_needed, first_needed_offset + elfso_import_library_offset(libraries, i));
+            elfso_dyn64(elf_dt_needed, first_needed_offset + list.get(needed_offsets, i));
         }
         elfso_dyn64(elf_dt_null, 0);
     }

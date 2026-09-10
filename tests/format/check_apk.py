@@ -360,6 +360,118 @@ def check_gl_demo(assembler, work, aapt2, zipalign):
     print("PASS: aapt2 reads the example's label, icons and native code, and zipalign accepts it")
 
 
+def elf_load_alignments(data: bytes) -> list[int]:
+    """Return the p_align of every PT_LOAD, straight from the program headers."""
+    assert data[:4] == b"\x7fELF", "not an ELF image"
+    assert data[4] == 2, "expected a 64-bit ELF image"
+    e_phoff, = struct.unpack_from("<Q", data, 0x20)
+    e_phentsize, e_phnum = struct.unpack_from("<HH", data, 0x36)
+    alignments = []
+    for index in range(e_phnum):
+        offset = e_phoff + index * e_phentsize
+        p_type, = struct.unpack_from("<I", data, offset)
+        if p_type == 1:  # PT_LOAD
+            p_align, = struct.unpack_from("<Q", data, offset + 48)
+            alignments.append(p_align)
+    return alignments
+
+
+def check_gl_demo_aarch64(assembler, work, aapt2, zipalign):
+    """The same renderer in AArch64 instructions, packaged for arm64 devices.
+
+    This is the build a phone actually runs, so it gets its own checks: the archive
+    has to carry the library under lib/arm64-v8a, the library has to be an AArch64
+    shared object that names the three platform libraries it imports, and its LOAD
+    segments have to be aligned for the 16 KiB page size Android 15 introduced.
+    """
+    example = ROOT / "tests" / "format" / "android_gl_demo"
+    stage = work / "gl-demo-aarch64"
+    if stage.exists():
+        shutil.rmtree(stage)
+    shutil.copytree(example, stage)
+
+    library = stage / "libmain.so"
+    run(assembler, stage / "gl-demo-so-aarch64.asm", "-o", library)
+    apk = stage / "demo64-unsigned.apk"
+    run(assembler, stage / "gl-demo-apk-aarch64.asm", "-o", apk)
+
+    image = library.read_bytes()
+    machine, = struct.unpack_from("<H", image, 18)
+    assert machine == 0xB7, f"the library does not declare AArch64 (machine {machine:#x})"
+    for expected in (b"libandroid.so", b"libEGL.so", b"libGLESv2.so", b"libmain.so",
+                     b"ANativeActivity_onCreate"):
+        assert expected in image, f"the AArch64 library lost {expected!r}"
+    alignments = elf_load_alignments(image)
+    assert alignments, "the library has no LOAD segments"
+    assert all(align == 16384 for align in alignments), alignments
+
+    with zipfile.ZipFile(apk) as archive:
+        names = set(archive.namelist())
+        assert "classes.dex" not in names, "the example declares hasCode=false and needs no DEX"
+        assert "lib/arm64-v8a/libmain.so" in names, names
+    print(f"PASS: AArch64 renderer builds as a {apk.stat().st_size} byte archive around a "
+          f"{library.stat().st_size} byte library, LOAD aligned to {alignments[0]}")
+
+    if not aapt2 or not zipalign:
+        return
+    output = run(aapt2, "dump", "badging", apk)
+    for expected in ("package: name='com.example.xirasm.gldemo'",
+                     "native-code: 'arm64-v8a'",
+                     "launchable-activity: name='android.app.NativeActivity'"):
+        assert expected in output, (expected, output)
+    run(zipalign, "-c", "-v", "-P", "16", "4", apk)
+    print("PASS: aapt2 reads the AArch64 archive's ABI and zipalign accepts it")
+
+
+def check_gl_demo_universal(assembler, work, aapt2, zipalign):
+    """Both renderers in one archive, which is the build a release has to ship.
+
+    A package with a single ABI only installs where that ABI is native, so the
+    universal archive has to carry both libraries under their own ABI directory,
+    each with the machine type, page alignment and entry point its own build has.
+    """
+    example = ROOT / "tests" / "format" / "android_gl_demo"
+    stage = work / "gl-demo-universal"
+    if stage.exists():
+        shutil.rmtree(stage)
+    shutil.copytree(example, stage)
+
+    x86_library = stage / "libmain-x86_64.so"
+    arm_library = stage / "libmain-aarch64.so"
+    run(assembler, stage / "gl-demo-so.asm", "-o", x86_library)
+    run(assembler, stage / "gl-demo-so-aarch64.asm", "-o", arm_library)
+    apk = stage / "demo-universal-unsigned.apk"
+    run(assembler, stage / "gl-demo-apk-universal.asm", "-o", apk)
+
+    with zipfile.ZipFile(apk) as archive:
+        names = set(archive.namelist())
+        assert "classes.dex" not in names, "the example declares hasCode=false and needs no DEX"
+        entries = {"lib/x86_64/libmain.so": (x86_library, 0x3E),
+                   "lib/arm64-v8a/libmain.so": (arm_library, 0xB7)}
+        for name, (library, expected_machine) in entries.items():
+            assert name in names, names
+            stored = archive.read(name)
+            assert stored == library.read_bytes(), f"{name} is not the assembled library"
+            machine, = struct.unpack_from("<H", stored, 18)
+            assert machine == expected_machine, f"{name} declares machine {machine:#x}"
+            for expected in (b"libmain.so", b"ANativeActivity_onCreate"):
+                assert expected in stored, f"{name} lost {expected!r}"
+        alignments = elf_load_alignments(archive.read("lib/arm64-v8a/libmain.so"))
+    assert alignments and all(align == 16384 for align in alignments), alignments
+    print(f"PASS: universal archive carries x86_64 and arm64-v8a renderers in "
+          f"{apk.stat().st_size} bytes, AArch64 LOAD aligned to {alignments[0]}")
+
+    if not aapt2 or not zipalign:
+        return
+    output = run(aapt2, "dump", "badging", apk)
+    native = [line for line in output.splitlines() if line.startswith("native-code:")]
+    assert native, output
+    for expected in ("x86_64", "arm64-v8a"):
+        assert expected in native[0], (expected, native)
+    run(zipalign, "-c", "-v", "-P", "16", "4", apk)
+    print("PASS: aapt2 reads both ABIs from the universal archive and zipalign accepts it")
+
+
 def read_deflate_notes() -> bytes:
     """The compressed fixture's inline payload, spelled the way the fixture has it."""
     return b"XIRASM " * 11 + b"XIRASM"
@@ -468,6 +580,8 @@ def main():
     check_res_scan(assembler, work, aapt2, zipalign)
 
     check_gl_demo(assembler, work, aapt2, zipalign)
+    check_gl_demo_aarch64(assembler, work, aapt2, zipalign)
+    check_gl_demo_universal(assembler, work, aapt2, zipalign)
 
     check_deflate(assembler, work, aapt2, zipalign)
 

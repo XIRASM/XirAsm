@@ -358,6 +358,8 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("include/format/macho_export.inc"));
     run_api_matrix.addFileArg(b.path("include/format/macho_import.inc"));
     run_api_matrix.addFileArg(b.path("include/os/win32/guid.inc"));
+    run_api_matrix.addFileArg(b.path("include/os/android.inc"));
+    run_api_matrix.addFileArg(b.path("include/os/android/imports/liblog.inc"));
     run_api_matrix.addArg("--fixtures");
     run_api_matrix.addFileArg(b.path("tests/x86/basic.asm"));
     run_api_matrix.addFileArg(b.path("tests/x86/branch.asm"));
@@ -517,6 +519,10 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/struct/nested_union.asm"));
     run_api_matrix.addFileArg(b.path("tests/api/reference/03-aggregates.asm"));
     run_api_matrix.addFileArg(b.path("tests/win32/generated-guid.asm"));
+    run_api_matrix.addFileArg(b.path("tests/os/android/catalog_import_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/os/android/catalog_import_x86_64_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/os/android/catalog_query_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/os/android/defs_user_facade.asm"));
     api_matrix_step.dependOn(&run_api_matrix.step);
 
     const release_boundary_step = b.step("test-release-boundary", "Validate release candidate path, docs, and brand boundary");
@@ -1739,6 +1745,86 @@ pub fn build(b: *std.Build) void {
             "include/format/elf_const.inc",
             "include/arm/a64-macros.inc",
             "include/arm/a64.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/isa/arm/label_case.asm",
+        "isa-arm-label-case",
+        "x64",
+        "48",
+        &.{
+            "include/arm/a64-macros.inc",
+            "include/arm/a64.inc",
+            "include/arm/a64/operands.inc",
+            "include/arm/a64/memory.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/os/android/catalog_import_user_facade.asm",
+        "os-android-catalog-import",
+        "x64",
+        "1640",
+        &.{
+            "include/format/format.inc",
+            "include/arm/a64-macros.inc",
+            "include/os/android/imports/liblog.inc",
+            "include/os/android/imports/libGLESv2.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/os/android/catalog_query_user_facade.asm",
+        "os-android-catalog-query",
+        "x64",
+        "1",
+        &.{
+            "include/os/android/catalog.inc",
+            "include/os/android/catalog/symbols.toml",
+            "include/os/android/imports/libnativewindow.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/os/android/defs_user_facade.asm",
+        "os-android-defs",
+        "x64",
+        "992",
+        &.{
+            "include/format/format.inc",
+            "include/arm/a64-macros.inc",
+            "include/os/android/defs/native_activity.inc",
+            "include/os/android/defs/native_window.inc",
+            "include/os/android/defs/input.inc",
+            "include/os/android/defs/keycodes.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/os/android/catalog_import_x86_64_user_facade.asm",
+        "os-android-catalog-import-x86-64",
+        "x64",
+        "1752",
+        &.{
+            "include/format/format.inc",
+            "include/os/android/imports/liblog.inc",
+            "include/os/android/imports/libandroid.inc",
         },
     );
     addAsmSizeFixtureInstalled(

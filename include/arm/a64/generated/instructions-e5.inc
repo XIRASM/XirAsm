@@ -3401,7 +3401,7 @@ fn a64_e5_smax_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e5-0138: SMAX_32_minmax_imm
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -128 || p2 <= 127) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551488 || p2 <= 127) {
             return 0x11c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 255) << 10);
         }
         assert(false, "a64 smax: operand value out of range")
@@ -3423,7 +3423,7 @@ fn a64_e5_smax_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e5-0139: SMAX_64_minmax_imm
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -128 || p2 <= 127) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551488 || p2 <= 127) {
             return 0x91c00000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 255) << 10);
         }
         assert(false, "a64 smax: operand value out of range")
@@ -3459,7 +3459,7 @@ fn a64_e5_smin_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e5-0142: SMIN_32_minmax_imm
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -128 || p2 <= 127) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551488 || p2 <= 127) {
             return 0x11c80000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 255) << 10);
         }
         assert(false, "a64 smin: operand value out of range")
@@ -3481,7 +3481,7 @@ fn a64_e5_smin_word(args: list) -> u64 {
         const p1: integer = list.get(list.get(flat, 1), 1)
         const p2: integer = list.get(list.get(flat, 2), 1)
         // e5-0143: SMIN_64_minmax_imm
-        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= -128 || p2 <= 127) {
+        if p0 >= 0 && p0 <= 31 && p1 >= 0 && p1 <= 31 && (p2 >= 18446744073709551488 || p2 <= 127) {
             return 0x91c80000 | ((p0 & 31) << 0) | ((p1 & 31) << 5) | (((p2 >> 0) & 255) << 10);
         }
         assert(false, "a64 smin: operand value out of range")

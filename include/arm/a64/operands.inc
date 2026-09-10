@@ -203,17 +203,29 @@ fn a64_number(arg: operand) -> operand {
     return clean;
 }
 
+// The `:lo12:` marker is matched case-insensitively, but the label behind it keeps
+// the spelling the source used: a symbol name is case-sensitive, and lowercasing
+// it here would look up a label that never existed.
+fn a64_lo12_parse(text: string) -> map {
+    return match.tokens("=: marker:token =: label:name", text);
+}
+
 fn a64_is_lo12(arg: operand) -> bool {
     const captured: operand = a64_number(arg)
-    const parsed: map = match.tokens("=: =lo12 =: label:name", lower(trim(operand.text(captured))))
-    return map.get(parsed, "ok");
+    const parsed: map = a64_lo12_parse(trim(operand.text(captured)))
+    if !map.get(parsed, "ok") {
+        return false;
+    }
+    const captures: map = map.get(parsed, "captures")
+    return lower(map.get(captures, "marker")) == "lo12";
 }
 
 fn a64_lo12_name(arg: operand) -> string {
     const captured: operand = a64_number(arg)
-    const parsed: map = match.tokens("=: =lo12 =: label:name", lower(trim(operand.text(captured))))
+    const parsed: map = a64_lo12_parse(trim(operand.text(captured)))
     assert(map.get(parsed, "ok"), "a64: invalid :lo12: label modifier")
     const captures: map = map.get(parsed, "captures")
+    assert(lower(map.get(captures, "marker")) == "lo12", "a64: invalid :lo12: label modifier")
     return map.get(captures, "label");
 }
 
@@ -327,7 +339,10 @@ fn a64_operands(args: list, floating: bool, zero_float: bool, evaluate: bool, li
                     } else {
                         const label: map = match.tokens("name:name", name)
                         if map.get(label, "ok") {
-                            list.push_mut(result, a64_target(name))
+                            // Classification is case-insensitive, but a label keeps the
+                            // spelling the source used: symbol names are case-sensitive,
+                            // and Android's platform API is full of CamelCase ones.
+                            list.push_mut(result, a64_target(trim(text)))
                         } else {
                             list.push_mut(result, list.of(35, captured))
                         }

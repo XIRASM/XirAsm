@@ -224,9 +224,9 @@ fn elfso_import_emit_dynstr64(imports: list, soname: string) {
 
 fn elfso_import_emit_dynsym64(imports: list, first_import_name_offset: u64) {
     elfso_sym64(0, 0, elf_shn_undef, 0, 0);
+    const offsets: list = elfso_import_name_offsets(imports);
     for i in range(0, len(imports)) {
-        const entry: map = list.get(imports, i);
-        elfso_sym64(first_import_name_offset + elfso_import_name_offset(imports, i), elfso_st_info(elf_stb_global, elf_stt_func), elf_shn_undef, 0, 0);
+        elfso_sym64(first_import_name_offset + list.get(offsets, i), elfso_st_info(elf_stb_global, elf_stt_func), elf_shn_undef, 0, 0);
     }
 }
 
@@ -261,8 +261,9 @@ fn elfso_import_emit_dynamic64(imports: list, dynstr_vaddr: u64, dynstr_size: u6
     elfso_dyn64(elf_dt_relaent, elfso_import_rela64_size);
 
     const libraries: list = elfso_import_libraries(imports);
+    const offsets: list = elfso_import_library_offsets(libraries);
     for i in range(0, len(libraries)) {
-        elfso_dyn64(elf_dt_needed, first_needed_offset + elfso_import_library_offset(libraries, i));
+        elfso_dyn64(elf_dt_needed, first_needed_offset + list.get(offsets, i));
     }
     elfso_dyn64(elf_dt_null, 0);
 }
@@ -279,8 +280,9 @@ fn elfso_import_emit_dynamic64_plt(imports: list, dynstr_vaddr: u64, dynstr_size
     elfso_dyn64(elf_dt_jmprel, rela_plt_vaddr);
 
     const libraries: list = elfso_import_libraries(imports);
+    const offsets: list = elfso_import_library_offsets(libraries);
     for i in range(0, len(libraries)) {
-        elfso_dyn64(elf_dt_needed, first_needed_offset + elfso_import_library_offset(libraries, i));
+        elfso_dyn64(elf_dt_needed, first_needed_offset + list.get(offsets, i));
     }
     elfso_dyn64(elf_dt_null, 0);
 }
@@ -314,29 +316,34 @@ fn elfso_import_dynstr_size(imports: list, soname: string) -> u64 {
 }
 
 fn elfso_import_names_size(imports: list) -> u64 {
-    const size: u64 = 0;
-    return elfso_import_names_size_from(imports, 0, size);
+    let size: u64 = 0
+    let index: u64 = 0
+    while (index < len(imports)) {
+        const entry: map = list.get(imports, index);
+        size = size + len(map.get(entry, "name")) + 1;
+        index = index + 1;
+    }
+    return size;
 }
 
-fn elfso_import_names_size_from(imports: list, index: u64, size: u64) -> u64 {
-    if (index == len(imports)) {
-        return size;
+// Prefix sums of the name table. The dynamic symbol table needs one offset per
+// import, so deriving each offset from the head of the list would walk the table
+// once per entry. One pass here keeps the table linear in the import count.
+fn elfso_import_name_offsets(imports: list) -> list {
+    let offsets: list = list.new()
+    let offset: u64 = 0
+    let index: u64 = 0
+    while (index < len(imports)) {
+        list.push_mut(offsets, offset);
+        const entry: map = list.get(imports, index);
+        offset = offset + len(map.get(entry, "name")) + 1;
+        index = index + 1;
     }
-    const entry: map = list.get(imports, index);
-    return elfso_import_names_size_from(imports, index + 1, size + len(map.get(entry, "name")) + 1);
+    return offsets;
 }
 
 fn elfso_import_name_offset(imports: list, index: u64) -> u64 {
-    const offset: u64 = 0;
-    return elfso_import_name_offset_from(imports, index, 0, offset);
-}
-
-fn elfso_import_name_offset_from(imports: list, target_index: u64, index: u64, offset: u64) -> u64 {
-    if (index == target_index) {
-        return offset;
-    }
-    const entry: map = list.get(imports, index);
-    return elfso_import_name_offset_from(imports, target_index, index + 1, offset + len(map.get(entry, "name")) + 1);
+    return list.get(elfso_import_name_offsets(imports), index);
 }
 
 fn elfso_import_libraries(imports: list) -> list {
@@ -361,27 +368,30 @@ fn elfso_import_list_has(values: list, needle: string) -> bool {
 }
 
 fn elfso_import_libraries_size(libraries: list) -> u64 {
-    const size: u64 = 0;
-    return elfso_import_libraries_size_from(libraries, 0, size);
+    let size: u64 = 0
+    let index: u64 = 0
+    while (index < len(libraries)) {
+        const library: string = list.get(libraries, index);
+        size = size + len(library) + 1;
+        index = index + 1;
+    }
+    return size;
 }
 
-fn elfso_import_libraries_size_from(libraries: list, index: u64, size: u64) -> u64 {
-    if (index == len(libraries)) {
-        return size;
+// Prefix sums of the needed-library table; see elfso_import_name_offsets.
+fn elfso_import_library_offsets(libraries: list) -> list {
+    let offsets: list = list.new()
+    let offset: u64 = 0
+    let index: u64 = 0
+    while (index < len(libraries)) {
+        list.push_mut(offsets, offset);
+        const library: string = list.get(libraries, index);
+        offset = offset + len(library) + 1;
+        index = index + 1;
     }
-    const library: string = list.get(libraries, index);
-    return elfso_import_libraries_size_from(libraries, index + 1, size + len(library) + 1);
+    return offsets;
 }
 
 fn elfso_import_library_offset(libraries: list, index: u64) -> u64 {
-    const offset: u64 = 0;
-    return elfso_import_library_offset_from(libraries, index, 0, offset);
-}
-
-fn elfso_import_library_offset_from(libraries: list, target_index: u64, index: u64, offset: u64) -> u64 {
-    if (index == target_index) {
-        return offset;
-    }
-    const library: string = list.get(libraries, index);
-    return elfso_import_library_offset_from(libraries, target_index, index + 1, offset + len(library) + 1);
+    return list.get(elfso_import_library_offsets(libraries), index);
 }

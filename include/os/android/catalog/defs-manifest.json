@@ -1,0 +1,356 @@
+{
+  "api_level": 35,
+  "constants": 1168,
+  "data_models": {
+    "32": "ILP32 (armv7, i686)",
+    "64": "LP64 (arm64, x86-64)"
+  },
+  "fields": 161,
+  "generator": "generate_android_constants.py",
+  "headers_emitted": 33,
+  "headers_scanned": 68,
+  "headers_skipped": [
+    "binder_auto_utils.h: C++ header",
+    "binder_enums.h: C++ header",
+    "binder_interface_utils.h: C++ header",
+    "binder_parcel_utils.h: C++ header",
+    "binder_parcelable_utils.h: C++ header",
+    "binder_to_string.h: C++ header",
+    "hardware_buffer_aidl.h: C++ header",
+    "native_window_aidl.h: C++ header",
+    "persistable_bundle_aidl.h: C++ header"
+  ],
+  "per_header": {
+    "NeuralNetworks.h": {
+      "constants": 1,
+      "fields": 0,
+      "structs": 0
+    },
+    "NeuralNetworksTypes.h": {
+      "constants": 169,
+      "fields": 8,
+      "structs": 2
+    },
+    "api-level.h": {
+      "constants": 21,
+      "fields": 0,
+      "structs": 0
+    },
+    "asset_manager.h": {
+      "constants": 4,
+      "fields": 0,
+      "structs": 0
+    },
+    "binder_ibinder.h": {
+      "constants": 3,
+      "fields": 0,
+      "structs": 0
+    },
+    "binder_status.h": {
+      "constants": 30,
+      "fields": 0,
+      "structs": 0
+    },
+    "bitmap.h": {
+      "constants": 22,
+      "fields": 0,
+      "structs": 0
+    },
+    "configuration.h": {
+      "constants": 91,
+      "fields": 0,
+      "structs": 0
+    },
+    "data_space.h": {
+      "constants": 47,
+      "fields": 0,
+      "structs": 0
+    },
+    "dlext.h": {
+      "constants": 10,
+      "fields": 0,
+      "structs": 0
+    },
+    "fdsan.h": {
+      "constants": 20,
+      "fields": 0,
+      "structs": 0
+    },
+    "font.h": {
+      "constants": 11,
+      "fields": 0,
+      "structs": 0
+    },
+    "font_matcher.h": {
+      "constants": 3,
+      "fields": 0,
+      "structs": 0
+    },
+    "hardware_buffer.h": {
+      "constants": 58,
+      "fields": 13,
+      "structs": 3
+    },
+    "hdr_metadata.h": {
+      "constants": 3,
+      "fields": 10,
+      "structs": 3
+    },
+    "imagedecoder.h": {
+      "constants": 18,
+      "fields": 0,
+      "structs": 0
+    },
+    "input.h": {
+      "constants": 171,
+      "fields": 0,
+      "structs": 0
+    },
+    "keycodes.h": {
+      "constants": 317,
+      "fields": 0,
+      "structs": 0
+    },
+    "log.h": {
+      "constants": 20,
+      "fields": 7,
+      "structs": 1
+    },
+    "looper.h": {
+      "constants": 10,
+      "fields": 0,
+      "structs": 0
+    },
+    "multinetwork.h": {
+      "constants": 3,
+      "fields": 0,
+      "structs": 0
+    },
+    "native_activity.h": {
+      "constants": 4,
+      "fields": 26,
+      "structs": 2
+    },
+    "native_window.h": {
+      "constants": 13,
+      "fields": 6,
+      "structs": 1
+    },
+    "ndk-version.h": {
+      "constants": 6,
+      "fields": 0,
+      "structs": 0
+    },
+    "obb.h": {
+      "constants": 1,
+      "fields": 0,
+      "structs": 0
+    },
+    "permission_manager.h": {
+      "constants": 5,
+      "fields": 0,
+      "structs": 0
+    },
+    "persistable_bundle.h": {
+      "constants": 2,
+      "fields": 0,
+      "structs": 0
+    },
+    "rect.h": {
+      "constants": 0,
+      "fields": 4,
+      "structs": 1
+    },
+    "sensor.h": {
+      "constants": 61,
+      "fields": 85,
+      "structs": 11
+    },
+    "storage_manager.h": {
+      "constants": 8,
+      "fields": 0,
+      "structs": 0
+    },
+    "surface_control.h": {
+      "constants": 5,
+      "fields": 0,
+      "structs": 0
+    },
+    "thermal.h": {
+      "constants": 8,
+      "fields": 2,
+      "structs": 1
+    },
+    "window.h": {
+      "constants": 23,
+      "fields": 0,
+      "structs": 0
+    }
+  },
+  "schema": 1,
+  "skipped_entries": {
+    "NeuralNetworksTypes.h": [
+      "define ANDROID_PACKAGES_MODULES_NEURALNETWORKS_RUNTIME_NEURAL_NETWORKS_TYPES_H: NeuralNetworksTypes.h:ANDROID_PACKAGES_MODULES_NEURALNETWORKS_RUNTIME_NEURAL_NETWORKS_TYPES_H: unknown constant __BEGIN_DECLS"
+    ],
+    "data_space.h": [
+      "define ANDROID_DATA_SPACE_H: data_space.h:ANDROID_DATA_SPACE_H: unknown constant __BEGIN_DECLS"
+    ],
+    "font.h": [
+      "define ANDROID_FONT_H: font.h:ANDROID_FONT_H: unknown constant __BEGIN_DECLS"
+    ],
+    "font_matcher.h": [
+      "define ANDROID_FONT_MATCHER_H: font_matcher.h:ANDROID_FONT_MATCHER_H: unknown constant __BEGIN_DECLS"
+    ],
+    "hardware_buffer.h": [
+      "define ANDROID_HARDWARE_BUFFER_H: hardware_buffer.h:ANDROID_HARDWARE_BUFFER_H: unknown constant __BEGIN_DECLS"
+    ],
+    "hdr_metadata.h": [
+      "define ANDROID_HDR_METADATA_H: hdr_metadata.h:ANDROID_HDR_METADATA_H: unknown constant __BEGIN_DECLS"
+    ],
+    "multinetwork.h": [
+      "define ANDROID_MULTINETWORK_H: multinetwork.h:ANDROID_MULTINETWORK_H: unknown constant __BEGIN_DECLS",
+      "define NETWORK_UNSPECIFIED: multinetwork.h:NETWORK_UNSPECIFIED: unknown constant net_handle_t"
+    ],
+    "permission_manager.h": [
+      "define ANDROID_PERMISSION_MANAGER_H: permission_manager.h:ANDROID_PERMISSION_MANAGER_H: unknown constant __BEGIN_DECLS"
+    ],
+    "surface_control.h": [
+      "define ANDROID_SURFACE_CONTROL_H: surface_control.h:ANDROID_SURFACE_CONTROL_H: unknown constant __BEGIN_DECLS"
+    ]
+  },
+  "sources": {
+    "NeuralNetworks.h": {
+      "bytes": 109323,
+      "sha256": "eb17ffe2793f6fe8cf99de954ea3763a6c9fbe4fd709375b8efaa3c50338bfb2"
+    },
+    "NeuralNetworksTypes.h": {
+      "bytes": 307419,
+      "sha256": "602b6ea1ce89b5b935f1c7047fda32da645f60dc29aa030ad38b166175740da2"
+    },
+    "api-level.h": {
+      "bytes": 8050,
+      "sha256": "54fdb30d96bdce02f112c69000430707914b8cf2ac73fd1a71b543344e66cabe"
+    },
+    "asset_manager.h": {
+      "bytes": 6680,
+      "sha256": "012037df871214da4e161d258a6f9e7a7a4db98ccce8b0f0588c489835f71584"
+    },
+    "binder_ibinder.h": {
+      "bytes": 36484,
+      "sha256": "b05970748a392ec1e93669d6fe77aee5a7cfa4c0f9729d70e1f320017a1d98a4"
+    },
+    "binder_status.h": {
+      "bytes": 9854,
+      "sha256": "cd621a5006fd9c354e25a280856222eb39189549e0a9f9292007e52adccca2a3"
+    },
+    "bitmap.h": {
+      "bytes": 9372,
+      "sha256": "e11877474f799c75f384bf4bb6bfb3c8b6980951b7bfb0f196606c2baf7c0c82"
+    },
+    "configuration.h": {
+      "bytes": 27268,
+      "sha256": "875ffbed98e906a67d0f654bc7131611fa3281b196b55041196694a8be1fabee"
+    },
+    "data_space.h": {
+      "bytes": 18568,
+      "sha256": "0843552d403efef0151037b5fd11d9745022c458fc9a102919974792e2978fe1"
+    },
+    "dlext.h": {
+      "bytes": 7074,
+      "sha256": "06f396c3624e580cc54283b1415e1e09919af317390104c44f9e217e37c94556"
+    },
+    "fdsan.h": {
+      "bytes": 7425,
+      "sha256": "eeee5f1bd56c15dc42c16c658b73797465622586bfe579611c0ce6784c3dbd71"
+    },
+    "font.h": {
+      "bytes": 9630,
+      "sha256": "77d650ce91086e252aa67e42b2ba5f5abf4015ed9a134d326977aff38e9edf6c"
+    },
+    "font_matcher.h": {
+      "bytes": 7698,
+      "sha256": "97ecd18ccadc7b35f18a20fd1c22791429317dbfd070c0981156ccc473243f8e"
+    },
+    "hardware_buffer.h": {
+      "bytes": 23977,
+      "sha256": "4be5e3cd427cd1d55c31b205f404ec6120e0c0680ecc49c2340d5e80a049aa11"
+    },
+    "hdr_metadata.h": {
+      "bytes": 1743,
+      "sha256": "aba1545e1170a6f3c7ca279e62798a7740c260fa9d3c8be968df2be2f689bc84"
+    },
+    "imagedecoder.h": {
+      "bytes": 41697,
+      "sha256": "9877f33f718506e12ae41ecab72e29eb3f4367eb81fc5e8e717de39672285d82"
+    },
+    "input.h": {
+      "bytes": 60429,
+      "sha256": "603ec0c4f3ad4dffe39375048b401a2bff19d39bc8ecabd205e29eb7d9d54072"
+    },
+    "keycodes.h": {
+      "bytes": 31975,
+      "sha256": "f9d4fd2be7ab5543d4fe29ac2c9dae7f51890c3b41301dac4f4c6efc54c187ee"
+    },
+    "log.h": {
+      "bytes": 14345,
+      "sha256": "7d1ab6eaa89cefc5d1c04f11ffa953951188c4d5b1038de476542590ccbb66c2"
+    },
+    "looper.h": {
+      "bytes": 10760,
+      "sha256": "e5e7198cadb31077648292abc3ae08245ef33df0982fad2c3ccc5187e046cb41"
+    },
+    "multinetwork.h": {
+      "bytes": 10857,
+      "sha256": "e5a4e4db1dd3e1d5ceef0e448792b93debcf0cc0da12cde641cf4386a770610c"
+    },
+    "native_activity.h": {
+      "bytes": 11780,
+      "sha256": "04f85d119fc222abd65aef1f57f8e03a94134c272b95ed781e8f3791c64d973a"
+    },
+    "native_window.h": {
+      "bytes": 14717,
+      "sha256": "979577126ba69e8714b7b2409c181fbe6ed879e76774ffa70b954bbf043ebe8e"
+    },
+    "ndk-version.h": {
+      "bytes": 710,
+      "sha256": "99b23f24cb315714f20a5713bb5feb74a455b7d0d38458a4f1b0cb23304614eb"
+    },
+    "obb.h": {
+      "bytes": 1645,
+      "sha256": "fd3e7a17778fa696a0fce301b5d50ed840d555b804f6d1b5b8f03d7fbb39283b"
+    },
+    "permission_manager.h": {
+      "bytes": 2980,
+      "sha256": "278bd46ce2c6917f5c369b49b595994f0590318ffe956fa811191b3917c42e85"
+    },
+    "persistable_bundle.h": {
+      "bytes": 44538,
+      "sha256": "683f3890ed905e4784d3101f912f96b55efd4e9b29381cc7fa94f3279badf2e2"
+    },
+    "rect.h": {
+      "bytes": 1621,
+      "sha256": "38c24c9f3e08b8e5a577e32d0a17fa55c3a50b5820128b2663972704b4c07706"
+    },
+    "sensor.h": {
+      "bytes": 39338,
+      "sha256": "c4bbd6a6534a76fb9693f5ca94ca1a52982ade92d02ed350eaf105800757a298"
+    },
+    "storage_manager.h": {
+      "bytes": 4843,
+      "sha256": "89230d45400e7182ba845d67e9b747c6a1e2be33644ee195fab6263300b70272"
+    },
+    "surface_control.h": {
+      "bytes": 32497,
+      "sha256": "0f0020dd048ed3940e90a3d6388d6e76bcda1a5a9e7008b83b90e34e5ab73131"
+    },
+    "thermal.h": {
+      "bytes": 12590,
+      "sha256": "bbe417d186e37fa6983464640bffa4055fb4b0ead4fd4a1a599e70f3cc74bd1a"
+    },
+    "window.h": {
+      "bytes": 9640,
+      "sha256": "4731d77cf37ba0159659083d269301c492c083dd77026bd5ff21f209db872ec6"
+    }
+  },
+  "structs": 25
+}

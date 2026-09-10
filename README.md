@@ -199,6 +199,15 @@ APK, with the texture generated at assembly time. `aapt2` and `zipalign` read th
 result back cleanly. Signing stays outside the assembler on purpose; the
 [Android guide](document/apk.md) has the SDK command sequence.
 
+The platform libraries themselves are catalogued: `import("os/android/imports/liblog.inc")`
+gives you `android_import_log___android_log_write`, so a source never spells a
+library name or an API level by hand, and `import("os/android/defs/native_activity.inc")`
+gives you the structures the platform hands back — 25 libraries and 4,416
+symbol/library rows from the NDK stubs, plus 1,168 constants and 161 field offsets
+from the NDK headers, each checked against `llvm-nm` and clang. The
+[Android platform guide](document/os-android.md) covers the two ways to use it and
+where the data stops being true.
+
 ## More Than a Macro Assembler
 
 XIRASM's compile-time language is designed for assembly projects that outgrow
@@ -239,6 +248,8 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
   Mach-O files with user-facing facade APIs.
 - [Android Guide](document/apk.md) - assemble a NativeActivity library and the
   APK, resource table, and manifest around it.
+- [Android Platform Guide](document/os-android.md) - use the generated NDK symbol
+  catalog and header constants instead of hand-written library names and offsets.
 - [Language API Reference](document/api-reference.md) - look up syntax and
   built-in APIs.
 - [Advanced Format Construction](document/advanced-formats.md) - take direct
@@ -246,7 +257,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.21**. See the [release notes](document/releases/0.2.21.md).
+Current version: **0.2.22**. See the [release notes](document/releases/0.2.22.md).
 
 XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI, and
 editor support are usable today, and public contracts may still be refined before
