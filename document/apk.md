@@ -465,6 +465,67 @@ ldr x7, [x0, #android_layout_ANativeWindow_Buffer_bits_offset64]
   `tests/os/validate_android_constants.py` 会把每个数字改写成 `_Static_assert` 交给 clang 编译核对。
   **"没有 struct 类型声明"不等于"没有结构体信息"**。
 
+### 怎么拿到结构体大小
+
+两个常见需求都靠**同一个常量**：把 `sizeof(结构体)` 填进版本字段，以及在栈上开一块结构体。
+
+```asm
+import("format/format.inc")
+import("os/android/defs/log.inc")
+import("os/android/defs/native_window.inc")
+import("os/android/imports/liblog.inc")
+import("arm/a64-macros.inc")
+
+let image: map = format_elf64_so_aarch64(
+    "libsize.so",
+    list.of(format_segment(".text", format_load | format_readable | format_executable))
+)
+let exports: list = format_elfso_export_new()
+format_elfso_export_many_mut(exports, list.of("ANativeActivity_onCreate"), ".text", 76)
+let imports: list = format_elfso_import_new()
+android_import_log_add_slots_mut(imports, list.of(android_import_log___android_log_write))
+format_elfso_tables_mut(image, exports, imports)
+format_begin(image);
+format_segment_begin(image, ".text");
+ANativeActivity_onCreate:
+    // 栈帧大小来自生成常量，不是数出来的数字
+    sub sp, sp, #android_layout___android_log_message_size64
+
+    // struct_size 约定要填 sizeof(__android_log_message)：同一个常量
+    mov w9, #android_layout___android_log_message_size64
+    str w9, [sp, #android_layout___android_log_message_struct_size_offset64]
+
+    mov w9, #4
+    str w9, [sp, #android_layout___android_log_message_priority_offset64]
+
+    adrp x9, size_probe_tag
+    add x9, x9, :lo12:size_probe_tag
+    str x9, [sp, #android_layout___android_log_message_tag_offset64]
+
+    mov x0, sp
+    ldr x8, __android_log_write
+    blr x8
+
+    // 同一个常量还能用来开别的结构体：ANativeWindow_lock 的缓冲区
+    sub sp, sp, #android_layout_ANativeWindow_Buffer_size64
+    mov x0, sp
+    add sp, sp, #android_layout_ANativeWindow_Buffer_size64
+
+    add sp, sp, #android_layout___android_log_message_size64
+    ret
+size_probe_tag:
+    db("xirasm");
+format_segment_end(image, ".text");
+format_finish(image);
+```
+
+探针实测（`llvm-objdump`）：编出来就是 `sub sp, sp, #0x30` 与 `mov w9, #0x30`（48），
+也就是 64 位模型下的 `sizeof(__android_log_message)`；32 位构建改用 `_size32`（28）。
+同一个常量还能用来开别的结构体，例如 `sub sp, sp, #android_layout_ANativeWindow_Buffer_size64`（48）。
+
+**后缀由目标决定**：arm64 与 x86-64 用 `_size64` / `_offset64`，armv7 与 i686 用 `_size32` /
+`_offset32`。目前唯一需要写者自己留意的就是这一点 —— 两套名字都在，别配错。
+
 为什么不是 `struct` 类型（如实说明）：生成器当前只产出常量。Meta 的 `struct` / `packed struct`
 配合 `sizeof` / `offset_of` 是另一种形态，而平台布局是 **ABI 相关**的——同一个结构体在 LP64 与
 ILP32 下大小不同，类型化就得为两种模型各生成一套声明，或按目标条件选择。**把平台结构体规范成
