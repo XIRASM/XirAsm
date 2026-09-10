@@ -457,7 +457,13 @@ pub fn lowerApiCall(
         try module.diagnostics.add(allocator, .err, call.span, "macro calls use instruction syntax without parentheses");
         return error.FrontendDiagnostics;
     }
-    return error.UnknownApiCall;
+
+    // A reader who mistyped a call name needs the name in the message: the
+    // error alone carries no payload, and the location only points at the line.
+    const message = try std.fmt.allocPrint(allocator, "unknown call: {s}", .{call.callee});
+    defer allocator.free(message);
+    try module.diagnostics.add(allocator, .err, call.span, message);
+    return error.FrontendDiagnostics;
 }
 
 pub fn apiCallHasOutputSideEffect(callee: []const u8) bool {

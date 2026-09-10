@@ -178,9 +178,10 @@ ELF32 使用 `format_elfobj32`。常用的 32 位相对调用重定位是 `elf_r
 | 家族 | 函数 | 用途 |
 | --- | --- | --- |
 | COFF | `format_coff32(sections)` / `format_coff64(sections)` | 创建 COFF 目标文件配置 |
+| COFF | `format_coff64_arm64(sections)` | 创建 AArch64 COFF 目标文件配置 |
 | COFF | `format_coff_public(name, section_name, section_start, address, sym_type)` | 声明公开符号 |
 | COFF | `format_coff_extern(name, sym_type)` | 声明外部符号 |
-| COFF | `format_coff_reloc(section_name, section_start, address, symbol_name, reloc_type)` | 声明需要链接器修正的字段 |
+| COFF | `format_coff_reloc(section_name, section_start, address, symbol_name, reloc_type)` | 声明需要链接器修正的字段；AArch64 目标文件传 `coff_rel_arm64_*` 类型 |
 | COFF | `format_coff_tables_mut(plan, symbols, relocs)` | 把 COFF 符号表和重定位表挂到配置上 |
 | ELF | `format_elfobj32(sections)` / `format_elfobj64(sections)` | 创建 x86 目标文件配置 |
 | ELF | `format_elfobj64_aarch64(sections)` | 创建 AArch64 目标文件配置 |

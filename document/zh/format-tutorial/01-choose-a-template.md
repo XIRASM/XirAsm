@@ -16,13 +16,18 @@ import("format/format.inc");
 | --- | --- | --- |
 | PE32 可执行文件或 DLL | `format_pe32(options, sections)` | `format_section(...)` |
 | PE64 可执行文件或 DLL | `format_pe64(options, sections)` | `format_section(...)` |
+| PE64 AArch64 可执行文件或 DLL | `format_pe64_arm64(options, sections)` | `format_section(...)` |
 | COFF32 目标文件 | `format_coff32(sections)` | `format_section(...)` |
 | COFF64 目标文件 | `format_coff64(sections)` | `format_section(...)` |
+| COFF64 AArch64 目标文件 | `format_coff64_arm64(sections)` | `format_section(...)` |
 | ELF32 可执行文件 | `format_elf32(options, segments)` | `format_segment(...)` |
 | ELF64 可执行文件或 PIE | `format_elf64(options, segments)` | `format_segment(...)` |
+| ELF64 AArch64 可执行文件或 PIE | `format_elf64_aarch64(options, segments)` | `format_segment(...)` |
 | ELF32 目标文件 | `format_elfobj32(sections)` | `format_section(...)` |
 | ELF64 目标文件 | `format_elfobj64(sections)` | `format_section(...)` |
+| ELF64 AArch64 目标文件 | `format_elfobj64_aarch64(sections)` | `format_section(...)` |
 | ELF64 共享库 | `format_elf64_so(soname, segments)` | `format_segment(...)` |
+| ELF64 AArch64 共享库 | `format_elf64_so_aarch64(soname, segments)` | `format_segment(...)` |
 
 PE、COFF 和 ELF 目标文件按“节”组织内容；ELF 可执行文件和 ELF 共享库按“装载段”组织运行时映射。
 

@@ -8,6 +8,11 @@ allowed or required, and which sections must be loaded.
 
 `format_pe32(options, sections)` and `format_pe64(options, sections)` require
 one role, one subsystem, and one ASLR policy. Add `format_pe_nx` when desired.
+`format_pe64` builds an x86-64 image; `format_pe64_arm64(options, sections)`
+builds an AArch64 one and `format_pe64_machine(options, sections, machine)`
+selects the machine explicitly. The container, the import and export
+directories, and the DIR64 base relocations are shared by both machines; only
+the file header machine and the instruction encoding differ.
 
 | Group | Value | Meaning |
 | --- | --- | --- |

@@ -29,6 +29,8 @@ const BuiltinId = enum {
     fs_exists,
     fs_read_text,
     fs_read_bytes,
+    fs_list_dir,
+    fs_is_dir,
     toml_parse,
     toml_file,
     json_parse,
@@ -47,6 +49,10 @@ const builtins = [_]Builtin{
     .{ .name = "fs.read_text", .id = .fs_read_text },
     // api-matrix-meta-data: "fs.read_bytes"
     .{ .name = "fs.read_bytes", .id = .fs_read_bytes },
+    // api-matrix-meta-data: "fs.list_dir"
+    .{ .name = "fs.list_dir", .id = .fs_list_dir },
+    // api-matrix-meta-data: "fs.is_dir"
+    .{ .name = "fs.is_dir", .id = .fs_is_dir },
     // api-matrix-meta-data: "toml.parse"
     .{ .name = "toml.parse", .id = .toml_parse },
     // api-matrix-meta-data: "toml.file"
@@ -76,6 +82,8 @@ pub fn evalBuiltin(
         .fs_exists => evalFsExists(allocator, args, ctx),
         .fs_read_text => evalFsRead(allocator, args, ctx, .text),
         .fs_read_bytes => evalFsRead(allocator, args, ctx, .bytes),
+        .fs_list_dir => evalFsListDir(allocator, args, ctx),
+        .fs_is_dir => evalFsIsDir(allocator, args, ctx),
         .toml_parse => evalTomlParse(allocator, args),
         .toml_file => evalTomlFile(allocator, args, ctx),
         .json_parse => evalJsonParse(allocator, args),
@@ -134,6 +142,64 @@ fn evalFsRead(
             ) };
         },
     }
+}
+
+/// Entries of a directory as a list of names, sorted so the result does not
+/// depend on the order the host filesystem returns.
+fn evalFsListDir(allocator: Allocator, args: []const value_mod.Value, ctx: EvalContext) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    const resolver = ctx.file_resolver orelse return error.FileNotAvailable;
+    const list = resolver.list orelse return error.FileNotAvailable;
+    const path = try expectString(args[0]);
+
+    var listing = try list(resolver.context, allocator, .{
+        .path = path,
+        .parent_path = ctx.parent_path,
+        .span = source_mod.unknown_span,
+    });
+    defer listing.deinit(allocator);
+
+    const items = try allocator.alloc(value_mod.Value, listing.entries.len);
+    var initialized: usize = 0;
+    errdefer {
+        for (items[0..initialized]) |*item| item.deinit(allocator);
+        allocator.free(items);
+    }
+    for (listing.entries, 0..) |entry, index| {
+        items[index] = .{ .string = try allocator.dupe(u8, entry.name) };
+        initialized += 1;
+    }
+    sortStrings(items);
+    return .{ .list = .{ .items = items } };
+}
+
+/// True when the path names an existing directory. Like `fs.exists`, this never
+/// fails: a host without directory support answers false.
+fn evalFsIsDir(allocator: Allocator, args: []const value_mod.Value, ctx: EvalContext) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    const resolver = ctx.file_resolver orelse return error.FileNotAvailable;
+    const path = try expectString(args[0]);
+    const is_directory = if (resolver.is_dir) |check| try check(resolver.context, allocator, .{
+        .path = path,
+        .parent_path = ctx.parent_path,
+        .span = source_mod.unknown_span,
+    }) else false;
+    return .{ .boolean = is_directory };
+}
+
+fn sortStrings(items: []value_mod.Value) void {
+    std.mem.sort(value_mod.Value, items, {}, struct {
+        fn lessThan(_: void, left: value_mod.Value, right: value_mod.Value) bool {
+            return std.mem.order(u8, stringOf(left), stringOf(right)) == .lt;
+        }
+
+        fn stringOf(value: value_mod.Value) []const u8 {
+            return switch (value) {
+                .string => |text| text,
+                else => "",
+            };
+        }
+    }.lessThan);
 }
 
 pub fn readBytes(
@@ -368,6 +434,90 @@ fn expectUsize(value: value_mod.Value) Error!usize {
     };
     if (integer > std.math.maxInt(usize)) return error.InvalidApiInteger;
     return @intCast(integer);
+}
+
+test "meta list_dir sorts by byte value and is_dir follows the resolver" {
+    const allocator = std.testing.allocator;
+    const Fake = struct {
+        fn read(_: *anyopaque, _: Allocator, _: meta_io.FileReadRequest) meta_io.Error!meta_io.FileReadResult {
+            return error.FileNotAvailable;
+        }
+
+        fn exists(_: *anyopaque, _: Allocator, _: meta_io.FileReadRequest) Allocator.Error!bool {
+            return false;
+        }
+
+        /// Entries arrive in an order no filesystem promises, and the names are
+        /// chosen so that byte order differs from a case-insensitive order: the
+        /// uppercase `Z` sorts before the underscore, which sorts before the
+        /// lowercase names.
+        fn list(_: *anyopaque, list_allocator: Allocator, _: meta_io.FileListRequest) meta_io.Error!meta_io.DirListing {
+            var entries: std.ArrayList(meta_io.DirEntry) = .empty;
+            errdefer {
+                for (entries.items) |entry| list_allocator.free(entry.name);
+                entries.deinit(list_allocator);
+            }
+            for ([_][]const u8{ "apple.txt", "_under.txt", "sub", "Zebra.txt" }) |name| {
+                const owned = try list_allocator.dupe(u8, name);
+                errdefer list_allocator.free(owned);
+                try entries.append(list_allocator, .{ .name = owned });
+            }
+            return .{ .entries = try entries.toOwnedSlice(list_allocator) };
+        }
+
+        /// Answers per path, so a wrong answer or a dropped request is visible.
+        fn isDir(_: *anyopaque, _: Allocator, request: meta_io.FileListRequest) Allocator.Error!bool {
+            return std.mem.eql(u8, request.path, "some/dir");
+        }
+    };
+
+    var marker: u8 = 0;
+    const resolver: meta_io.FileResolver = .{
+        .context = @ptrCast(&marker),
+        .read = Fake.read,
+        .exists = Fake.exists,
+        .list = Fake.list,
+        .is_dir = Fake.isDir,
+    };
+
+    var listing = try evalBuiltin(allocator, "fs.list_dir", &.{
+        .{ .string = @constCast("some/dir") },
+    }, resolver, null);
+    defer listing.deinit(allocator);
+    const items = try listing.expectList();
+    try std.testing.expectEqual(@as(usize, 4), items.items.len);
+    try std.testing.expectEqualStrings("Zebra.txt", try items.items[0].expectString());
+    try std.testing.expectEqualStrings("_under.txt", try items.items[1].expectString());
+    try std.testing.expectEqualStrings("apple.txt", try items.items[2].expectString());
+    try std.testing.expectEqualStrings("sub", try items.items[3].expectString());
+
+    var is_dir = try evalBuiltin(allocator, "fs.is_dir", &.{
+        .{ .string = @constCast("some/dir") },
+    }, resolver, null);
+    defer is_dir.deinit(allocator);
+    try std.testing.expect(try is_dir.expectBoolean());
+
+    var other = try evalBuiltin(allocator, "fs.is_dir", &.{
+        .{ .string = @constCast("other/dir") },
+    }, resolver, null);
+    defer other.deinit(allocator);
+    try std.testing.expect(!try other.expectBoolean());
+
+    // A host without directory support reports the path as unavailable and
+    // answers false, which is the documented contract for the optional entry.
+    const bare: meta_io.FileResolver = .{
+        .context = @ptrCast(&marker),
+        .read = Fake.read,
+        .exists = Fake.exists,
+    };
+    try std.testing.expectError(error.FileNotAvailable, evalBuiltin(allocator, "fs.list_dir", &.{
+        .{ .string = @constCast("some/dir") },
+    }, bare, null));
+    var absent = try evalBuiltin(allocator, "fs.is_dir", &.{
+        .{ .string = @constCast("some/dir") },
+    }, bare, null);
+    defer absent.deinit(allocator);
+    try std.testing.expect(!try absent.expectBoolean());
 }
 
 test "meta data parses toml into map values" {

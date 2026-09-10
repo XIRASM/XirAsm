@@ -45,5 +45,7 @@
 12. **[列表与映射](api-reference/12-lists-and-maps.md)**
 13. **[文件与结构化数据](api-reference/13-files-and-structured-data.md)**
 14. **[词法单元与模式匹配](api-reference/14-tokens-and-pattern-matching.md)**
+15. **[加密校验与摘要](api-reference/15-crypto-helpers.md)**
+16. **[压缩](api-reference/16-compression.md)**
 
 每章保持紧凑的速查结构：先列出语法或函数形式，再说明行为、限制、错误条件和最小示例。

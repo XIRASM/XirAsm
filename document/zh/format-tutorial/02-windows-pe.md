@@ -4,7 +4,7 @@ Windows 可执行文件和 DLL 都使用 PE。用 `format.inc` 生成 PE 时，�
 
 ## PE 选项
 
-`format_pe32(options, sections)` 和 `format_pe64(options, sections)` 的 `options` 必须包含一个角色、一个子系统、一个 ASLR 策略；`format_pe_nx` 是可选安全标志。
+`format_pe32(options, sections)` 和 `format_pe64(options, sections)` 的 `options` 必须包含一个角色、一个子系统、一个 ASLR 策略；`format_pe_nx` 是可选安全标志。`format_pe64` 生成 x86-64 映像，`format_pe64_arm64(options, sections)` 生成 AArch64 映像，`format_pe64_machine(options, sections, machine)` 显式指定机器。两种机器共用容器布局、导入导出目录和 DIR64 基址重定位，差别只在文件头机器字段与指令编码。
 
 | 分组 | 值 | 含义 |
 | --- | --- | --- |

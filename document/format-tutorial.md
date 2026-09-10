@@ -55,6 +55,7 @@ configuration cannot express the file you need.
 | Linux executable | `format_elf32` or `format_elf64` with `format_elf_exec` | `format_segment_begin`, `format_entry_mut`, `format_finish` |
 | Linux PIE | `format_elf64` with `format_elf_pie` | `format_segment_begin`, `format_entry_mut`, `format_finish` |
 | Linux shared object | `format_elf64_so` | `format_elfso_tables_mut`, `format_segment_begin`, `format_finish` |
+| Android shared object (AArch64) | `format_elf64_so_aarch64` | `format_elfso_import_slots_mut`, `format_elfso_tables_mut`, `format_segment_begin`, `format_finish` |
 | COFF object | `format_coff32` or `format_coff64` | `format_coff_tables_mut`, `format_section_begin`, `format_finish` |
 | ELF object (x86) | `format_elfobj32` or `format_elfobj64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |
 | ELF object (AArch64) | `format_elfobj64_aarch64` | `format_elfobj_tables_mut`, `format_section_begin`, `format_finish` |

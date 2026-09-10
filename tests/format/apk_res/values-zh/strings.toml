@@ -1,0 +1,4 @@
+# Locale variant: the same keys in a two letter locale configuration. The text
+# is not ASCII, so the scanner path is also covered by the encoding checks.
+app_name = "资源目录扫描"
+tagline = "资源来自目录树"

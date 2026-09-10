@@ -3,11 +3,13 @@ const std = @import("std");
 const ast = @import("../ast.zig");
 const expr = @import("../expr.zig");
 const module_mod = @import("../module.zig");
+const source = @import("../source.zig");
 const typecheck = @import("../typecheck.zig");
 const value_mod = @import("../value.zig");
 const aggregate_literal = @import("aggregate_literal.zig");
 const contracts = @import("contracts.zig");
 const context_mod = @import("context.zig");
+const deferred = @import("deferred.zig");
 
 const Allocator = std.mem.Allocator;
 const ActiveOutput = contracts.ActiveOutput;
@@ -26,7 +28,7 @@ pub fn lowerDeclaration(
     declaration: ast.ValueDeclarationStatement,
     callbacks: Callbacks,
 ) LowerError!void {
-    var evaluated = try lowerInitializer(module, context, active, declaration.value, callbacks);
+    var evaluated = try lowerInitializerReporting(module, context, active, declaration.value, declaration.span, callbacks);
     errdefer evaluated.deinit(module.allocator);
     const annotation = try typecheck.annotationFromName(module, declaration.type_name);
     if (declaration.type_name != null and annotation == null) return error.InvalidValueDeclaration;
@@ -48,12 +50,67 @@ pub fn lowerAssignment(
     assignment: ast.AssignmentStatement,
     callbacks: Callbacks,
 ) LowerError!void {
-    var evaluated = try lowerInitializer(module, context, active, assignment.value, callbacks);
+    var evaluated = try lowerInitializerReporting(module, context, active, assignment.value, assignment.span, callbacks);
     errdefer evaluated.deinit(module.allocator);
 
     if (try context_mod.setLocalValue(context, module.allocator, assignment.name, evaluated)) return;
     if (context.value_function_depth != 0) return error.SideEffectInValueFunction;
     try module.setValue(assignment.name, evaluated);
+}
+
+/// Evaluate an initializer and, when it fails because a name is not declared,
+/// say which expression carried the name. The error alone cannot carry it, and
+/// the location only points at the line.
+fn lowerInitializerReporting(
+    module: *module_mod.Module,
+    context: *LowerContext,
+    active: ActiveOutput,
+    initializer: ast.ValueInitializer,
+    statement_span: source.SourceSpan,
+    callbacks: Callbacks,
+) LowerError!value_mod.Value {
+    return lowerInitializer(module, context, active, initializer, callbacks) catch |err| switch (err) {
+        error.UndefinedSymbol => {
+            const text = switch (initializer) {
+                .expression => |*node| try deferred.renderExpressionText(module.allocator, node),
+                .struct_literal => try module.allocator.dupe(u8, "struct literal"),
+            };
+            defer module.allocator.free(text);
+            try reportUndefinedSymbol(module, statement_span, text);
+            return error.FrontendDiagnostics;
+        },
+        else => return err,
+    };
+}
+
+fn reportUndefinedSymbol(module: *module_mod.Module, span: source.SourceSpan, text: []const u8) LowerError!void {
+    // A late-layout block can be lowered again while it converges, so one
+    // location must not collect the same message twice.
+    for (module.diagnostics.items.items) |item| {
+        if (sameLocation(item.span, span)) return;
+    }
+
+    const message = try std.fmt.allocPrint(
+        module.allocator,
+        "undefined name in this expression: {s}",
+        .{shorten(text)},
+    );
+    defer module.allocator.free(message);
+    try module.diagnostics.add(module.allocator, .err, span, message);
+}
+
+fn sameLocation(left: source.SourceSpan, right: source.SourceSpan) bool {
+    if (left.start != right.start) return false;
+    const left_source = left.source orelse return right.source == null;
+    const right_source = right.source orelse return false;
+    return left_source.index == right_source.index;
+}
+
+/// Long expressions still have to read as a message.
+fn shorten(text: []const u8) []const u8 {
+    const trimmed = std.mem.trim(u8, text, " \t\r\n");
+    const limit: usize = 120;
+    return if (trimmed.len <= limit) trimmed else trimmed[0..limit];
 }
 
 fn lowerInitializer(

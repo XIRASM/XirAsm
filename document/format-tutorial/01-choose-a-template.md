@@ -19,13 +19,18 @@ construction.
 | --- | --- | --- |
 | PE32 executable or DLL | `format_pe32(options, sections)` | `format_section(...)` |
 | PE64 executable or DLL | `format_pe64(options, sections)` | `format_section(...)` |
+| PE64 AArch64 executable or DLL | `format_pe64_arm64(options, sections)` | `format_section(...)` |
 | COFF32 object | `format_coff32(sections)` | `format_section(...)` |
 | COFF64 object | `format_coff64(sections)` | `format_section(...)` |
+| COFF64 AArch64 object | `format_coff64_arm64(sections)` | `format_section(...)` |
 | ELF32 executable | `format_elf32(options, segments)` | `format_segment(...)` |
 | ELF64 executable or PIE | `format_elf64(options, segments)` | `format_segment(...)` |
+| ELF64 AArch64 executable or PIE | `format_elf64_aarch64(options, segments)` | `format_segment(...)` |
 | ELF32 object | `format_elfobj32(sections)` | `format_section(...)` |
 | ELF64 object | `format_elfobj64(sections)` | `format_section(...)` |
+| ELF64 AArch64 object | `format_elfobj64_aarch64(sections)` | `format_section(...)` |
 | ELF64 shared object | `format_elf64_so(soname, segments)` | `format_segment(...)` |
+| ELF64 AArch64 shared object | `format_elf64_so_aarch64(soname, segments)` | `format_segment(...)` |
 
 PE, COFF, and ELF object files use sections. ELF executable images and shared
 objects use load segments.

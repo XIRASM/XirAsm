@@ -1285,7 +1285,7 @@ test "lowering dispatches nested Meta if procedure calls" {
 
 test "lowering keeps Meta function parameters local to the call" {
     try std.testing.expectError(
-        error.InvalidExpression,
+        error.UndefinedSymbol,
         lowerSource(
             std.testing.allocator,
             \\fn emit_one(value: u64) {
@@ -1365,7 +1365,7 @@ test "lowering keeps nested block locals scoped by nearest declaration" {
 
 test "lowering keeps Meta for iteration locals scoped per iteration" {
     try std.testing.expectError(
-        error.InvalidExpression,
+        error.UndefinedSymbol,
         lowerSource(
             std.testing.allocator,
             \\for i in range(0, 2) {
@@ -1385,7 +1385,7 @@ test "lowering keeps Meta for iteration locals scoped per iteration" {
 
 test "lowering keeps Meta function body locals inside call scope" {
     try std.testing.expectError(
-        error.InvalidExpression,
+        error.UndefinedSymbol,
         lowerSource(
             std.testing.allocator,
             \\fn emit_one(value: u64) {
@@ -1399,6 +1399,48 @@ test "lowering keeps Meta function body locals inside call scope" {
             .{},
         ),
     );
+}
+
+test "lowering names the expression that carries an undeclared name" {
+    const allocator = std.testing.allocator;
+    var module = try module_mod.Module.init(allocator, target.Target.default);
+    defer module.deinit();
+
+    try std.testing.expectError(error.FrontendDiagnostics, lowerSourceIntoModule(allocator, &module,
+        \\let app: u64 = apk_res_dir(app, "res")
+        \\
+    ));
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    try std.testing.expectEqualStrings(
+        "undefined name in this expression: apk_res_dir(app, \"res\")",
+        module.diagnostics.items.items[0].message,
+    );
+}
+
+test "lowering reports an unknown call by name" {
+    const allocator = std.testing.allocator;
+    var module = try module_mod.Module.init(allocator, target.Target.default);
+    defer module.deinit();
+
+    try std.testing.expectError(error.FrontendDiagnostics, lowerSourceIntoModule(allocator, &module,
+        \\no_such_function(7);
+        \\
+    ));
+    try std.testing.expectEqual(@as(usize, 1), module.diagnostics.items.items.len);
+    try std.testing.expectEqualStrings("unknown call: no_such_function", module.diagnostics.items.items[0].message);
+}
+
+test "an API call statement may carry a line comment" {
+    var module = try lowerSource(
+        std.testing.allocator,
+        \\emit.u8(7); // trailing comment
+        \\emit.u8(0x41) // and one without a semicolon
+        \\
+    ,
+        .{},
+    );
+    defer module.deinit();
+    try std.testing.expectEqual(@as(usize, 2), module.fragments.items.items.len);
 }
 
 test "lowering rejects Meta function declarations in scoped blocks" {

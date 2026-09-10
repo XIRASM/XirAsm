@@ -164,6 +164,10 @@ format.format_elfso_export_pairs_mut	format	format_elfso_export_pairs_mut	fn for
 format.format_elfso_import_new	format	format_elfso_import_new	fn format_elfso_import_new	format_elfso_import_new(	Create an empty format.inc ELF64 shared-object import list.
 format.format_elfso_import_many_mut	format	format_elfso_import_many_mut	fn format_elfso_import_many_mut	format_elfso_import_many_mut(	Add matching-name ELF64 shared-object PLT/GOT imports from one library.
 format.format_elfso_import_pairs_mut	format	format_elfso_import_pairs_mut	fn format_elfso_import_pairs_mut	format_elfso_import_pairs_mut(	Add local-name and imported-name ELF64 shared-object PLT/GOT pairs.
+format.format_elf64_so_aarch64	format	format_elf64_so_aarch64	fn format_elf64_so_aarch64	format_elf64_so_aarch64(	Create an Android-ready AArch64 ELF64 shared-object plan with 16 KiB LOAD alignment and GLOB_DAT imports.
+format.format_elfso_import_slots_mut	format	format_elfso_import_slots_mut	fn format_elfso_import_slots_mut	format_elfso_import_slots_mut(	Add matching-name ELF64 shared-object GLOB_DAT slot imports from one library.
+format.elfso_begin64_machine	format	elfso_begin64_machine	fn elfso_begin64_machine	elfso_begin64_machine(	Emit an ELF64 shared-object header and program-header reservation for an explicit machine.
+format.elfso_import_emit_rela64_type	format	elfso_import_emit_rela64_type	fn elfso_import_emit_rela64_type	elfso_import_emit_rela64_type(	Emit R_X86_64_64 or R_AARCH64_GLOB_DAT relocation rows for shared-object import slots.
 format.format_elfso_tables_mut	format	format_elfso_tables_mut	fn format_elfso_tables_mut	format_elfso_tables_mut(	Attach ELF64 shared-object exports and imports to a plan.
 format.pe_begin32	format	pe_begin32	fn pe_begin32	pe_begin32(	Emit PE32 DOS stub and NT signature with 32-bit image base.
 format.pe32_exe	format	pe32_exe	fn pe32_exe	pe32_exe(	Advanced PE32 helper with a caller-supplied section count.
@@ -535,6 +539,8 @@ expr.match_tokens	expr	match.tokens	meta_std.isBuiltinName(name); "match.tokens"
 expr.fs_exists	expr	fs.exists	api-matrix-meta-data: "fs.exists"	fs.exists(	Test whether a source-relative file is available through the controlled resolver.
 expr.fs_read_text	expr	fs.read_text	api-matrix-meta-data: "fs.read_text"	fs.read_text(	Read a source-relative text file through the controlled resolver.
 expr.fs_read_bytes	expr	fs.read_bytes	api-matrix-meta-data: "fs.read_bytes"	fs.read_bytes(	Read a source-relative binary file through the controlled resolver.
+expr.fs_list_dir	expr	fs.list_dir	api-matrix-meta-data: "fs.list_dir"	fs.list_dir(	List the entries of a source-relative directory in sorted order.
+expr.fs_is_dir	expr	fs.is_dir	api-matrix-meta-data: "fs.is_dir"	fs.is_dir(	Test whether a source-relative path names a directory.
 expr.toml_parse	expr	toml.parse	api-matrix-meta-data: "toml.parse"	toml.parse(	Parse TOML text or bytes into Meta map/list/scalar values.
 expr.toml_file	expr	toml.file	api-matrix-meta-data: "toml.file"	toml.file(	Read and parse a source-relative TOML file through the controlled resolver.
 expr.json_parse	expr	json.parse	api-matrix-meta-data: "json.parse"	json.parse(	Parse JSON text or bytes into Meta map/list/scalar values.
@@ -556,3 +562,9 @@ expr.load_u16	expr	load.u16	call.name, "load.u16"	load.u16(	Read little-endian u
 expr.load_u32	expr	load.u32	call.name, "load.u32"	load.u32(	Read little-endian u32 from module byte space or deferred final output image.
 expr.load_u64	expr	load.u64	call.name, "load.u64"	load.u64(	Read little-endian u64 from module byte space or deferred final output image.
 expr.load_bytes	expr	load.bytes	call.name, "load.bytes"	load.bytes(	Read byte block from module byte space or deferred final output image.
+expr.crypto_crc32	expr	crypto.crc32	meta_std.isBuiltinName(name); "crypto.crc32"	crypto.crc32(	Compute the CRC-32 (IEEE) checksum of a bytes or string value.
+expr.crypto_adler32	expr	crypto.adler32	meta_std.isBuiltinName(name); "crypto.adler32"	crypto.adler32(	Compute the Adler-32 checksum of a bytes or string value.
+expr.crypto_sha1	expr	crypto.sha1	meta_std.isBuiltinName(name); "crypto.sha1"	crypto.sha1(	Compute the SHA-1 digest of a bytes or string value as 20 bytes.
+expr.crypto_sha256	expr	crypto.sha256	meta_std.isBuiltinName(name); "crypto.sha256"	crypto.sha256(	Compute the SHA-256 digest of a bytes or string value as 32 bytes.
+expr.deflate_compress	expr	deflate.compress	meta_std.isBuiltinName(name); "deflate.compress"	deflate.compress(	Compress a bytes or string value into a raw DEFLATE stream, optionally at a level from 1 to 9.
+expr.deflate_decompress	expr	deflate.decompress	meta_std.isBuiltinName(name); "deflate.decompress"	deflate.decompress(	Decompress a raw DEFLATE stream back into the bytes it carries.

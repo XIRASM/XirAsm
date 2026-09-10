@@ -1,0 +1,4 @@
+# String resources for the scanner fixture. Every key becomes a string
+# resource; app_name also becomes the application label.
+app_name = "XIRASM Res Scan"
+tagline = "resources declared by a directory tree"

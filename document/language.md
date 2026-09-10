@@ -183,8 +183,8 @@ This distinction is fundamental:
 The following rules are enough to read the examples in the first part of this
 guide:
 
-- `//` starts a line comment. It may appear after instruction lines; quoted operands
-  may contain `//` as ordinary text.
+- `//` starts a line comment. It may appear after instruction lines and after API
+  call statements; quoted operands may contain `//` as ordinary text.
 - A label ends with `:`.
 - ISA instruction lines do not end with semicolons.
 - Function and API calls end with `;`.
@@ -3201,6 +3201,27 @@ intermediate binding. `emit.file(path, offset, count)` emits an exact range.
 Both forms use the same source-relative resolver and bounds checks as
 `fs.read_bytes`, and are unavailable in `late_layout` and `defer`.
 
+### Listing a Directory
+
+`fs.list_dir(path)` returns the entry names of a directory, and
+`fs.is_dir(path)` reports whether a path is a directory:
+
+```asm
+for entry in fs.list_dir("assets") {
+    if fs.is_dir(sym.join("assets/", entry)) {
+        continue;
+    }
+    emit.file(sym.join("assets/", entry));
+}
+```
+
+Names are entry names rather than paths, directories appear like any other
+entry, and the list is sorted in ascending byte order, so a generated image does
+not depend on the order the host filesystem returns. Both functions resolve
+paths exactly like the read functions above. `fs.is_dir` answers `false` for a
+path that cannot be resolved, which makes it the guard for an optional
+directory.
+
 ### Reading a Byte Range
 
 The three-argument form of `fs.read_bytes` reads a bounded range:
@@ -4892,6 +4913,14 @@ resolution, and finalization use the same source-oriented reporting model.
 
 Begin with the first error. A later failure may be a consequence of an earlier
 invalid declaration, missing label, or rejected instruction.
+
+A name that does not resolve is named in the message, because the location alone
+does not say which name failed:
+
+```text
+app.asm:7:1: error: undefined name in this expression: missing_helper(app)
+app.asm:9:1: error: unknown call: no_such_function
+```
 
 ### Notes and Warnings
 

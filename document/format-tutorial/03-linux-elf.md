@@ -219,6 +219,34 @@ The generated `cos_fn_plt` and `cos_fn_gotplt` labels are available even when
 the example does not call them. Internal data references use `rel`; imported
 calls use the generated PLT labels.
 
+## Choosing the Machine
+
+`format_elf64` and `format_elf64_so` build x86-64 images by default. AArch64 has
+its own entry points, and a machine-parameterized form is available when the
+machine comes from configuration:
+
+| Entry point | Result |
+| --- | --- |
+| `format_elf64(options, segments)` | ELF64 x86-64 executable or PIE |
+| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 executable or PIE |
+| `format_elf64_machine(options, segments, machine)` | either machine, selected by `elf_machine_x86_64` or `elf_machine_aarch64` |
+| `format_elf64_so(soname, segments)` | ELF64 x86-64 shared object, 4 KiB LOAD alignment |
+| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 shared object, 16 KiB LOAD alignment |
+| `format_elfobj64_aarch64(sections)` | AArch64 ELF64 object file |
+
+Two details differ between the machines. AArch64 aligns LOAD segments to the
+16 KiB page size that Android 15 and later devices require, for executables,
+PIE images, and shared objects alike; x86-64 keeps the 4 KiB Linux default.
+Imports also use different mechanisms: x86-64 calls through PLT entries,
+AArch64 resolves GLOB_DAT slots (`format_elfso_import_slots_mut`), which is why
+the executable import path is x86-64 only - an AArch64 application imports
+through a shared object instead.
+
+A larger page alignment costs file space only when a segment has to move to the
+next page boundary; the virtual addresses advance by whole pages while the file
+layout stays compact. Set `"load_align"` on the plan before `format_begin` to
+choose another page size.
+
 ## ELF Call Summary
 
 | Function | Use |
@@ -226,7 +254,12 @@ calls use the generated PLT labels.
 | `format_elf32(format_elf_exec, segments)` | ELF32 executable |
 | `format_elf64(format_elf_exec, segments)` | ELF64 fixed executable |
 | `format_elf64(format_elf_pie, segments)` | ELF64 PIE |
-| `format_elf64_so(soname, segments)` | ELF64 shared object |
+| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 fixed executable or PIE |
+| `format_elf64_machine(options, segments, machine)` | ELF64 executable or PIE for an explicit machine |
+| `format_elf64_so(soname, segments)` | ELF64 x86-64 shared object |
+| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 shared object, Android page alignment |
+| `format_elf64_so_machine(soname, segments, machine)` | ELF64 shared object for an explicit machine |
+| `format_elfobj64_aarch64(sections)` | AArch64 ELF64 object file |
 | `format_elfexe_import_new()` | empty ELF64 executable import list |
 | `format_elfexe_import_many_mut(imports, library, names)` | grouped ELF64 executable PLT/GOT imports |
 | `format_elfexe_import_pairs_mut(imports, library, pairs)` | ELF64 executable local-name/import-name pairs |
@@ -237,4 +270,5 @@ calls use the generated PLT labels.
 | `format_elfso_import_new()` | empty shared-object import list |
 | `format_elfso_import_many_mut(imports, library, names)` | grouped shared-object PLT/GOT imports |
 | `format_elfso_import_pairs_mut(imports, library, pairs)` | shared-object local-name/import-name pairs |
+| `format_elfso_import_slots_mut(imports, library, names)` | AArch64 shared-object GLOB_DAT import slots |
 | `format_elfso_tables_mut(image, exports, imports)` | attach shared-object dynamic metadata |

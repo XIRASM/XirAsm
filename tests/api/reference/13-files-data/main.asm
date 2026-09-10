@@ -19,6 +19,16 @@ const toml_values: list = map.get(toml_again, "values")
 assert(map.eq(toml_config, toml_again))
 assert(map.get(toml_config, "enabled"))
 
+// Directory listing: names only, sorted by byte value, directories included.
+const listing: list = fs.list_dir("listing")
+assert(len(listing) == 3);
+assert(list.get(listing, 0) == "Zebra.txt");
+assert(list.get(listing, 1) == "apple.txt");
+assert(list.get(listing, 2) == "sub");
+assert(fs.is_dir("listing/sub"));
+assert(!fs.is_dir("listing/apple.txt"));
+assert(fs.exists(sym.join("listing/sub/", list.get(fs.list_dir("listing/sub"), 0))));
+
 emit.bytes(nested_range)
 emit.bytes(banner)
 emit.bytes(map.get(json_config, "name"))
@@ -35,3 +45,6 @@ emit.u8(map.get(toml_target, "bits"))
 for value in toml_values {
     emit.u8(value)
 }
+
+emit.u8(len(listing));
+emit.bytes(list.get(listing, 0));

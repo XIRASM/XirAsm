@@ -621,7 +621,9 @@ test "macro rejects duplicate signatures and mismatching invocations" {
         .{ .text = "macro x() {\n x\n}\nx\n", .expected = error.MetaCallDepthExceeded },
         .{ .text = "defer {\n macro x() {\n }\n}\n", .expected = error.FinalizerCannotChangeLayout },
         .{ .text = "macro x() {\n}\ndefer {\n x\n}\n", .expected = error.FinalizerCannotChangeLayout },
-        .{ .text = "macro x(a) {\n emit.u8(operand.eval(a))\n}\nx missing\n", .expected = error.InvalidExpression },
+        // An operand that names an undeclared value now reports the unresolved
+        // name rather than a generic expression failure.
+        .{ .text = "macro x(a) {\n emit.u8(operand.eval(a))\n}\nx missing\n", .expected = error.UndefinedSymbol },
         .{ .text = "macro x(a) {\n const b = operand.slice(a, 0, 999)\n}\nx a\n", .expected = error.InvalidExpression },
     }) |case| {
         try std.testing.expectError(case.expected, @import("lower.zig").lowerSource(std.testing.allocator, case.text, .{}));
@@ -767,7 +769,15 @@ fn exerciseInvalidMacro(allocator: Allocator, text: []const u8) !void {
         return error.ExpectedFailure;
     } else |err| switch (err) {
         error.OutOfMemory => return err,
-        error.InvalidMacro, error.InvalidExpression, error.InvalidMacroOperands, error.DuplicateMacro => {},
+        // An unresolved name surfaces as its own error where the failure is not
+        // tied to a declaration, and as a reported diagnostic where it is.
+        error.InvalidMacro,
+        error.InvalidExpression,
+        error.InvalidMacroOperands,
+        error.DuplicateMacro,
+        error.UndefinedSymbol,
+        error.FrontendDiagnostics,
+        => {},
         else => return err,
     }
 }
@@ -940,7 +950,9 @@ test "macro captured expressions preserve short circuit and reject future value 
         \\check true || missing
         \\check !(false && missing)
     , &.{});
-    try std.testing.expectError(error.InvalidExpression, @import("lower.zig").lowerSource(std.testing.allocator,
+    // Capturing a value that does not exist yet fails where the declaration
+    // tries to use it, and the report names the expression that failed.
+    try std.testing.expectError(error.FrontendDiagnostics, @import("lower.zig").lowerSource(std.testing.allocator,
         \\let saved: list = list.new()
         \\macro capture(x) {
         \\    list.push_mut(saved, x)

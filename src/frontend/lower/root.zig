@@ -24,6 +24,7 @@ const diagnostic_lowering = @import("diagnostic_lowering.zig");
 const late_layout_mod = @import("late_layout.zig");
 const isa_lowering = @import("isa_lowering.zig");
 const layout_cursor = @import("layout_cursor.zig");
+const meta_io = @import("../meta_io.zig");
 const meta_condition = @import("meta_condition.zig");
 const meta_control_flow = @import("meta_control_flow.zig");
 const meta_function_runtime = @import("meta_function_runtime.zig");
@@ -65,6 +66,8 @@ pub const LateLayoutResult = contracts.LateLayoutResult;
 pub const IncludeResolver = contracts.IncludeResolver;
 pub const IncludeRequest = contracts.IncludeRequest;
 pub const IncludeSource = contracts.IncludeSource;
+pub const DirEntry = meta_io.DirEntry;
+pub const DirListing = meta_io.DirListing;
 pub const SectionId = contracts.SectionId;
 pub const Fragment = contracts.Fragment;
 pub const DiagnosticSeverity = contracts.DiagnosticSeverity;
@@ -506,7 +509,9 @@ pub fn evalModuleValueFunction(
     eval_ctx: *expr.EvalContext,
 ) expr.ExpressionError!value_mod.Value {
     const lower_context: *LowerContext = @ptrCast(@alignCast(context));
-    const function_index = eval_ctx.module.value_functions.lookupIndex(name) orelse return error.InvalidOperand;
+    // Neither a builtin nor a declared value function: the name is simply not
+    // declared, which is worth saying instead of reporting a bad operand.
+    const function_index = eval_ctx.module.value_functions.lookupIndex(name) orelse return error.UndefinedSymbol;
     const active_section = eval_ctx.active_section orelse return error.MissingEvaluationContext;
     const active: ActiveOutput = .{
         .section_id = active_section,
@@ -857,13 +862,41 @@ fn isAllowedDeferredApi(callee: []const u8) bool {
         api_mod.storeByteCount(callee) != null;
 }
 
+/// A parser error keeps its own identity wherever lowering has the same
+/// condition: a reader who sees "InvalidValueDeclaration" or "LegacyDirectiveSyntax"
+/// learns something, while a flattened "InvalidApiCall" does not.
 fn mapParseError(err: parser.ParseError) LowerError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
         error.SourceTooLarge => error.SourceTooLarge,
+        error.InvalidLabel => error.InvalidLabel,
+        error.InvalidApiCall => error.InvalidApiCall,
+        error.InvalidApiArgument => error.InvalidApiArgument,
+        error.InvalidExpression => error.InvalidExpression,
+        error.InvalidValueDeclaration => error.InvalidValueDeclaration,
+        error.InvalidStructDeclaration => error.InvalidStructDeclaration,
+        error.InvalidStructField => error.InvalidStructField,
+        error.UnionFieldDefaultNotAllowed => error.UnionFieldDefaultNotAllowed,
+        error.InvalidMetaBlock => error.InvalidMetaBlock,
+        error.InvalidMetaStatement => error.InvalidMetaStatement,
+        error.InvalidMetaDefer => error.InvalidMetaDefer,
         error.InvalidLateLayout => error.InvalidLateLayout,
+        error.InvalidMetaFor => error.InvalidMetaFor,
+        error.InvalidMetaFunction => error.InvalidMetaFunction,
+        error.InvalidMacro => error.InvalidMacro,
+        error.InvalidMetaIf => error.InvalidMetaIf,
+        error.InvalidMetaWhile => error.InvalidMetaWhile,
+        error.UnexpectedEndOfMetaBlock => error.UnexpectedEndOfMetaBlock,
+        error.UnexpectedEndOfMetaDefer => error.UnexpectedEndOfMetaDefer,
         error.UnexpectedEndOfLateLayout => error.UnexpectedEndOfLateLayout,
-        else => error.InvalidApiCall,
+        error.UnexpectedEndOfMetaFor => error.UnexpectedEndOfMetaFor,
+        error.UnexpectedEndOfMetaFunction => error.UnexpectedEndOfMetaFunction,
+        error.UnexpectedEndOfStruct => error.UnexpectedEndOfStruct,
+        error.UnexpectedEndOfMetaIf => error.UnexpectedEndOfMetaIf,
+        error.UnexpectedEndOfMetaWhile => error.UnexpectedEndOfMetaWhile,
+        error.TooManyStatements => error.TooManyStatements,
+        error.UnexpectedEndOfStatement => error.UnexpectedEndOfStatement,
+        error.LegacyDirectiveSyntax => error.LegacyDirectiveSyntax,
     };
 }
 

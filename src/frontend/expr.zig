@@ -613,7 +613,9 @@ const ExpressionParser = struct {
             !std.mem.eql(u8, token.items, "sym") and
             !std.mem.eql(u8, token.items, "tokens") and
             !std.mem.eql(u8, token.items, "operand") and
-            !std.mem.eql(u8, token.items, "match"))
+            !std.mem.eql(u8, token.items, "match") and
+            !std.mem.eql(u8, token.items, "crypto") and
+            !std.mem.eql(u8, token.items, "deflate"))
         {
             return;
         }

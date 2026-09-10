@@ -1,0 +1,25 @@
+// APK with a non-ASCII application label: the string resource is read from a
+// data file, the manifest references it, and the resource table stores it in
+// the platform's encoding. The icon set is inline data, so this fixture needs
+// no local inputs and assembles anywhere.
+//
+// tests/format/check_apk.py assembles it and checks that the label reaches the
+// archive both as resource-table bytes and through the platform's reader.
+import("format/apk.inc");
+
+const icon_mdpi: bytes = bytes.from_hex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000B49444154789C6360000200000500017A5EAB3F0000000049454E44AE426082")
+const icon_hdpi: bytes = bytes.from_hex("89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C4890000000B49444154789C6360000200000500017A5EAB3F0000000049454E44AE426082")
+
+origin(0);
+
+const raw: string = fs.read_text("apk_zh_strings.txt")
+const values: list = split(raw, "|")
+assert(len(values) == 2, "apk non-ASCII fixture data must hold two values");
+
+let app: map = apk_new("com.example.xirasm.zhdemo", 1, "1.0", "main")
+app = apk_set_sdk(app, 26, 34)
+app = apk_label_string(app, "app_name", trim(list.get(values, 0)));
+app = apk_string_resource(app, "emoji_name", trim(list.get(values, 1)));
+app = apk_icon_bytes(app, "mdpi", "res/mipmap-mdpi-v4/ic_launcher.png", icon_mdpi);
+app = apk_icon_bytes(app, "hdpi", "res/mipmap-hdpi-v4/ic_launcher.png", icon_hdpi);
+apk_emit(app);

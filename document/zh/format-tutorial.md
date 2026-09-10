@@ -44,6 +44,7 @@ import("format/format.inc");
 | Linux 可执行文件 | `format_elf32` 或 `format_elf64`，选项为 `format_elf_exec` | `format_segment_begin`、`format_entry_mut`、`format_finish` |
 | Linux PIE | `format_elf64`，选项为 `format_elf_pie` | `format_segment_begin`、`format_entry_mut`、`format_finish` |
 | Linux 共享库 | `format_elf64_so` | `format_elfso_tables_mut`、`format_segment_begin`、`format_finish` |
+| Android 共享库（AArch64） | `format_elf64_so_aarch64` | `format_elfso_import_slots_mut`、`format_elfso_tables_mut`、`format_segment_begin`、`format_finish` |
 | COFF 目标文件 | `format_coff32` 或 `format_coff64` | `format_coff_tables_mut`、`format_section_begin`、`format_finish` |
 | ELF 目标文件（x86） | `format_elfobj32` 或 `format_elfobj64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |
 | ELF 目标文件（AArch64） | `format_elfobj64_aarch64` | `format_elfobj_tables_mut`、`format_section_begin`、`format_finish` |

@@ -4884,11 +4884,15 @@ default image base 0x08048000
 The direct helper:
 
 ```text
-elfexe_begin64_at(program_header_count, file_type, image_base)
+elfexe_begin64_at(program_header_count, file_type, image_base, machine)
 ```
 
-can emit another 64-bit file type and base, but the complete address and
-relocation plan must agree with that choice.
+can emit another 64-bit file type, base, and machine (`elf_machine_x86_64` or
+`elf_machine_aarch64`), but the complete address and relocation plan must agree
+with that choice. The user layer selects the machine for you:
+`format_elf64(options, segments)` is x86-64, `format_elf64_aarch64(options,
+segments)` is AArch64, and `format_elf64_machine(options, segments, machine)`
+takes it as a parameter.
 
 Do not turn a fixed-address executable into PIE by changing only `e_type`.
 Position-independent code, entry calculation, dynamic metadata, and

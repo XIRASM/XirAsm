@@ -5,6 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 import itertools
 import re
 import xml.etree.ElementTree as ET
+import xml.parsers.expat
 from source import digest, require
 
 MODIFIERS = {
@@ -16,12 +17,36 @@ MODIFIERS = {
 }
 
 
+def parse_pinned_xml(data):
+    """Parse a pinned Arm spec document with entity expansion disabled.
+
+    The spec files are plain data documents. Anything that declares or
+    resolves an entity is hostile input (billion-laughs amplification or
+    external fetches) and aborts instead of expanding; predefined
+    character entities such as &amp; keep parsing normally.
+    """
+    builder = ET.TreeBuilder()
+    parser = xml.parsers.expat.ParserCreate()
+    parser.buffer_text = True
+    parser.StartElementHandler = lambda name, attrs: builder.start(name, attrs)
+    parser.EndElementHandler = lambda name: builder.end(name)
+    parser.CharacterDataHandler = builder.data
+
+    def forbid(*_args):
+        raise ValueError("entity expansion is forbidden in pinned XML")
+
+    parser.EntityDeclHandler = forbid
+    parser.ExternalEntityRefHandler = forbid
+    parser.Parse(data, True)
+    return builder.close()
+
+
 def system_tables(xml):
     """Read named system operands from Arm's structured field tables."""
     result = {}
     offsets = {"op1": 16, "op2": 5, "CRn": 12, "CRm": 8}
     for file in ("at_sys.xml", "dc_sys.xml", "ic_sys.xml", "tlbi_sys.xml", "dmb.xml", "dsb.xml", "msr_imm.xml"):
-        root = ET.parse(xml / file).getroot()
+        root = parse_pinned_xml((xml / file).read_bytes())
         entries = []
         explanations = root.findall('.//explanation')
         if file == 'dsb.xml':
@@ -57,9 +82,12 @@ def system_tables(xml):
                         link = row.find('.//register_link')
                         require(link is not None, name, 'missing TLBI register reference')
                         version = xml.name.removeprefix('ISA_A64_xml_')
-                        reference = xml.parents[1] / ('SysReg_xml_' + version) / ('SysReg_xml_' + version) / link.get('id')
+                        reference_id = link.get('id')
+                        require(reference_id is not None and re.fullmatch(r'[A-Za-z0-9_.-]+', reference_id),
+                                name, 'unsupported TLBI register reference id')
+                        reference = xml.parents[1] / ('SysReg_xml_' + version) / ('SysReg_xml_' + version) / reference_id
                         content = reference.read_bytes()
-                        register = ET.fromstring(content)
+                        register = parse_pinned_xml(content)
                         permissions = [''.join(p.itertext()) for p in register.findall('.//access_permission_text/para')]
                         rt_fixed = any('The Rt field should be set to' in p and '0b11111' in p for p in permissions)
                         require(rt_fixed or register.find('.//reg_fieldsets//field') is not None,

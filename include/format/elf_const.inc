@@ -140,7 +140,11 @@ const elf_r_aarch64_ldst32_abs_lo12_nc: u32 = 285
 const elf_r_aarch64_ldst64_abs_lo12_nc: u32 = 286
 const elf_r_aarch64_adr_got_page: u32 = 311
 const elf_r_aarch64_ld64_got_lo12_nc: u32 = 312
+const elf_r_aarch64_glob_dat: u32 = 1025
+const elf_r_aarch64_jump_slot: u32 = 1026
+const elf_r_aarch64_relative: u32 = 1027
 
 const elf_default_page_align: u64 = 0x1000
+const elf_android_page_align: u64 = 0x4000
 const elf_default_base64: u64 = 0x400000
 const elf_default_base32: u64 = 0x08048000

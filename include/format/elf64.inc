@@ -17,7 +17,7 @@ fn elf64_exe(segment_count: u16) {
 }
 
 fn elf64_pie(segment_count: u16) {
-    elfexe_begin64_at(segment_count, elf_type_dyn, 0);
+    elfexe_begin64_at(segment_count, elf_type_dyn, 0, elf_machine_x86_64);
 }
 
 fn elf64_first_foa(segment_count: u64) -> u64 {

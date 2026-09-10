@@ -431,6 +431,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/format/format_elf64_obj_user_facade.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/format_elf64_so_export_user_facade.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/format_elf64_so_import_user_facade.asm"));
+    run_api_matrix.addFileArg(b.path("tests/format/format_elf64_so_aarch64_import_user_facade.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/elf32_minimal.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/elf32_facade_minimal.asm"));
     run_api_matrix.addFileArg(b.path("tests/format/elf32_segment_attributes.asm"));
@@ -485,6 +486,8 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_org_middle_reserve.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_cursor_facts.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/string_bytes_helpers.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/crypto_helpers.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/deflate_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/list_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/collection_mutation.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/split_join_helpers.asm"));
@@ -497,6 +500,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/include_import/inline.inc"));
     run_api_matrix.addFileArg(b.path("tests/meta/include_import/main.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/main.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/data_file/list_dir.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/range.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/range_oob.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/data_file/auto.inc"));
@@ -590,7 +594,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/01-block-scope.asm",
         "x64",
         &.{},
-        "InvalidExpression",
+        "UndefinedSymbol",
     );
     addAsmFixture(
         b,
@@ -868,7 +872,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/06-missing-label.asm",
         "x64",
         &.{},
-        "InvalidExpression",
+        "UndefinedSymbol",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -1392,13 +1396,16 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/13-files-data/main.asm",
         "api-reference-13-files-data.bin",
         "x64",
-        "42434458520a4a534f4e400102034f4b544f4d4c200405",
+        "42434458520a4a534f4e400102034f4b544f4d4c200405035a656272612e747874",
         &.{
             "tests/api/reference/13-files-data/banner.txt",
             "tests/api/reference/13-files-data/config.json",
             "tests/api/reference/13-files-data/config.toml",
             "tests/api/reference/13-files-data/nested/reader.inc",
             "tests/api/reference/13-files-data/nested/payload.bin",
+            "tests/api/reference/13-files-data/listing/Zebra.txt",
+            "tests/api/reference/13-files-data/listing/apple.txt",
+            "tests/api/reference/13-files-data/listing/sub/inner.txt",
         },
     );
     addFailingAsmFixtureWithInputs(
@@ -1507,6 +1514,24 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/13-defer-file.asm",
         "x64",
         &.{"tests/api/reference/13-files-data/banner.txt"},
+        "FileNotAvailable",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        api_reference_step,
+        exe,
+        "tests/api/reference/negative/13-late-layout-dir.asm",
+        "x64",
+        &.{"tests/api/reference/13-files-data/listing/sub/inner.txt"},
+        "InvalidLateLayout",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        api_reference_step,
+        exe,
+        "tests/api/reference/negative/13-defer-dir.asm",
+        "x64",
+        &.{"tests/api/reference/13-files-data/listing/sub/inner.txt"},
         "FileNotAvailable",
     );
     addAsmFixtureWithInputs(
@@ -1695,6 +1720,25 @@ pub fn build(b: *std.Build) void {
             "include/format/macho_dylib.inc",
             "include/format/macho_obj.inc",
             "include/format/macho_const.inc",
+        },
+    );
+    addAsmSizeFixtureInstalled(
+        b,
+        fixture_step,
+        exe,
+        file_size_checker,
+        "tests/format/format_elf64_so_aarch64_import_user_facade.asm",
+        "format-elf64-so-aarch64-import-user-facade",
+        "x64",
+        "1456",
+        &.{
+            "include/format/format.inc",
+            "include/format/elfso.inc",
+            "include/format/elfso_import.inc",
+            "include/format/elf_export.inc",
+            "include/format/elf_const.inc",
+            "include/arm/a64-macros.inc",
+            "include/arm/a64.inc",
         },
     );
     addAsmSizeFixtureInstalled(
@@ -4297,6 +4341,26 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
+        "tests/meta/crypto_helpers.asm",
+        "meta-crypto-helpers.bin",
+        "x64",
+        "2639f4cba9993e364706816aba3e25717850c26c9cd0d89d",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/deflate_helpers.asm",
+        "meta-deflate-helpers.bin",
+        "x64",
+        "37000b000b000b00020037000000",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
         "tests/meta/list_helpers.asm",
         "meta-list-helpers.bin",
         "x64",
@@ -4421,6 +4485,16 @@ pub fn build(b: *std.Build) void {
         "meta-data-file-json.bin",
         "x64",
         "4a534f4e400102034f4b",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/data_file/list_dir.asm",
+        "meta-data-file-list-dir.bin",
+        "x64",
+        "05",
     );
     addAsmFixture(
         b,

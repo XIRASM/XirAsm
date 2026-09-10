@@ -114,6 +114,7 @@ pub fn mapLowerErrorToExpression(err: contracts.LowerError) expr.ExpressionError
         error.MissingStructFieldValue => error.MissingStructFieldValue,
         error.OffsetOverflow => error.OffsetOverflow,
         error.FileNotAvailable => error.FileNotAvailable,
+        error.UndefinedSymbol => error.UndefinedSymbol,
         error.InvalidValueDeclaration,
         error.InvalidExpression,
         error.InvalidApiArity,
@@ -141,6 +142,7 @@ pub fn mapExpressionError(err: expr.ExpressionError) contracts.LowerError {
         error.MissingStructFieldValue => error.MissingStructFieldValue,
         error.OffsetOverflow => error.OffsetOverflow,
         error.FileNotAvailable => error.FileNotAvailable,
+        error.UndefinedSymbol => error.UndefinedSymbol,
         error.TypeMismatch => error.InvalidExpression,
         error.InvalidArgument,
         error.InvalidCharacter,
@@ -148,7 +150,6 @@ pub fn mapExpressionError(err: expr.ExpressionError) contracts.LowerError {
         error.InvalidOperand,
         error.InvalidToken,
         error.MissingEvaluationContext,
-        error.UndefinedSymbol,
         error.UnexpectedEof,
         => error.InvalidExpression,
     };
@@ -160,6 +161,44 @@ pub fn fileResolver(context: *LowerContext) ?meta_io.FileResolver {
         .context = @ptrCast(context),
         .read = readResolvedMetaFile,
         .exists = metaFileExists,
+        .list = listResolvedMetaDir,
+        .is_dir = metaFileIsDir,
+    };
+}
+
+fn listResolvedMetaDir(
+    raw_context: *anyopaque,
+    allocator: Allocator,
+    request: meta_io.FileListRequest,
+) meta_io.Error!meta_io.DirListing {
+    const context: *LowerContext = @ptrCast(@alignCast(raw_context));
+    const include_resolver = context.include_resolver orelse return error.FileNotAvailable;
+    const list_directory = include_resolver.list_directory orelse return error.FileNotAvailable;
+    return list_directory(include_resolver.context, allocator, .{
+        .path = request.path,
+        .parent_path = request.parent_path,
+        .span = request.span,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.FileNotAvailable,
+    };
+}
+
+fn metaFileIsDir(
+    raw_context: *anyopaque,
+    allocator: Allocator,
+    request: meta_io.FileListRequest,
+) Allocator.Error!bool {
+    const context: *LowerContext = @ptrCast(@alignCast(raw_context));
+    const include_resolver = context.include_resolver orelse return false;
+    const is_directory = include_resolver.is_directory orelse return false;
+    return is_directory(include_resolver.context, allocator, .{
+        .path = request.path,
+        .parent_path = request.parent_path,
+        .span = request.span,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return false,
     };
 }
 

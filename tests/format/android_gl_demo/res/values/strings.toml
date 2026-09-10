@@ -1,0 +1,5 @@
+# The resource scanner binds app_name as the application label, so the launcher
+# shows the Chinese name this table declares. The value may use any script; the
+# resource name stays an ASCII identifier.
+app_name = "XIRASM 图形演示"
+tagline = "整包由汇编器产出"

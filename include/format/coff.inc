@@ -15,6 +15,7 @@ const coff_string_table_min_size: u64 = 4
 
 const coff_machine_i386: u16 = pe_machine_i386
 const coff_machine_amd64: u16 = pe_machine_amd64
+const coff_machine_arm64: u16 = pe_machine_arm64
 
 const coff_file_32bit_machine: u16 = pe_file_32bit_machine
 const coff_file_line_nums_stripped: u16 = 0x0004
@@ -56,6 +57,29 @@ const coff_rel_amd64_rel32: u16 = 0x0004
 const coff_rel_i386_dir32: u16 = 0x0006
 const coff_rel_i386_dir32nb: u16 = 0x0007
 const coff_rel_i386_rel32: u16 = 0x0014
+
+// IMAGE_REL_ARM64_* relocation types. The values follow the PE/COFF enumeration
+// in LLVM's BinaryFormat/COFF.h; ADDR32NB, BRANCH26, PAGEBASE_REL21,
+// PAGEOFFSET_12A, PAGEOFFSET_12L, and ADDR64 were additionally cross-checked
+// against the relocation records of compiler-generated COFF ARM64 objects.
+const coff_rel_arm64_absolute: u16 = 0x0000
+const coff_rel_arm64_addr32: u16 = 0x0001
+const coff_rel_arm64_addr32nb: u16 = 0x0002
+const coff_rel_arm64_branch26: u16 = 0x0003
+const coff_rel_arm64_pagebase_rel21: u16 = 0x0004
+const coff_rel_arm64_rel21: u16 = 0x0005
+const coff_rel_arm64_pageoffset_12a: u16 = 0x0006
+const coff_rel_arm64_pageoffset_12l: u16 = 0x0007
+const coff_rel_arm64_secrel: u16 = 0x0008
+const coff_rel_arm64_secrel_low12a: u16 = 0x0009
+const coff_rel_arm64_secrel_high12a: u16 = 0x000a
+const coff_rel_arm64_secrel_low12l: u16 = 0x000b
+const coff_rel_arm64_token: u16 = 0x000c
+const coff_rel_arm64_section: u16 = 0x000d
+const coff_rel_arm64_addr64: u16 = 0x000e
+const coff_rel_arm64_branch19: u16 = 0x000f
+const coff_rel_arm64_branch14: u16 = 0x0010
+const coff_rel_arm64_rel32: u16 = 0x0011
 
 const coff_sec_name_foa: u64 = 0
 const coff_sec_raw_size_foa: u64 = 16
@@ -228,6 +252,10 @@ fn coff_begin64(section_count: u16, symbol_table_foa: u64, symbol_count: u64) {
     coff_begin(coff_machine_amd64, section_count, symbol_table_foa, symbol_count, coff_file_line_nums_stripped);
 }
 
+fn coff_begin_arm64(section_count: u16, symbol_table_foa: u64, symbol_count: u64) {
+    coff_begin(coff_machine_arm64, section_count, symbol_table_foa, symbol_count, coff_file_line_nums_stripped);
+}
+
 fn coff_begin_section(name: string, raw_ptr: u64) {
     region.begin(name, 0, raw_ptr);
 }
@@ -313,6 +341,38 @@ fn coff_reloc_i386_dir32nb_at(section_start: u64, label_address: u64, symbol_ind
 
 fn coff_reloc_i386_rel32_at(section_start: u64, label_address: u64, symbol_index: u64) {
     coff_reloc_at(section_start, label_address, symbol_index, coff_rel_i386_rel32);
+}
+
+fn coff_reloc_arm64_addr64_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_addr64);
+}
+
+fn coff_reloc_arm64_addr32_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_addr32);
+}
+
+fn coff_reloc_arm64_addr32nb_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_addr32nb);
+}
+
+fn coff_reloc_arm64_branch26_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_branch26);
+}
+
+fn coff_reloc_arm64_pagebase_rel21_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_pagebase_rel21);
+}
+
+fn coff_reloc_arm64_pageoffset_12a_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_pageoffset_12a);
+}
+
+fn coff_reloc_arm64_pageoffset_12l_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_pageoffset_12l);
+}
+
+fn coff_reloc_arm64_rel32_at(section_start: u64, label_address: u64, symbol_index: u64) {
+    coff_reloc_at(section_start, label_address, symbol_index, coff_rel_arm64_rel32);
 }
 
 fn coff_end_symbols(symbol_count: u64) {

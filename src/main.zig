@@ -895,6 +895,8 @@ fn assembleFlatTimed(
         .include_resolver = .{
             .context = @ptrCast(&include_context),
             .resolve = resolveFileInclude,
+            .list_directory = listFileIncludeDirectory,
+            .is_directory = isFileIncludeDirectory,
         },
     }) catch |err| {
         if (!module.diagnostics.hasErrors()) return err;
@@ -978,6 +980,8 @@ fn assembleProjectFlatTimed(
         .include_resolver = .{
             .context = @ptrCast(&include_context),
             .resolve = resolveFileInclude,
+            .list_directory = listFileIncludeDirectory,
+            .is_directory = isFileIncludeDirectory,
         },
     };
     for (includes) |include| {
@@ -1015,6 +1019,119 @@ fn resolveFileInclude(
 ) xirasm.LowerError!xirasm.IncludeSource {
     const resolver: *FileIncludeResolver = @ptrCast(@alignCast(context));
     return resolveFileIncludeFromRoots(resolver, allocator, request.parent_path, request.path);
+}
+
+/// List an existing directory with the same search order that resolves files:
+/// absolute, then relative to the including source, then the project include
+/// root, then the installed include root.
+fn listFileIncludeDirectory(
+    context: *anyopaque,
+    allocator: Allocator,
+    request: xirasm.IncludeRequest,
+) xirasm.LowerError!xirasm.DirListing {
+    const resolver: *FileIncludeResolver = @ptrCast(@alignCast(context));
+    var directory = try openDirectoryFromRoots(resolver, allocator, request.parent_path, request.path, true);
+    defer directory.close(resolver.io);
+    return listDirectoryEntries(resolver.io, allocator, directory);
+}
+
+/// Answer whether a path names an existing directory. A missing path is false,
+/// not an error, which is what `fs.is_dir` promises.
+fn isFileIncludeDirectory(
+    context: *anyopaque,
+    allocator: Allocator,
+    request: xirasm.IncludeRequest,
+) xirasm.LowerError!bool {
+    const resolver: *FileIncludeResolver = @ptrCast(@alignCast(context));
+    var directory = openDirectoryFromRoots(resolver, allocator, request.parent_path, request.path, false) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return false,
+    };
+    directory.close(resolver.io);
+    return true;
+}
+
+fn openDirectoryFromRoots(
+    resolver: *const FileIncludeResolver,
+    allocator: Allocator,
+    parent_path: ?[]const u8,
+    directory_path: []const u8,
+    iterate: bool,
+) xirasm.LowerError!std.Io.Dir {
+    if (isAbsolutePath(directory_path)) {
+        return openDirectory(resolver.io, std.Io.Dir.cwd(), directory_path, iterate);
+    }
+
+    if (parent_path) |parent| {
+        const resolved_path = try resolveIncludePath(allocator, parent, directory_path);
+        defer allocator.free(resolved_path);
+        if (openDirectory(resolver.io, std.Io.Dir.cwd(), resolved_path, iterate)) |directory| {
+            return directory;
+        } else |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.IncludeNotAvailable => {},
+            else => return err,
+        }
+    }
+
+    if (resolver.project_root) |project_root| {
+        const resolved_path = try std.fs.path.join(allocator, &.{ project_root, "include", directory_path });
+        defer allocator.free(resolved_path);
+        if (openDirectory(resolver.io, std.Io.Dir.cwd(), resolved_path, iterate)) |directory| {
+            return directory;
+        } else |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.IncludeNotAvailable => {},
+            else => return err,
+        }
+    }
+
+    if (resolver.install_include_root) |install_include_root| {
+        const resolved_path = try std.fs.path.join(allocator, &.{ install_include_root, directory_path });
+        defer allocator.free(resolved_path);
+        if (openDirectory(resolver.io, std.Io.Dir.cwd(), resolved_path, iterate)) |directory| {
+            return directory;
+        } else |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            error.IncludeNotAvailable => {},
+            else => return err,
+        }
+    }
+
+    return error.IncludeNotAvailable;
+}
+
+/// Open a directory for listing. Any failure means the path is not a readable
+/// directory, which the frontend reports as an unavailable path.
+fn openDirectory(io: Io, base: std.Io.Dir, sub_path: []const u8, iterate: bool) xirasm.LowerError!std.Io.Dir {
+    return base.openDir(io, sub_path, .{ .iterate = iterate }) catch error.IncludeNotAvailable;
+}
+
+fn listDirectoryEntries(
+    io: Io,
+    allocator: Allocator,
+    directory: std.Io.Dir,
+) xirasm.LowerError!xirasm.DirListing {
+    var entries: std.ArrayList(xirasm.DirEntry) = .empty;
+    errdefer {
+        for (entries.items) |entry| allocator.free(entry.name);
+        entries.deinit(allocator);
+    }
+
+    var iterator = directory.iterate();
+    while (iterator.next(io) catch return error.IncludeNotAvailable) |entry| {
+        const name = try allocator.dupe(u8, entry.name);
+        errdefer allocator.free(name);
+        try entries.append(allocator, .{ .name = name });
+    }
+
+    const owned = try entries.toOwnedSlice(allocator);
+    std.mem.sort(xirasm.DirEntry, owned, {}, struct {
+        fn lessThan(_: void, left: xirasm.DirEntry, right: xirasm.DirEntry) bool {
+            return std.mem.order(u8, left.name, right.name) == .lt;
+        }
+    }.lessThan);
+    return .{ .entries = owned };
 }
 
 fn resolveFileIncludeFromRoots(

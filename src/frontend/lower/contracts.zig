@@ -2,6 +2,7 @@ const std = @import("std");
 
 const diagnostic = @import("../diagnostic.zig");
 const fragment = @import("../fragment.zig");
+const meta_io = @import("../meta_io.zig");
 const source = @import("../source.zig");
 const target = @import("../target.zig");
 
@@ -21,6 +22,7 @@ pub const LowerError = Allocator.Error || error{
     IncludeCycle,
     IncludeTooDeep,
     InvalidExpression,
+    UndefinedSymbol,
     InvalidValueDeclaration,
     InvalidAlignment,
     InvalidStructDeclaration,
@@ -96,6 +98,11 @@ pub const LowerError = Allocator.Error || error{
 pub const IncludeResolver = struct {
     context: *anyopaque,
     resolve: *const fn (context: *anyopaque, allocator: Allocator, request: IncludeRequest) LowerError!IncludeSource,
+    /// Resolves a path to an existing directory and lists it. Hosts that cannot
+    /// enumerate directories leave these null; the frontend then reports the
+    /// directory as unavailable instead of guessing.
+    list_directory: ?*const fn (context: *anyopaque, allocator: Allocator, request: IncludeRequest) LowerError!meta_io.DirListing = null,
+    is_directory: ?*const fn (context: *anyopaque, allocator: Allocator, request: IncludeRequest) LowerError!bool = null,
 };
 
 pub const IncludeRequest = struct {

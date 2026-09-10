@@ -2,23 +2,37 @@
 
 [简体中文](README.zh-CN.md) | [Website](https://xirasm-site.pages.dev/) | [What's New](https://xirasm-site.pages.dev/#updates)
 
-**One modern assembler for x86, RISC-V, and SPIR-V. Write real assembly, emit
-usable binaries, and make the build programmable when you need more.**
+**One modern assembler for x86, AArch64, RISC-V, and SPIR-V. Write real
+assembly, emit usable binaries for Windows, Linux, macOS, and Android, and make
+the build programmable when you need more.**
 
 XIRASM assembles natural ISA text and directly produces flat binaries, Windows
-PE/COFF, Linux ELF, and complete SPIR-V modules. Start with ordinary assembly.
+PE/COFF, Linux ELF, macOS Mach-O, and complete SPIR-V modules. It also builds
+the Android APK around the code it just assembled. Start with ordinary assembly.
 Reach for its typed compile-time language only when a project needs generated
 code, reusable format logic, or precise binary layout.
 
-- **Three ISA families:** x86 in 16/32/64-bit modes, RV32/RV64, and SPIR-V 1.6.
+- **Four instruction sets:** x86 in 16/32/64-bit modes, AArch64, RV32/RV64, and
+  SPIR-V 1.6.
 - **Useful output, not an intermediate experiment:** executables, DLLs, shared
-  libraries, object files, flat binaries, and SPIR-V modules.
+  libraries, object files, Mach-O images, flat binaries, SPIR-V modules, and
+  installable Android APKs.
+- **AArch64 that reaches a real device:** `arm/a64-macros.inc` brings AArch64
+  instruction text, and the format layer carries the encoded bytes into ELF64
+  executables, PIE, objects, and Android shared libraries, PE64/COFF64 images,
+  and Mach-O arm64 executables, dylibs, and objects, with the relocations and
+  import stubs each of those needs.
+- **Android without a Java build:** the APK writer emits the ZIP container, the
+  binary `AndroidManifest.xml`, and a `resources.arsc` compiled from a resource
+  tree, and it can carry the NativeActivity shared library assembled from the
+  same source. Platform resource IDs such as
+  `@android:style/Theme.DeviceDefault` come from a generated framework catalog.
 - **Modern metaprogramming:** typed values, functions, collections, modules,
   structured control flow, and source-located diagnostics instead of a fragile
   text-macro layer.
 - **A short path to native output:** project templates provide ready-to-build
-  Windows and Linux programs; format facades handle ordinary PE, COFF, and ELF
-  work without requiring users to construct every header by hand.
+  Windows and Linux programs; format facades handle ordinary PE, COFF, ELF, and
+  Mach-O work without requiring users to construct every header by hand.
 
 ## Build a Native Program
 
@@ -95,6 +109,11 @@ xirasm hello.asm --target x86-64 -o hello.bin
 | `rv32`, `riscv32` | RV32 instructions |
 | `spv`, `spirv` | Complete SPIR-V 1.6 modules |
 
+AArch64 instruction text comes from the generated include layer rather than a
+CLI target: `import("arm/a64-macros.inc")` makes `mov x8, #93` and `svc #0`
+assemble, and the format facade decides whether the result becomes an ELF64
+image, a PE64 image, an object file, or a Mach-O image.
+
 The same project model and compile-time language apply across targets. You do
 not have to learn one macro system for x86 and another generation language for
 RISC-V or SPIR-V.
@@ -105,8 +124,10 @@ XIRASM can directly produce:
 
 | Platform or use | Formats |
 | --- | --- |
-| Windows | PE32/PE64 executables and DLLs; COFF32/COFF64 objects |
-| Linux | ELF32/ELF64 executables; ELF64 PIE and shared libraries; ELF32/ELF64 objects |
+| Windows | PE32/PE64 executables and DLLs for x86 and ARM64; COFF32/COFF64 objects for x86 and ARM64 |
+| Linux | ELF32/ELF64 executables; ELF64 PIE and shared libraries (x86-64 and AArch64); ELF32/ELF64 objects |
+| macOS | Mach-O 64 executables, dylibs, and objects for x86_64 and arm64, with dyld imports, stubs, and export tables |
+| Android | APK archives: ZIP container, binary manifest, compiled resource table, assets, and per-ABI native libraries |
 | Bare metal and tooling | Flat and application-specific binaries |
 | GPU and IR tooling | Complete SPIR-V 1.6 modules |
 
@@ -119,6 +140,31 @@ import("format/format.inc");
 When a loader, file format, or research tool needs an unusual layout, the same
 language also exposes regions, labels, alignment, finalizers, and direct format
 helpers. The common path stays short; low-level control remains available.
+
+## Build an Android APK
+
+An APK is a ZIP archive holding a binary manifest and a compiled resource table.
+XIRASM writes all three, and the native library inside can come from the same
+project:
+
+```asm
+import("format/apk.inc");
+
+origin(0)
+
+let app: map = apk_new("com.example.tool", 1, "1.0", "demo")
+app = apk_res_dir(app, "res")
+app = apk_native_lib(app, "arm64-v8a", "libdemo.so", "build/arm64-v8a/libdemo.so")
+apk_emit(app)
+```
+
+The archive installs and runs with no DEX, no Java source, and no third-party
+runtime: the activity is a NativeActivity whose entry point is the shared
+library's own `ANativeActivity_onCreate`. `tests/format/android_gl_demo/` is a
+complete GLES2 renderer and the archive around it, both written by the
+assembler, and it builds to a 39 KB APK that reads back cleanly through `aapt2`
+and `zipalign`. Signing stays outside the assembler; see the
+[Android guide](document/apk.md) for the SDK command sequence.
 
 ## More Than a Macro Assembler
 
@@ -140,10 +186,12 @@ turning ordinary instruction text into a programming-language API.
 ## Validation
 
 The regression suite checks final encoded bytes and boundary behavior, not only
-whether source text parses. It includes x86 layout and fixup cases, RISC-V byte
-comparisons with LLVM tooling, SPIR-V assembly/disassembly and validation, and
-structural, linker, loader, and native-runtime checks for supported binary
-formats.
+whether source text parses. It includes x86 layout and fixup cases, RISC-V and
+AArch64 byte comparisons with LLVM tooling, SPIR-V assembly/disassembly and
+validation, and structural, linker, loader, and native-runtime checks for
+supported binary formats. Independent readers verify the results: LLVM tools for
+instruction encodings and ELF, COFF, and Mach-O structure, and Android SDK tools
+(`aapt2`, `zipalign`) plus a separate decompressor for the APK.
 
 ## Editor and Documentation
 
@@ -152,8 +200,10 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 - [Language Guide](document/language.md) - learn the assembly and compile-time
   language model.
-- [Format Tutorial](document/format-tutorial.md) - build PE, COFF, and ELF files
-  with user-facing facade APIs.
+- [Format Tutorial](document/format-tutorial.md) - build PE, COFF, ELF, and
+  Mach-O files with user-facing facade APIs.
+- [Android Guide](document/apk.md) - assemble a NativeActivity library and the
+  APK, resource table, and manifest around it.
 - [Language API Reference](document/api-reference.md) - look up syntax and
   built-in APIs.
 - [Advanced Format Construction](document/advanced-formats.md) - take direct
@@ -161,7 +211,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.19**. See the [release notes](document/releases/0.2.19.md).
+Current version: **0.2.21**. See the [release notes](document/releases/0.2.21.md).
 
 XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI,
 and editor support are usable now, while public contracts may still be refined

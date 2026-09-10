@@ -8,6 +8,9 @@ const pe_signature: u32 = 0x00004550
 
 const pe_machine_i386: u16 = 0x014c
 const pe_machine_amd64: u16 = 0x8664
+// IMAGE_FILE_MACHINE_ARM64, as reported for a compiler-generated COFF-ARM64
+// object by an independent PE/COFF reader.
+const pe_machine_arm64: u16 = 0xaa64
 
 const pe_file_relocs_stripped: u16 = 0x0001
 const pe_file_executable_image: u16 = 0x0002

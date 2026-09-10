@@ -164,14 +164,18 @@ packed struct ElfSoDynamic64 {
     value: u64,
 }
 
-fn elfso_begin64(ph_count: u16, section_table_foa: u64, section_count: u16, shstrndx: u16) {
+fn elfso_begin64_machine(machine: u16, ph_count: u16, section_table_foa: u64, section_count: u16, shstrndx: u16) {
     assert(ph_count > 1, "elfso_begin64 requires PT_LOAD and PT_DYNAMIC");
     assert(section_count > 0, "elfso_begin64 requires section headers");
     origin(0);
-    emit.struct(ElfSoHeader64 { phnum: ph_count, shoff: section_table_foa, shnum: section_count, shstrndx: shstrndx });
+    emit.struct(ElfSoHeader64 { machine: machine, phnum: ph_count, shoff: section_table_foa, shnum: section_count, shstrndx: shstrndx });
     for i in range(0, ph_count) {
         emit.struct(ElfSoProgramHeader64 {});
     }
+}
+
+fn elfso_begin64(ph_count: u16, section_table_foa: u64, section_count: u16, shstrndx: u16) {
+    elfso_begin64_machine(elf_machine_x86_64, ph_count, section_table_foa, section_count, shstrndx);
 }
 
 fn elfso_begin_region(name: string, file_offset: u64) {

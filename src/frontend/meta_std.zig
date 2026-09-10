@@ -55,6 +55,12 @@ const BuiltinId = enum {
     tokens_of,
     tokens_join,
     match_tokens,
+    crypto_crc32,
+    crypto_adler32,
+    crypto_sha1,
+    crypto_sha256,
+    deflate_compress,
+    deflate_decompress,
 };
 
 const Builtin = struct {
@@ -145,6 +151,18 @@ const builtins = [_]Builtin{
     .{ .name = "tokens.join", .id = .tokens_join },
     // api-matrix-meta-std: "match.tokens"
     .{ .name = "match.tokens", .id = .match_tokens },
+    // api-matrix-meta-std: "crypto.crc32"
+    .{ .name = "crypto.crc32", .id = .crypto_crc32 },
+    // api-matrix-meta-std: "crypto.adler32"
+    .{ .name = "crypto.adler32", .id = .crypto_adler32 },
+    // api-matrix-meta-std: "crypto.sha1"
+    .{ .name = "crypto.sha1", .id = .crypto_sha1 },
+    // api-matrix-meta-std: "crypto.sha256"
+    .{ .name = "crypto.sha256", .id = .crypto_sha256 },
+    // api-matrix-meta-std: "deflate.compress"
+    .{ .name = "deflate.compress", .id = .deflate_compress },
+    // api-matrix-meta-std: "deflate.decompress"
+    .{ .name = "deflate.decompress", .id = .deflate_decompress },
 };
 
 pub fn isBuiltinName(name: []const u8) bool {
@@ -194,6 +212,12 @@ pub fn evalBuiltin(allocator: Allocator, name: []const u8, args: []const value_m
         .tokens_of => evalTokensOf(allocator, args),
         .tokens_join => evalTokensJoin(allocator, args),
         .match_tokens => evalMatchTokens(allocator, args),
+        .crypto_crc32 => evalCryptoCrc32(args),
+        .crypto_adler32 => evalCryptoAdler32(args),
+        .crypto_sha1 => evalCryptoSha1(allocator, args),
+        .crypto_sha256 => evalCryptoSha256(allocator, args),
+        .deflate_compress => evalDeflateCompress(allocator, args),
+        .deflate_decompress => evalDeflateDecompress(allocator, args),
     };
 }
 
@@ -719,6 +743,108 @@ fn evalMatchTokens(allocator: Allocator, args: []const value_mod.Value) Error!va
     return token_match.matchTokensValue(allocator, args[0], args[1]) catch |err| return mapTokenMatchError(err);
 }
 
+fn evalCryptoCrc32(args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    return value_mod.Value.int(std.hash.Crc32.hash(try expectByteInput(args[0])));
+}
+
+fn evalCryptoAdler32(args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    return value_mod.Value.int(std.hash.Adler32.hash(try expectByteInput(args[0])));
+}
+
+fn evalCryptoSha1(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
+    std.crypto.hash.Sha1.hash(try expectByteInput(args[0]), &digest, .{});
+    return .{ .bytes = try allocator.dupe(u8, &digest) };
+}
+
+fn evalCryptoSha256(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(try expectByteInput(args[0]), &digest, .{});
+    return .{ .bytes = try allocator.dupe(u8, &digest) };
+}
+
+/// Raw DEFLATE, which is what a ZIP entry of method 8 carries: no zlib or gzip
+/// header, no checksum trailer. The caller stores the CRC itself.
+fn evalDeflateCompress(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1 and args.len != 2) return error.InvalidArgument;
+    const payload = try expectByteInput(args[0]);
+    const options = if (args.len == 2) try deflateOptions(try expectInteger(args[1])) else std.compress.flate.Compress.Options.default;
+
+    // The compressor keeps a window of input to find matches in, and it asserts
+    // that the output writer starts with a buffer it can drain. The capacity is
+    // a hint, so a saturating add keeps an absurd length from overflowing here.
+    const window = try allocator.alloc(u8, std.compress.flate.max_window_len);
+    defer allocator.free(window);
+
+    var output = std.Io.Writer.Allocating.initCapacity(allocator, payload.len +| 64) catch return error.OutOfMemory;
+    defer output.deinit();
+
+    // The only sink is the allocating writer, so a writer failure is an
+    // allocation failure.
+    var compressor = std.compress.flate.Compress.init(&output.writer, window, .raw, options) catch return error.OutOfMemory;
+    compressor.writer.writeAll(payload) catch return error.OutOfMemory;
+    std.compress.flate.Compress.finish(&compressor) catch return error.OutOfMemory;
+
+    return .{ .bytes = try output.toOwnedSlice() };
+}
+
+/// Raw DEFLATE in, the original bytes out. A stream carries no length, so the
+/// decoder runs until its final block; a stream that ends early or contradicts
+/// itself is reported as an invalid argument rather than a partial result.
+fn evalDeflateDecompress(allocator: Allocator, args: []const value_mod.Value) Error!value_mod.Value {
+    if (args.len != 1) return error.InvalidArgument;
+    const payload = try expectByteInput(args[0]);
+
+    const window = try allocator.alloc(u8, std.compress.flate.max_window_len);
+    defer allocator.free(window);
+
+    var source: std.Io.Reader = .fixed(payload);
+    var decoder = std.compress.flate.Decompress.init(&source, .raw, window);
+
+    var output = std.Io.Writer.Allocating.initCapacity(allocator, 64) catch return error.OutOfMemory;
+    defer output.deinit();
+
+    var buffer: [4096]u8 = undefined;
+    while (true) {
+        const read = decoder.reader.readSliceShort(&buffer) catch return error.InvalidArgument;
+        if (read == 0) break;
+        if (output.written().len + read > deflate_max_output) return error.OutputTooLarge;
+        output.writer.writeAll(buffer[0..read]) catch return error.OutOfMemory;
+    }
+    return .{ .bytes = try output.toOwnedSlice() };
+}
+
+/// A stream can expand far more than it weighs, so decompression stops rather
+/// than letting a small input ask for all the memory in the machine.
+const deflate_max_output: usize = 256 * 1024 * 1024;
+
+fn deflateOptions(level: u64) Error!std.compress.flate.Compress.Options {
+    return switch (level) {
+        1 => .level_1,
+        2 => .level_2,
+        3 => .level_3,
+        4 => .level_4,
+        5 => .level_5,
+        6 => .level_6,
+        7 => .level_7,
+        8 => .level_8,
+        9 => .level_9,
+        else => error.InvalidArgument,
+    };
+}
+
+fn expectByteInput(value: value_mod.Value) Error![]const u8 {
+    return switch (value) {
+        .string => |text| text,
+        .bytes => |data| data,
+        .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => error.TypeMismatch,
+    };
+}
+
 fn mapTokenMatchError(err: token_match.Error) Error {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
@@ -1131,6 +1257,115 @@ test "meta std rejects invalid byte helper arguments" {
     try std.testing.expectError(error.TypeMismatch, evalBuiltin(std.testing.allocator, "join", &.{
         non_string_list,
         .{ .string = &separator },
+    }));
+}
+
+test "meta std crypto helpers hash bytes and strings" {
+    var payload = [_]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+    var crc = try evalBuiltin(std.testing.allocator, "crypto.crc32", &.{.{ .bytes = &payload }});
+    defer crc.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u64, 0xcbf43926), try crc.expectInteger());
+
+    var adler = try evalBuiltin(std.testing.allocator, "crypto.adler32", &.{.{ .bytes = &payload }});
+    defer adler.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u64, 0x091e01de), try adler.expectInteger());
+
+    var text = [_]u8{ '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+    var text_crc = try evalBuiltin(std.testing.allocator, "crypto.crc32", &.{.{ .string = &text }});
+    defer text_crc.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(u64, 0xcbf43926), try text_crc.expectInteger());
+
+    var abc = [_]u8{ 'a', 'b', 'c' };
+    var sha1 = try evalBuiltin(std.testing.allocator, "crypto.sha1", &.{.{ .bytes = &abc }});
+    defer sha1.deinit(std.testing.allocator);
+    try std.testing.expectEqualSlices(u8, &.{
+        0xa9, 0x99, 0x3e, 0x36, 0x47, 0x06, 0x81, 0x6a, 0xba, 0x3e,
+        0x25, 0x71, 0x78, 0x50, 0xc2, 0x6c, 0x9c, 0xd0, 0xd8, 0x9d,
+    }, try sha1.expectBytes());
+
+    var sha256 = try evalBuiltin(std.testing.allocator, "crypto.sha256", &.{.{ .bytes = &abc }});
+    defer sha256.deinit(std.testing.allocator);
+    try std.testing.expectEqualSlices(u8, &.{
+        0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22, 0x23,
+        0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad,
+    }, try sha256.expectBytes());
+
+    var empty = [_]u8{};
+    var empty_sha256 = try evalBuiltin(std.testing.allocator, "crypto.sha256", &.{.{ .bytes = &empty }});
+    defer empty_sha256.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 32), (try empty_sha256.expectBytes()).len);
+
+    try std.testing.expectError(error.TypeMismatch, evalBuiltin(std.testing.allocator, "crypto.crc32", &.{
+        value_mod.Value.int(1),
+    }));
+    try std.testing.expectError(error.InvalidArgument, evalBuiltin(std.testing.allocator, "crypto.crc32", &.{}));
+}
+
+test "meta std deflate compresses to a stream that decompresses back" {
+    var text = [_]u8{ 'X', 'I', 'R', 'A', 'S', 'M', ' ', 'X', 'I', 'R', 'A', 'S', 'M', ' ', 'X', 'I', 'R', 'A', 'S', 'M' };
+
+    var compressed = try evalBuiltin(std.testing.allocator, "deflate.compress", &.{.{ .bytes = &text }});
+    defer compressed.deinit(std.testing.allocator);
+    const stream = try compressed.expectBytes();
+    try std.testing.expect(stream.len < text.len);
+
+    // The stream is raw DEFLATE: the standard decoder has to accept it and hand
+    // back exactly the input, which is what a ZIP reader will require.
+    var source: std.Io.Reader = .fixed(stream);
+    var window: [std.compress.flate.max_window_len]u8 = undefined;
+    var decoder = std.compress.flate.Decompress.init(&source, .raw, &window);
+    var restored: [64]u8 = undefined;
+    const written = try decoder.reader.readSliceShort(&restored);
+    try std.testing.expectEqualSlices(u8, &text, restored[0..written]);
+    try std.testing.expectEqual(@as(usize, 0), try decoder.reader.readSliceShort(&restored));
+
+    // An empty payload still produces a stream a decoder accepts.
+    var empty: [0]u8 = .{};
+    var empty_compressed = try evalBuiltin(std.testing.allocator, "deflate.compress", &.{.{ .bytes = &empty }});
+    defer empty_compressed.deinit(std.testing.allocator);
+    const empty_stream = try empty_compressed.expectBytes();
+    try std.testing.expect(empty_stream.len > 0);
+
+    var empty_source: std.Io.Reader = .fixed(empty_stream);
+    var empty_window: [std.compress.flate.max_window_len]u8 = undefined;
+    var empty_decoder = std.compress.flate.Decompress.init(&empty_source, .raw, &empty_window);
+    try std.testing.expectEqual(@as(usize, 0), try empty_decoder.reader.readSliceShort(&restored));
+
+    // The level argument accepts one through nine and nothing else.
+    var level_best = try evalBuiltin(std.testing.allocator, "deflate.compress", &.{
+        .{ .bytes = &text },
+        value_mod.Value.int(9),
+    });
+    defer level_best.deinit(std.testing.allocator);
+    try std.testing.expect((try level_best.expectBytes()).len > 0);
+
+    try std.testing.expectError(error.InvalidArgument, evalBuiltin(std.testing.allocator, "deflate.compress", &.{
+        .{ .bytes = &text },
+        value_mod.Value.int(0),
+    }));
+    try std.testing.expectError(error.InvalidArgument, evalBuiltin(std.testing.allocator, "deflate.compress", &.{}));
+    try std.testing.expectError(error.TypeMismatch, evalBuiltin(std.testing.allocator, "deflate.compress", &.{
+        value_mod.Value.int(7),
+    }));
+}
+
+test "meta std deflate decompresses what it compressed" {
+    var text = [_]u8{ 'X', 'I', 'R', 'A', 'S', 'M', ' ', 'X', 'I', 'R', 'A', 'S', 'M' };
+    var compressed = try evalBuiltin(std.testing.allocator, "deflate.compress", &.{.{ .bytes = &text }});
+    defer compressed.deinit(std.testing.allocator);
+    const stream = try compressed.expectBytes();
+
+    var restored = try evalBuiltin(std.testing.allocator, "deflate.decompress", &.{.{ .bytes = @constCast(stream) }});
+    defer restored.deinit(std.testing.allocator);
+    try std.testing.expectEqualSlices(u8, &text, try restored.expectBytes());
+
+    // The stream a compressing call produced never ends early, so an empty
+    // result here would be a bug rather than a valid outcome.
+    var junk = [_]u8{ 0x00, 0x00, 0x00, 0xff, 0xff };
+    try std.testing.expectError(error.InvalidArgument, evalBuiltin(std.testing.allocator, "deflate.decompress", &.{.{ .bytes = &junk }}));
+    try std.testing.expectError(error.InvalidArgument, evalBuiltin(std.testing.allocator, "deflate.decompress", &.{}));
+    try std.testing.expectError(error.TypeMismatch, evalBuiltin(std.testing.allocator, "deflate.decompress", &.{
+        value_mod.Value.int(7),
     }));
 }
 

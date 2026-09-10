@@ -322,17 +322,18 @@ packed struct ElfSectionHeader32 {
     entsize: u32 = 0,
 }
 
-fn elfexe_begin64_at(ph_count: u16, file_type: u16, image_base: u64) {
+fn elfexe_begin64_at(ph_count: u16, file_type: u16, image_base: u64, machine: u16) {
     assert(ph_count > 0, "elfexe_begin64 requires at least one program header");
+    assert(machine == elf_machine_x86_64 || machine == elf_machine_aarch64, "unsupported ELF64 machine");
     origin(image_base);
-    emit.struct(ElfHeader64 { ident: ElfIdent { class: elf_class_64 }, file_type: file_type, phnum: ph_count });
+    emit.struct(ElfHeader64 { ident: ElfIdent { class: elf_class_64 }, file_type: file_type, machine: machine, phnum: ph_count });
     for i in range(0, ph_count) {
         emit.struct(ElfProgramHeader64 {});
     }
 }
 
 fn elfexe_begin64(ph_count: u16) {
-    elfexe_begin64_at(ph_count, elf_type_exec, elf_default_base64);
+    elfexe_begin64_at(ph_count, elf_type_exec, elf_default_base64, elf_machine_x86_64);
 }
 
 fn elfexe_begin32(ph_count: u16) {

@@ -207,9 +207,10 @@ lists their signatures, and the Mach-O chapter shows a complete object.
 | Family | Function | Use |
 | --- | --- | --- |
 | COFF | `format_coff32(sections)` / `format_coff64(sections)` | create an object configuration |
+| COFF | `format_coff64_arm64(sections)` | create an AArch64 COFF object configuration |
 | COFF | `format_coff_public(name, section_name, section_start, address, sym_type)` | define a public symbol |
 | COFF | `format_coff_extern(name, sym_type)` | declare an external symbol |
-| COFF | `format_coff_reloc(section_name, section_start, address, symbol_name, reloc_type)` | declare a relocation field |
+| COFF | `format_coff_reloc(section_name, section_start, address, symbol_name, reloc_type)` | declare a relocation field; ARM64 objects pass a `coff_rel_arm64_*` type |
 | COFF | `format_coff_tables_mut(object, symbols, relocs)` | attach symbol and relocation tables |
 | ELF | `format_elfobj32(sections)` / `format_elfobj64(sections)` | create an x86 object configuration |
 | ELF | `format_elfobj64_aarch64(sections)` | create an AArch64 object configuration |

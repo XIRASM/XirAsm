@@ -1374,23 +1374,27 @@ fn parseApiCall(
     text: []const u8,
     span: source.SourceSpan,
 ) ParseError!ast.ApiCallStatement {
-    const open_index = std.mem.indexOfScalar(u8, text, '(') orelse return error.InvalidApiCall;
-    const close_index = std.mem.lastIndexOfScalar(u8, text, ')') orelse return error.InvalidApiCall;
+    // A trailing line comment belongs to the line, not to the call, so it is
+    // removed the same way an instruction line loses one. Only `//` outside a
+    // string literal counts, which is what the lexer's helper decides.
+    const statement = lexer.isaTextBeforeComment(text);
+    const open_index = std.mem.indexOfScalar(u8, statement, '(') orelse return error.InvalidApiCall;
+    const close_index = std.mem.lastIndexOfScalar(u8, statement, ')') orelse return error.InvalidApiCall;
     if (close_index < open_index) return error.InvalidApiCall;
 
-    const trailing = std.mem.trim(u8, text[close_index + 1 ..], " \t;");
+    const trailing = std.mem.trim(u8, statement[close_index + 1 ..], " \t;");
     if (trailing.len != 0) return error.InvalidApiCall;
 
-    const callee_text = std.mem.trim(u8, text[0..open_index], " \t");
+    const callee_text = std.mem.trim(u8, statement[0..open_index], " \t");
     if (callee_text.len == 0) return error.InvalidApiCall;
 
-    const owned_text = try allocator.dupe(u8, text);
+    const owned_text = try allocator.dupe(u8, statement);
     errdefer allocator.free(owned_text);
 
     const owned_callee = try allocator.dupe(u8, callee_text);
     errdefer allocator.free(owned_callee);
 
-    const args_text = text[open_index + 1 .. close_index];
+    const args_text = statement[open_index + 1 .. close_index];
     const args = try parseApiArguments(allocator, args_text);
     errdefer deinitApiArguments(allocator, args);
 

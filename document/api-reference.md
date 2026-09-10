@@ -45,6 +45,7 @@ The language reference is organized by responsibility:
 12. Lists and maps
 13. Files and structured data
 14. Tokens and pattern matching
+15. Crypto helpers
 
 ## Part I: Core Language
 
@@ -2493,6 +2494,8 @@ Use `map.has` or `map.get_or` when absence is expected.
 | `fs.read_text(path)` | `string` | Reads an entire file as text. |
 | `fs.read_bytes(path)` | `bytes` | Reads an entire file as bytes. |
 | `fs.read_bytes(path, offset, count)` | `bytes` | Reads an exact byte range. |
+| `fs.list_dir(path)` | `list` | Lists the entry names of a directory in ascending byte order. |
+| `fs.is_dir(path)` | `bool` | Tests whether a path names a directory. |
 | `emit.file(path)` | statement | Emits an entire source-relative file. |
 | `emit.file(path, offset, count)` | statement | Emits an exact file byte range. |
 | `json.parse(value)` | value | Parses JSON held in a string or byte sequence. |
@@ -2510,6 +2513,7 @@ relative data paths.
 | Operation | Ordinary source | `late_layout` | `defer` |
 | --- | --- | --- | --- |
 | `fs.exists`, `fs.read_text`, `fs.read_bytes`, `emit.file` | Available | Unavailable | Unavailable |
+| `fs.list_dir`, `fs.is_dir` | Available | Unavailable | Unavailable |
 | `json.file`, `toml.file` | Available | Unavailable | Unavailable |
 | `json.parse`, `toml.parse` | Available | Available in value expressions | Available in value expressions |
 
@@ -2554,6 +2558,36 @@ valid.
 
 `emit.file` uses the same resolver and range rules as `fs.read_bytes`, but
 emits directly instead of returning a `bytes` value.
+
+#### Listing a Directory
+
+`fs.list_dir(path)` returns the entry names directly inside a directory as a
+list of strings, sorted in ascending byte order so a listing never depends on
+the order the filesystem happens to return. Names are entry names, not paths,
+and directories appear like any other entry.
+
+`fs.is_dir(path)` reports whether a path names a directory. Like `fs.exists` it
+answers `false` for a path that cannot be resolved, while `fs.list_dir` reports
+an error instead. Guard an optional scan with `fs.is_dir` when a missing
+directory is acceptable:
+
+```asm
+const entries: list = fs.list_dir("assets")
+assert(len(entries) == 2)
+assert(list.get(entries, 0) == "logo.bin")
+assert(list.get(entries, 1) == "notes")
+
+for entry in entries {
+    if fs.is_dir(sym.join("assets/", entry)) {
+        continue;
+    }
+    emit.file(sym.join("assets/", entry));
+}
+```
+
+Both functions use the same controlled resolver as the rest of this chapter: the
+build supplies directory support, and a host that cannot enumerate directories
+reports the path as unavailable rather than guessing.
 
 #### JSON Values
 
@@ -2886,3 +2920,102 @@ Token matching has fixed limits to keep compile-time parsing bounded:
 
 Exceeding a limit rejects the match call rather than returning an ordinary
 miss.
+
+### Chapter 15: Crypto Helpers
+
+#### Syntax Summary
+
+| Function | Result | Description |
+| --- | --- | --- |
+| `crypto.crc32(input)` | integer | Computes the CRC-32 (IEEE 802.3) checksum. |
+| `crypto.adler32(input)` | integer | Computes the Adler-32 checksum (RFC 1950). |
+| `crypto.sha1(input)` | `bytes` | Computes the 20-byte SHA-1 digest. |
+| `crypto.sha256(input)` | `bytes` | Computes the 32-byte SHA-256 digest. |
+
+`input` accepts a `bytes` value or a `string`, which contributes its byte
+sequence. The helpers are pure expression calls and are available wherever
+value expressions are, including inside deferred finalizers.
+
+Checksum helpers return unsigned integers. Digest helpers return a new
+byte sequence.
+
+```asm
+const payload: bytes = b"123456789"
+const crc: u64 = crypto.crc32(payload)
+const digest: bytes = crypto.sha256(payload)
+
+assert(crc == 0xcbf43926);
+assert(len(digest) == 32);
+
+emit.u32(crc);
+emit.bytes(digest);
+```
+
+The computation runs at native speed. Use these helpers instead of
+checksum loops written in Meta; a megabyte payload hashes immediately
+instead of spending compile time in a per-byte scan.
+
+#### Error Conditions
+
+- an argument that is neither a `bytes` value nor a `string`;
+- an incorrect number of arguments.
+
+### Chapter 16: Compression
+
+#### Syntax Summary
+
+| Function | Result | Description |
+| --- | --- | --- |
+| `deflate.compress(input)` | `bytes` | Compresses at the default level. |
+| `deflate.compress(input, level)` | `bytes` | Compresses at a level from 1 (fastest) to 9 (best). |
+| `deflate.decompress(input)` | `bytes` | Decompresses a raw DEFLATE stream. |
+
+`input` accepts a `bytes` value or a `string`, which contributes its byte
+sequence. The result is a **raw DEFLATE** stream: the compressed blocks on their
+own, with no zlib or gzip header and no checksum trailer. That is exactly what a
+ZIP entry of method 8 stores, so the archive records the CRC-32 of the
+*uncompressed* bytes and the sizes of both forms.
+
+```asm
+const text: bytes = b"XIRASM XIRASM XIRASM XIRASM"
+const packed: bytes = deflate.compress(text)
+const best: bytes = deflate.compress(text, 9)
+
+assert(len(packed) < len(text));
+assert(len(best) < len(text));
+emit.u16(len(text));
+emit.u16(len(packed));
+```
+
+Compression is deterministic: the same input and level produce the same stream
+every time, which is what lets a format include build a reproducible archive.
+Small inputs may grow slightly, because a stream carries its own block headers;
+store a payload uncompressed when it does not shrink.
+
+The level trades time for size. The default is level 6, which suits the payloads
+an assembler stores; level 1 is useful for large, barely compressible inputs, and
+level 9 for the smallest possible output when assembly time does not matter.
+
+`deflate.decompress` is the inverse, for reading a stream this build produced or
+one a data file carries:
+
+```asm
+const packed: bytes = deflate.compress(text)
+const restored: bytes = deflate.decompress(packed)
+
+assert(bytes.eq(restored, text));
+```
+
+A raw stream records no length, so the decoder runs until the stream's final
+block and returns everything it decoded; a stream that ends early or contradicts
+itself is reported as an invalid argument rather than a partial result. Because a
+stream can expand far more than it weighs, decompression stops at 256 MiB and
+reports the output as too large instead of consuming the machine.
+
+#### Error Conditions
+
+- an argument that is neither a `bytes` value nor a `string`;
+- a level outside 1 through 9;
+- an input that is not a valid DEFLATE stream, or one that decodes to more than
+  256 MiB;
+- an incorrect number of arguments.

@@ -1,4 +1,4 @@
-﻿# 第 10 章：模块与文件
+# 第 10 章：模块与文件
 
 汇编项目很快就会超过单个源文件的规模。指令辅助函数、二进制记录定义、生成的表格、配置数据和嵌入数据，通常由不同的人维护，变更原因也各异。
 
@@ -158,6 +158,21 @@ XIRASM
 `fs.read_bytes(path)` 将整个文件读为 `bytes`。图片、编码后的表格、预构建的记录及其他二进制数据均适用。
 
 当字节仅用于输出时，`emit.file(path)` 可避免创建中间绑定。`emit.file(path, offset, count)` 写出精确的范围。这两种形式均使用与 `fs.read_bytes` 相同的相对路径解析器和边界检查，但不能在 `late_layout` 和 `defer` 中使用。
+
+## 列出目录
+
+`fs.list_dir(path)` 返回目录中的条目名，`fs.is_dir(path)` 检查某个路径是否为目录：
+
+```asm
+for entry in fs.list_dir("assets") {
+    if fs.is_dir(sym.join("assets/", entry)) {
+        continue;
+    }
+    emit.file(sym.join("assets/", entry));
+}
+```
+
+列表里是条目名而不是路径，目录与文件一样出现；列表按字节升序排列，因此生成的映像不依赖宿主文件系统返回条目的顺序。这两个函数与上面的读取函数使用完全相同的路径解析规则。`fs.is_dir` 在路径无法定位时返回 `false`，因此适合作为“目录可有可无”时的判断依据。
 
 ## 读取字节范围
 

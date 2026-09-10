@@ -6,6 +6,8 @@ pub const LateLayoutResult = root.LateLayoutResult;
 pub const IncludeResolver = root.IncludeResolver;
 pub const IncludeRequest = root.IncludeRequest;
 pub const IncludeSource = root.IncludeSource;
+pub const DirEntry = root.DirEntry;
+pub const DirListing = root.DirListing;
 pub const LowerContext = root.LowerContext;
 pub const max_finalizer_loop_iterations = root.max_finalizer_loop_iterations;
 

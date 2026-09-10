@@ -16,6 +16,13 @@ source.asm:12:5: error: header size must be four
 
 先看第一个错误。后面的失败可能只是早先的无效声明、缺失标号或被拒绝指令连带出来的结果。
 
+解析不到的名字会写进消息里，因为位置本身说不清是哪个名字出的问题：
+
+```text
+app.asm:7:1: error: undefined name in this expression: missing_helper(app)
+app.asm:9:1: error: unknown call: no_such_function
+```
+
 ## 信息与警告
 
 `print` 输出信息，`warn` 输出非致命警告：

@@ -161,14 +161,36 @@ format_elfso_tables_mut(image, exports, imports)
 
 导入名不能和导出名冲突；生成的 `*_plt` 和 `*_gotplt` 标签也必须唯一。内部数据引用通常写 `rel`，导入调用使用生成的 PLT 标签。
 
+## 选择目标机器
+
+`format_elf64` 和 `format_elf64_so` 默认生成 x86-64 映像。AArch64 有对应的入口，机器来自配置时可以用带机器的通用形式：
+
+| 入口 | 产物 |
+| --- | --- |
+| `format_elf64(options, segments)` | ELF64 x86-64 固定地址可执行文件或 PIE |
+| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 固定地址可执行文件或 PIE |
+| `format_elf64_machine(options, segments, machine)` | 用 `elf_machine_x86_64` 或 `elf_machine_aarch64` 指定机器 |
+| `format_elf64_so(soname, segments)` | ELF64 x86-64 共享库，LOAD 段按 4 KiB 对齐 |
+| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 共享库，LOAD 段按 16 KiB 对齐 |
+| `format_elfobj64_aarch64(sections)` | AArch64 ELF64 目标文件 |
+
+两种机器有两处差别。AArch64 把 LOAD 段对齐到 16 KiB，这是 Android 15 及以后设备要求的页大小，可执行文件、PIE 和共享库都适用；x86-64 保持 Linux 默认的 4 KiB。导入机制也不同：x86-64 走 PLT 条目调用，AArch64 走 GLOB_DAT 槽位（`format_elfso_import_slots_mut`），因此可执行文件的导入路径只支持 x86-64——AArch64 应用改用共享库导入。
+
+更大的页对齐只在段需要挪到下一个页边界时多花文件空间：虚拟地址按整页前进，文件布局仍然紧凑。要换别的页大小，可以在 `format_begin` 之前给计划设置 `"load_align"`。
+
 ## ELF API 摘要
 
 | 函数 | 用途 |
 | --- | --- |
 | `format_elf32(format_elf_exec, segments)` | ELF32 固定地址可执行文件 |
-| `format_elf64(format_elf_exec, segments)` | ELF64 固定地址可执行文件 |
-| `format_elf64(format_elf_pie, segments)` | ELF64 PIE |
-| `format_elf64_so(soname, segments)` | ELF64 共享库 |
+| `format_elf64(format_elf_exec, segments)` | ELF64 x86-64 固定地址可执行文件 |
+| `format_elf64(format_elf_pie, segments)` | ELF64 x86-64 PIE |
+| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 固定地址可执行文件或 PIE |
+| `format_elf64_machine(options, segments, machine)` | 指定机器的 ELF64 可执行文件或 PIE |
+| `format_elf64_so(soname, segments)` | ELF64 x86-64 共享库 |
+| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 共享库，按安卓页大小对齐 |
+| `format_elf64_so_machine(soname, segments, machine)` | 指定机器的 ELF64 共享库 |
+| `format_elfobj64_aarch64(sections)` | AArch64 ELF64 目标文件 |
 | `format_elfexe_import_new()` | 创建 ELF64 可执行文件导入列表 |
 | `format_elfexe_import_many_mut(imports, library, names)` | 从同一个库批量加入同名导入 |
 | `format_elfexe_import_pairs_mut(imports, library, pairs)` | 加入“本地前缀、真实符号名”成对导入 |
@@ -179,4 +201,5 @@ format_elfso_tables_mut(image, exports, imports)
 | `format_elfso_import_new()` | 创建共享库导入列表 |
 | `format_elfso_import_many_mut(imports, library, names)` | 从同一个库批量加入共享库导入 |
 | `format_elfso_import_pairs_mut(imports, library, pairs)` | 加入共享库“本地前缀、真实符号名”成对导入 |
+| `format_elfso_import_slots_mut(imports, library, names)` | AArch64 共享库 GLOB_DAT 导入槽位 |
 | `format_elfso_tables_mut(plan, exports, imports)` | 把共享库动态元数据挂到配置上 |

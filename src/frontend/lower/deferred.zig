@@ -427,6 +427,13 @@ pub fn renderCondition(allocator: Allocator, maybe_context: ?*LowerContext, cond
     return renderFrozenExpression(allocator, context, &node);
 }
 
+/// Render an expression back to source text without evaluating it, so a
+/// diagnostic can name the expression that failed even when the failure is an
+/// unresolved name.
+pub fn renderExpressionText(allocator: Allocator, node: *const expr.Node) LowerError![]u8 {
+    return renderExpressionSource(allocator, null, node);
+}
+
 fn renderInitializer(
     allocator: Allocator,
     maybe_context: ?*LowerContext,
