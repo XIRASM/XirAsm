@@ -71,6 +71,13 @@ pub fn lowerStatementFunction(
         values[index] = .void;
     }
 
+    // Diagnostics raised while the body runs belong to the body, but the reader
+    // wrote the call: record the invocation so the message carries both, which
+    // matters when the body lives in a library include.
+    const previous_expansion = module.diagnostics.active_expansion;
+    module.diagnostics.active_expansion = try module.diagnostics.beginExpansion(allocator, call.span, function.span, .function);
+    defer module.diagnostics.active_expansion = previous_expansion;
+
     try callbacks.lower_statement_slice(allocator, module, active, output_stack, function.body, context);
     try writeBackMutableArguments(allocator, module, context, call, function.params);
 }
@@ -149,11 +156,31 @@ pub fn evalValueFunctionAt(
     output_stack: *std.ArrayList(ActiveOutput),
     function_index: usize,
     args: []const expr.BuiltinArgument,
+    call_span: ?@import("../source.zig").SourceSpan,
     callbacks: Callbacks,
 ) LowerError!value_mod.Value {
     const function = try module.value_functions.get(function_index);
     const return_type_name = function.return_type_name orelse return error.InvalidMetaFunction;
-    if (args.len != function.params.len) return error.InvalidApiArity;
+    if (args.len != function.params.len) {
+        // The expression layer collapses every lowering error into one operand
+        // error on the way back, so the counts have to be said here or not at all.
+        if (call_span) |span| {
+            const message = try std.fmt.allocPrint(
+                module.allocator,
+                "function {s} declares {d} {s}, but this call passes {d}",
+                .{
+                    function.name,
+                    function.params.len,
+                    if (function.params.len == 1) "parameter" else "parameters",
+                    args.len,
+                },
+            );
+            defer module.allocator.free(message);
+            try module.diagnostics.add(module.allocator, .err, span, message);
+            return error.FrontendDiagnostics;
+        }
+        return error.InvalidApiArity;
+    }
     if (context.call_depth >= max_call_depth) return error.MetaCallDepthExceeded;
 
     context.call_depth += 1;
@@ -164,13 +191,24 @@ pub fn evalValueFunctionAt(
     context.in_meta_loop = false;
     defer context.in_meta_loop = caller_in_meta_loop;
 
+    // A failure inside the body belongs to the body, but the reader wrote the
+    // call: record the invocation so the diagnostic chain names both.
+    const previous_expansion = module.diagnostics.active_expansion;
+    if (call_span) |span| {
+        module.diagnostics.active_expansion = try module.diagnostics.beginExpansion(allocator, span, function.span, .function);
+    }
+    defer module.diagnostics.active_expansion = previous_expansion;
+
     const previous_return = context.return_value;
+    const previous_return_span = context.return_span;
     context.return_value = null;
+    context.return_span = null;
     defer {
         if (context.return_value) |*stored| {
             stored.deinit(allocator);
         }
         context.return_value = previous_return;
+        context.return_span = previous_return_span;
     }
 
     var scoped_active = active;
@@ -204,7 +242,29 @@ pub fn evalValueFunctionAt(
         if (param.type_name != null and annotation == null) return error.InvalidMetaFunction;
         var value = expr.evaluateBuiltinValueArg(allocator, args[index], &eval_ctx) catch |err| return expression_bridge.mapExpressionError(err);
         errdefer value.deinit(allocator);
-        try typecheck.coerceValueToAnnotation(module, &value, annotation);
+        typecheck.coerceValueToAnnotation(module, &value, annotation) catch |err| {
+            if (err == error.OutOfMemory) return error.OutOfMemory;
+            // The coercion reports one declaration error for every mismatch and the
+            // expression layer keeps only "an operand failed", so the two types and
+            // the position are said here or nowhere.
+            if (call_span) |span| {
+                const message = try std.fmt.allocPrint(
+                    module.allocator,
+                    "argument {d} of function {s} has type {s}, but parameter {s} declares {s}",
+                    .{
+                        index + 1,
+                        function.name,
+                        value_mod.valueTypeName(value.valueType()),
+                        param.name,
+                        param.type_name orelse "a type",
+                    },
+                );
+                defer module.allocator.free(message);
+                try module.diagnostics.add(module.allocator, .err, span, message);
+                return error.FrontendDiagnostics;
+            }
+            return err;
+        };
         values[index] = value;
         initialized += 1;
     }
@@ -216,16 +276,55 @@ pub fn evalValueFunctionAt(
         values[index] = .void;
     }
 
+    // A value function is reached through expression evaluation, which carries no
+    // call-site span yet, so the invocation note is recorded for statement
+    // functions only; see the backlog entry for the expression-side gap.
     callbacks.lower_statement_slice(allocator, module, &scoped_active, output_stack, function.body, context) catch |err| {
         if (err != error.MetaFunctionReturned) return err;
     };
-    var result = context.return_value orelse return error.MissingMetaReturn;
+    var result = context.return_value orelse return failMissingReturn(module, function);
     context.return_value = null;
     errdefer result.deinit(allocator);
 
     const annotation = (try typecheck.annotationFromName(module, return_type_name)) orelse return error.InvalidMetaFunction;
-    try typecheck.coerceValueToAnnotation(module, &result, annotation);
+    typecheck.coerceValueToAnnotation(module, &result, annotation) catch |err| {
+        if (err == error.OutOfMemory) return error.OutOfMemory;
+        return failReturnType(module, context, function, return_type_name, result.valueType());
+    };
     return result;
+}
+
+/// A body runs when it is called, so an error it raises would otherwise be
+/// blamed on the call site; the message would also have lost the function name
+/// and the reason, because the expression layer collapses every lowering error
+/// into one operand error. Rejecting the value here keeps both.
+fn failReturnType(
+    module: *module_mod.Module,
+    context: *const LowerContext,
+    function: *const ast.MetaFunctionStatement,
+    return_type_name: []const u8,
+    produced: value_mod.ValueType,
+) LowerError {
+    const message = std.fmt.allocPrint(
+        module.allocator,
+        "function {s} declares a {s} return value, but this return statement produces a {s}",
+        .{ function.name, return_type_name, value_mod.valueTypeName(produced) },
+    ) catch return error.OutOfMemory;
+    defer module.allocator.free(message);
+    const span = context.return_span orelse function.span;
+    module.diagnostics.add(module.allocator, .err, span, message) catch return error.OutOfMemory;
+    return error.FrontendDiagnostics;
+}
+
+fn failMissingReturn(module: *module_mod.Module, function: *const ast.MetaFunctionStatement) LowerError {
+    const message = std.fmt.allocPrint(
+        module.allocator,
+        "function {s} declares a return value, but its body ended without a return statement",
+        .{function.name},
+    ) catch return error.OutOfMemory;
+    defer module.allocator.free(message);
+    module.diagnostics.add(module.allocator, .err, function.span, message) catch return error.OutOfMemory;
+    return error.FrontendDiagnostics;
 }
 
 pub fn nextUniqueSymbol(context: *anyopaque, allocator: Allocator, prefix: []const u8) expr.ExpressionError![]u8 {

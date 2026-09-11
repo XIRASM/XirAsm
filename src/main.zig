@@ -17,6 +17,7 @@ const HelpTopic = enum {
     overview,
     init,
     targets,
+    templates,
 };
 
 const ProgressMode = enum {
@@ -58,7 +59,12 @@ const BuildOptions = struct {
     listing_path: ?[]const u8 = null,
     progress: ProgressMode = .auto,
     timings: TimingMode = .off,
-    target: xirasm.Target = xirasm.Target.default,
+    /// null means "the command line did not say", which is what decides whether
+    /// the project file or the built-in default supplies the target. Comparing
+    /// the value against the default instead cannot tell `--target x64` from no
+    /// flag at all, because x86-64 *is* the default, and the project file then
+    /// silently won over an explicit request.
+    target: ?xirasm.Target = null,
 };
 
 const InitTargetConfig = struct {
@@ -71,6 +77,7 @@ const InitTargetConfig = struct {
 const InitTemplateKind = enum {
     flat_x86_32,
     flat_x86_64,
+    flat_aarch64,
     flat_riscv32,
     flat_riscv64,
     pe32,
@@ -78,6 +85,50 @@ const InitTemplateKind = enum {
     elf32,
     elf64,
 };
+
+/// The names `xirasm init --template` accepts, each mapping to exactly one
+/// template. `--template` exists so scaffolding does not require knowing the
+/// `--isa`/`--bits`/`--os`/`--abi` combination that produces a given output shape.
+const TemplateEntry = struct {
+    name: []const u8,
+    kind: InitTemplateKind,
+    help: []const u8,
+};
+
+const template_table = [_]TemplateEntry{
+    .{ .name = "pe64", .kind = .pe64, .help = "64-bit x86 PE executable, build/app.exe" },
+    .{ .name = "pe32", .kind = .pe32, .help = "32-bit x86 PE executable, build/app.exe" },
+    .{ .name = "elf64", .kind = .elf64, .help = "64-bit x86 ELF executable, build/app" },
+    .{ .name = "elf32", .kind = .elf32, .help = "32-bit x86 ELF executable, build/app" },
+    .{ .name = "bin64", .kind = .flat_x86_64, .help = "64-bit x86 flat binary, build/app.bin" },
+    .{ .name = "bin32", .kind = .flat_x86_32, .help = "32-bit x86 flat binary, build/app.bin" },
+    .{ .name = "bin-aarch64", .kind = .flat_aarch64, .help = "AArch64 flat binary through the A64 macro library" },
+    .{ .name = "bin-rv64", .kind = .flat_riscv64, .help = "64-bit RISC-V flat binary" },
+    .{ .name = "bin-rv32", .kind = .flat_riscv32, .help = "32-bit RISC-V flat binary" },
+};
+
+fn templateKindForName(value: []const u8) ?InitTemplateKind {
+    for (template_table) |entry| {
+        if (std.mem.eql(u8, value, entry.name)) return entry.kind;
+    }
+    return null;
+}
+
+/// The ISA/bits/OS/ABI combination a template is built from, so `--template` and
+/// the explicit options converge on the same scaffold.
+fn initTargetForTemplate(kind: InitTemplateKind) InitTargetConfig {
+    return switch (kind) {
+        .pe64 => .{ .isa = "x86-64", .bits = 64, .os = "windows", .abi = "msvc" },
+        .pe32 => .{ .isa = "x86", .bits = 32, .os = "windows", .abi = "msvc" },
+        .elf64 => .{ .isa = "x86-64", .bits = 64, .os = "linux", .abi = "sysv" },
+        .elf32 => .{ .isa = "x86", .bits = 32, .os = "linux", .abi = "sysv" },
+        .flat_x86_64 => .{ .isa = "x86-64", .bits = 64, .os = "bin", .abi = "none" },
+        .flat_x86_32 => .{ .isa = "x86", .bits = 32, .os = "bin", .abi = "none" },
+        .flat_aarch64 => .{ .isa = "aarch64", .bits = 64, .os = "bin", .abi = "none" },
+        .flat_riscv64 => .{ .isa = "riscv64", .bits = 64, .os = "none", .abi = "none" },
+        .flat_riscv32 => .{ .isa = "riscv32", .bits = 32, .os = "none", .abi = "none" },
+    };
+}
 
 const InitOptions = struct {
     name: ?[]const u8 = null,
@@ -100,6 +151,7 @@ const CliParseIssue = union(enum) {
         second: []const u8,
     },
     unknown_option: []const u8,
+    init_only_option: []const u8,
     unknown_help_topic: []const u8,
     invalid_target: []const u8,
     invalid_init_value: struct {
@@ -303,7 +355,7 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
             index += 2;
             continue;
         }
-        if (std.mem.eql(u8, arg, "--target")) {
+        if (std.mem.eql(u8, arg, "--isa") or std.mem.eql(u8, arg, "--target")) {
             if (index + 1 >= args.len) return .{ .err = .{ .invalid_target = arg } };
             options.target = parseTarget(args[index + 1]) orelse return .{ .err = .{ .invalid_target = args[index + 1] } };
             index += 2;
@@ -312,6 +364,7 @@ fn parseCliArgs(args: []const []const u8) ParseCliResult {
         if (std.mem.eql(u8, arg, "build")) {
             return .{ .err = .{ .misplaced_subcommand = arg } };
         }
+        if (isInitOnlyOption(arg)) return .{ .err = .{ .init_only_option = arg } };
         if (std.mem.startsWith(u8, arg, "-")) {
             return .{ .err = .{ .unknown_option = arg } };
         }
@@ -367,12 +420,13 @@ fn parseBuildArgs(args: []const []const u8) ParseCliResult {
             index += 2;
             continue;
         }
-        if (std.mem.eql(u8, arg, "--target")) {
+        if (std.mem.eql(u8, arg, "--isa") or std.mem.eql(u8, arg, "--target")) {
             if (index + 1 >= args.len) return .{ .err = .{ .invalid_target = arg } };
             options.target = parseTarget(args[index + 1]) orelse return .{ .err = .{ .invalid_target = args[index + 1] } };
             index += 2;
             continue;
         }
+        if (isInitOnlyOption(arg)) return .{ .err = .{ .init_only_option = arg } };
         if (std.mem.startsWith(u8, arg, "-")) {
             return .{ .err = .{ .unknown_option = arg } };
         }
@@ -401,6 +455,7 @@ fn parseInitArgs(args: []const []const u8) ParseCliResult {
         }
         if (std.mem.eql(u8, arg, "--name") or
             std.mem.eql(u8, arg, "--dir") or
+            std.mem.eql(u8, arg, "--template") or
             std.mem.eql(u8, arg, "--target") or
             std.mem.eql(u8, arg, "--isa") or
             std.mem.eql(u8, arg, "--arch") or
@@ -420,6 +475,9 @@ fn parseInitArgs(args: []const []const u8) ParseCliResult {
                     return .{ .err = .{ .multiple_init_paths = .{ .first = first, .second = value } } };
                 }
                 options.dir_path = value;
+            } else if (std.mem.eql(u8, arg, "--template")) {
+                const kind = templateKindForName(value) orelse return .{ .err = .{ .invalid_init_value = .{ .key = arg, .value = value } } };
+                options.target = initTargetForTemplate(kind);
             } else if (std.mem.eql(u8, arg, "--target")) {
                 options.target = parseInitTarget(value) orelse return .{ .err = .{ .invalid_target = value } };
             } else if (std.mem.eql(u8, arg, "--isa") or std.mem.eql(u8, arg, "--arch")) {
@@ -455,67 +513,139 @@ fn parseHelpArgs(args: []const []const u8) ParseCliResult {
     if (args.len > 1) return .{ .err = .{ .unknown_help_topic = args[1] } };
     if (std.mem.eql(u8, args[0], "init")) return .{ .ok = .{ .help = .init } };
     if (std.mem.eql(u8, args[0], "targets")) return .{ .ok = .{ .help = .targets } };
+    if (std.mem.eql(u8, args[0], "templates")) return .{ .ok = .{ .help = .templates } };
     return .{ .err = .{ .unknown_help_topic = args[0] } };
 }
 
-fn parseTarget(value: []const u8) ?xirasm.Target {
-    if (std.mem.eql(u8, value, "x86-64") or
-        std.mem.eql(u8, value, "x86_64") or
-        std.mem.eql(u8, value, "x64"))
-    {
-        return .{ .x86 = .{ .mode_bits = 64 } };
-    }
-    if (std.mem.eql(u8, value, "x86") or std.mem.eql(u8, value, "x86-32")) {
-        return .{ .x86 = .{ .mode_bits = 32 } };
-    }
-    if (std.mem.eql(u8, value, "rv64") or std.mem.eql(u8, value, "riscv64")) {
-        return .{ .riscv = .{ .xlen = 64 } };
-    }
-    if (std.mem.eql(u8, value, "rv32") or std.mem.eql(u8, value, "riscv32")) {
-        return .{ .riscv = .{ .xlen = 32 } };
-    }
-    if (std.mem.eql(u8, value, "spv") or std.mem.eql(u8, value, "spirv")) {
-        return xirasm.Target.spv();
+/// The one place an ISA name is written down. Parsing the command line, reading
+/// `[target] isa` from the project file, the `init` defaults and the target help
+/// text all come from this table, so naming a new ISA (or a new spelling of an
+/// existing one) is one edit rather than four that drift apart.
+const IsaFamily = enum { x86, arm, riscv, spirv };
+
+const IsaEntry = struct {
+    canonical: []const u8,
+    aliases: []const []const u8,
+    family: IsaFamily,
+    bits: u16,
+    /// What `xirasm init --isa <name>` scaffolds when no template is named.
+    init_os: []const u8,
+    init_abi: []const u8,
+    help: []const u8,
+};
+
+const isa_table = [_]IsaEntry{
+    .{
+        .canonical = "x86-64",
+        .aliases = &.{ "x86_64", "x64" },
+        .family = .x86,
+        .bits = 64,
+        .init_os = "bin",
+        .init_abi = "none",
+        .help = "64-bit x86",
+    },
+    .{
+        .canonical = "x86",
+        .aliases = &.{"x86-32"},
+        .family = .x86,
+        .bits = 32,
+        .init_os = "bin",
+        .init_abi = "none",
+        .help = "32-bit x86",
+    },
+    .{
+        .canonical = "aarch64",
+        .aliases = &.{ "arm64", "a64" },
+        .family = .arm,
+        .bits = 64,
+        .init_os = "bin",
+        .init_abi = "none",
+        .help = "AArch64, whose instructions come from the A64 macro library",
+    },
+    .{
+        .canonical = "riscv64",
+        .aliases = &.{"rv64"},
+        .family = .riscv,
+        .bits = 64,
+        .init_os = "none",
+        .init_abi = "none",
+        .help = "64-bit RISC-V",
+    },
+    .{
+        .canonical = "riscv32",
+        .aliases = &.{"rv32"},
+        .family = .riscv,
+        .bits = 32,
+        .init_os = "none",
+        .init_abi = "none",
+        .help = "32-bit RISC-V",
+    },
+    .{
+        .canonical = "spv",
+        .aliases = &.{"spirv"},
+        .family = .spirv,
+        .bits = 0,
+        .init_os = "none",
+        .init_abi = "none",
+        .help = "SPIR-V 1.6 module",
+    },
+};
+
+fn isaEntryForName(value: []const u8) ?IsaEntry {
+    for (isa_table) |entry| {
+        if (std.mem.eql(u8, value, entry.canonical)) return entry;
+        for (entry.aliases) |alias| {
+            if (std.mem.eql(u8, value, alias)) return entry;
+        }
     }
     return null;
+}
+
+fn targetForIsaName(value: []const u8, bits_override: ?u16) ?xirasm.Target {
+    const entry = isaEntryForName(value) orelse return null;
+    const bits = bits_override orelse entry.bits;
+    return switch (entry.family) {
+        .x86 => xirasm.Target.initX86(bits) catch null,
+        .arm => xirasm.Target.initArm(),
+        .riscv => xirasm.Target.initRiscv(bits) catch null,
+        .spirv => xirasm.Target.spv(),
+    };
+}
+
+fn parseTarget(value: []const u8) ?xirasm.Target {
+    return targetForIsaName(value, null);
+}
+
+/// Options that only mean something while scaffolding a project. They used to be
+/// rejected as merely unknown; naming them turns a confusing failure into an
+/// explanation of where the platform choice actually lives.
+fn isInitOnlyOption(arg: []const u8) bool {
+    for ([_][]const u8{ "--os", "--abi", "--arch", "--bits", "--bit", "--name", "--force", "--dir" }) |option| {
+        if (std.mem.eql(u8, arg, option)) return true;
+    }
+    return false;
 }
 
 fn parseInitTarget(value: []const u8) ?InitTargetConfig {
-    if (std.mem.eql(u8, value, "x86-64") or
-        std.mem.eql(u8, value, "x86_64") or
-        std.mem.eql(u8, value, "x64"))
-    {
-        return .{ .isa = "x86-64", .bits = 64, .os = "bin", .abi = "none" };
-    }
-    if (std.mem.eql(u8, value, "x86") or std.mem.eql(u8, value, "x86-32")) {
-        return .{ .isa = "x86", .bits = 32, .os = "bin", .abi = "none" };
-    }
-    if (std.mem.eql(u8, value, "rv64") or std.mem.eql(u8, value, "riscv64")) {
-        return .{ .isa = "riscv64", .bits = 64, .os = "none", .abi = "none" };
-    }
-    if (std.mem.eql(u8, value, "rv32") or std.mem.eql(u8, value, "riscv32")) {
-        return .{ .isa = "riscv32", .bits = 32, .os = "none", .abi = "none" };
-    }
-    return null;
+    const entry = isaEntryForName(value) orelse return null;
+    return .{
+        .isa = entry.canonical,
+        .bits = entry.bits,
+        .os = entry.init_os,
+        .abi = entry.init_abi,
+    };
 }
 
+/// Changing the template ISA keeps the OS/ABI already chosen, which is what makes
+/// `--isa x86 --os windows` compose.
 fn parseInitIsa(value: []const u8, current: InitTargetConfig) ?InitTargetConfig {
-    if (std.mem.eql(u8, value, "x86-64") or
-        std.mem.eql(u8, value, "x86_64") or
-        std.mem.eql(u8, value, "x64"))
-    {
-        return .{ .isa = "x86-64", .bits = 64, .os = current.os, .abi = current.abi };
-    }
-    if (std.mem.eql(u8, value, "x86") or std.mem.eql(u8, value, "x86-32")) {
-        return .{ .isa = "x86", .bits = 32, .os = current.os, .abi = current.abi };
-    }
-    if (std.mem.eql(u8, value, "riscv64") or std.mem.eql(u8, value, "rv64")) {
-        return .{ .isa = "riscv64", .bits = 64, .os = current.os, .abi = current.abi };
-    }
-    if (std.mem.eql(u8, value, "riscv32") or std.mem.eql(u8, value, "rv32")) {
-        return .{ .isa = "riscv32", .bits = 32, .os = current.os, .abi = current.abi };
-    }
-    return null;
+    const entry = isaEntryForName(value) orelse return null;
+    return .{
+        .isa = entry.canonical,
+        .bits = entry.bits,
+        .os = current.os,
+        .abi = current.abi,
+    };
 }
 
 fn parseInitBits(value: []const u8) ?u16 {
@@ -544,6 +674,7 @@ fn isValidInitTargetToken(value: []const u8) bool {
 fn targetName(target: xirasm.Target) []const u8 {
     return switch (target) {
         .x86 => |cfg| if (cfg.mode_bits == 64) "x86-64" else "x86",
+        .arm => "aarch64",
         .riscv => |cfg| if (cfg.xlen == 64) "rv64" else "rv32",
         .spirv => "spv",
     };
@@ -799,39 +930,24 @@ fn resolveBuildOptions(config: xirasm.data.ProjectConfig, options: BuildOptions)
 }
 
 fn resolveBuildTarget(config: xirasm.data.ProjectConfig, options: BuildOptions) !xirasm.Target {
-    if (explicitTarget(options)) return options.target;
+    // The command line wins whenever it said anything, including the default
+    // value: an explicit `--target x64` is a request, not an absence.
+    if (options.target) |explicit| return explicit;
     if (config.build.target) |target_text| {
         return parseTarget(target_text) orelse error.InvalidBuildConfig;
     }
     if (config.target.isa) |isa| {
         return targetFromProjectConfig(config.target, isa);
     }
-    return options.target;
+    return xirasm.Target.default;
 }
 
 fn targetFromProjectConfig(config: xirasm.data.TargetConfig, isa: []const u8) !xirasm.Target {
-    if (std.mem.eql(u8, isa, "x86-64") or
-        std.mem.eql(u8, isa, "x86_64") or
-        std.mem.eql(u8, isa, "x64"))
-    {
-        return xirasm.Target.initX86(config.bits orelse 64);
-    }
-    if (std.mem.eql(u8, isa, "x86") or std.mem.eql(u8, isa, "x86-32")) {
-        return xirasm.Target.initX86(config.bits orelse 32);
-    }
-    if (std.mem.eql(u8, isa, "rv64") or
-        std.mem.eql(u8, isa, "riscv64"))
-    {
-        return xirasm.Target.initRiscv(config.bits orelse 64);
-    }
-    if (std.mem.eql(u8, isa, "rv32") or std.mem.eql(u8, isa, "riscv32")) {
-        return xirasm.Target.initRiscv(config.bits orelse 32);
-    }
-    return error.InvalidBuildConfig;
+    return targetForIsaName(isa, config.bits) orelse error.InvalidBuildConfig;
 }
 
 fn explicitTarget(options: BuildOptions) bool {
-    return !options.target.isDefault();
+    return options.target != null;
 }
 
 fn readOptionalProjectConfig(allocator: Allocator, io: Io) !xirasm.data.ProjectConfig {
@@ -1188,8 +1304,16 @@ fn readResolvedIncludePath(
     allocator: Allocator,
     resolved_path: []const u8,
 ) xirasm.LowerError!xirasm.IncludeSource {
+    // The path is composed from a root and the caller's include argument, and
+    // joining only puts a separator between the parts: an argument written with
+    // `/` keeps its slashes, so a diagnostic line could read
+    // `root\include/format/x.inc`. Normalize the separators of the path that is
+    // shown and recorded.
     const owned_path = try allocator.dupe(u8, resolved_path);
     errdefer allocator.free(owned_path);
+    for (owned_path) |*byte| {
+        if (byte.* == '/') byte.* = std.fs.path.sep;
+    }
 
     const real_identity = std.Io.Dir.cwd().realPathFileAlloc(resolver.io, resolved_path, allocator) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
@@ -1505,6 +1629,7 @@ fn initMainTemplate(target: InitTargetConfig) []const u8 {
     return switch (initTemplateKind(target)) {
         .flat_x86_32 => init_flat_x86_32_template,
         .flat_x86_64 => init_flat_x86_64_template,
+        .flat_aarch64 => init_flat_aarch64_template,
         .flat_riscv32 => init_flat_riscv32_template,
         .flat_riscv64 => init_flat_riscv64_template,
         .pe32 => init_pe32_template,
@@ -1520,6 +1645,14 @@ fn initTemplateKind(target: InitTargetConfig) InitTemplateKind {
         std.mem.eql(u8, target.isa, "rv64") or
         std.mem.eql(u8, target.isa, "rv32");
     if (is_riscv) return if (target.bits == 32) .flat_riscv32 else .flat_riscv64;
+
+    // AArch64 has no PE or ELF executable template of its own, and it must not
+    // fall through to the x86 flat starter: that would scaffold x86 code for an
+    // AArch64 project.
+    const is_aarch64 = std.mem.eql(u8, target.isa, "aarch64") or
+        std.mem.eql(u8, target.isa, "arm64") or
+        std.mem.eql(u8, target.isa, "a64");
+    if (is_aarch64) return .flat_aarch64;
 
     if (std.mem.eql(u8, target.os, "windows")) {
         return if (target.bits == 32) .pe32 else .pe64;
@@ -1578,6 +1711,23 @@ const init_flat_x86_64_template =
     \\
     \\start:
     \\    mov rax, 1
+    \\    ret
+    \\
+;
+
+const init_flat_aarch64_template =
+    \\// Flat AArch64 binary starter.
+    \\//
+    \\// AArch64 instructions come from the generated macro library rather than from
+    \\// a backend encoder, so the file imports that library and then writes
+    \\// instructions in natural syntax.
+    \\
+    \\import("arm/a64-macros.inc");
+    \\
+    \\origin(0);
+    \\
+    \\start:
+    \\    nop
     \\    ret
     \\
 ;
@@ -1731,6 +1881,7 @@ fn writeHelpTopic(writer: *Io.Writer, topic: HelpTopic) Io.Writer.Error!void {
         .overview => try writer.writeAll(helpText()),
         .init => try writer.writeAll(initHelpText()),
         .targets => try writer.writeAll(targetsHelpText()),
+        .templates => try writer.writeAll(templatesHelpText()),
     }
 }
 
@@ -1739,42 +1890,53 @@ fn helpText() []const u8 {
     \\Usage:
     \\  xirasm <source.xir> [options]
     \\  xirasm build [source.xir] [options]
-    \\  xirasm init [dir] [--target <target>] [--name <name>] [--force]
-    \\  xirasm init [dir] [--isa <isa>] [--bits <32|64>] [--os <os>] [--abi <abi>]
-    \\  xirasm help [init|targets]
+    \\  xirasm init [dir] [--template <name>] [--name <name>] [--force]
+    \\  xirasm help [init|targets|templates]
     \\
     \\Options:
     \\  -h, --help        Show this help text
     \\  -V, --version     Show the XIRASM version
-    \\  -o <path>         Write assembled output bytes to the given file
+    \\  -o <path>         Override the output path. Assembling one source needs no
+    \\                    options: xirasm demo.xir writes demo.bin beside it, and a
+    \\                    project takes its output from xirasm.toml
+    \\  --isa <name>      Starting ISA, for a source that does not select one itself
     \\  --listing <path>  Write a source/bytes listing file
-    \\  --lst <path>      Alias for --listing
-    \\  --target <target> Select x86-64, x86, rv64, rv32, or spv
     \\  --timings         Print assembly timing summary
     \\  --trace-phases    Print timing summary plus per-phase timings
-    \\  --isa, --arch     Set init template ISA without changing OS/ABI
-    \\  --bits, --bit     Set init template bit width: 32 or 64
-    \\  --os              Select init output model: bin, windows, or linux
-    \\  --abi             Set init template ABI field
     \\  --progress        Force terminal progress while assembling
     \\  --no-progress     Disable terminal progress
+    \\  --target <name>   Older spelling of --isa; --lst of --listing
+    \\
+    \\init options:
+    \\  --template <name> Scaffold from a named template (see `xirasm help templates`)
+    \\  --isa             Template ISA without changing OS/ABI
+    \\  --bits            Template bit width: 32 or 64
+    \\  --os              Template output model: bin, windows, or linux
+    \\  --abi             Template ABI field
+    \\  --name <name>     Project name written into xirasm.toml
+    \\  --force           Write into a directory that already has files
     \\
     \\Examples:
     \\  xirasm demo.xir
-    \\  xirasm demo.xir -o demo.bin
-    \\  xirasm demo.xir --target rv64 -o demo.bin
+    \\  xirasm demo.xir --isa rv64
+    \\  xirasm demo.xir --listing demo.lst
     \\  xirasm build
-    \\  xirasm init demo --target x86-64
-    \\  xirasm init hello-win --isa x86-64 --os windows --abi msvc
-    \\  xirasm init hello-linux --isa x86-64 --os linux --abi sysv
-    \\  xirasm help init
-    \\  xirasm help targets
+    \\  xirasm init demo
+    \\  xirasm init hello-win --template pe64
+    \\  xirasm help templates
     \\
     \\Notes:
     \\  - Subcommands come first: use `xirasm build --timings`, not `xirasm --timings build`
-    \\  - build uses the source and output path from xirasm.toml
-    \\  - x86 Windows/Linux init templates use import("format/format.inc")
-    \\  - bin, none, and RISC-V init templates remain flat binary starters
+    \\  - The ISA selects the starting target only. A source that picks one itself
+    \\    (x86.use64(), riscv.use32(), the A64 macro library) uses its own choice.
+    \\  - Output format is chosen in the source, by importing it:
+    \\    import("format/format.inc") and a facade call produce PE, ELF, COFF, or
+    \\    Mach-O; the assembler itself only turns a source into bytes, so the CLI
+    \\    has no format, linker, or object-file switch.
+    \\  - build reads source, output, target, defines, and prelude includes from
+    \\    xirasm.toml; command line options win over that file.
+    \\  - xirasm.toml can list [include] files = [...] to lower sources before the
+    \\    main one, and [defines] name = value for compile-time values.
     \\
     ;
 }
@@ -1786,10 +1948,11 @@ fn initHelpText() []const u8 {
     \\  xirasm init [dir] [--isa <isa>] [--bits <32|64>] [--os <os>] [--abi <abi>]
     \\
     \\Template selection:
-    \\  x86 + --os windows   PE32/PE64 executable, output build/app.exe
-    \\  x86 + --os linux     ELF32/ELF64 executable, output build/app
-    \\  --os bin or none     Flat binary source, output build/app.bin
-    \\  RISC-V               Flat binary source, output build/app.bin
+    \\  pe64, pe32       x86 PE executable, output build/app.exe
+    \\  elf64, elf32     x86 ELF executable, output build/app
+    \\  bin64, bin32     x86 flat binary, output build/app.bin
+    \\  bin-aarch64      AArch64 flat binary through the A64 macro library
+    \\  bin-rv64, bin-rv32  RISC-V flat binary
     \\
     \\Generated project:
     \\  xirasm.toml           Source, output, and target defaults
@@ -1801,9 +1964,31 @@ fn initHelpText() []const u8 {
     \\  Advanced sources may explicitly import a format-specific include.
     \\
     \\Examples:
-    \\  xirasm init demo --target x86-64
-    \\  xirasm init hello-win --isa x86-64 --os windows --abi msvc
-    \\  xirasm init hello-linux --isa x86-64 --os linux --abi sysv
+    \\  xirasm init demo
+    \\  xirasm init hello-win --template pe64
+    \\  xirasm init hello-linux --template elf64
+    \\  xirasm help templates
+    \\
+    ;
+}
+
+fn templatesHelpText() []const u8 {
+    return
+    \\Templates (`xirasm init <dir> --template <name>`):
+    \\  pe64, pe32      x86 PE executable through format/format.inc
+    \\  elf64, elf32    x86 ELF executable through format/format.inc
+    \\  bin64, bin32    x86 flat binary
+    \\  bin-aarch64     AArch64 flat binary, importing the A64 macro library
+    \\  bin-rv64, bin-rv32  RISC-V flat binary
+    \\
+    \\A template only writes a starter project: xirasm.toml, src/main.xir, and an
+    \\include/README.md. Assembling that project never consults the template, so
+    \\switching output format later means editing the source's imports rather than
+    \\re-running init. --isa/--bits/--os/--abi select the same combinations by hand.
+    \\
+    \\Platform libraries are includes, not CLI flags: a source that targets Android
+    \\imports os/android/defs/... and the imports it needs, exactly as the
+    \\executable starters import format/format.inc.
     \\
     ;
 }
@@ -1813,15 +1998,21 @@ fn targetsHelpText() []const u8 {
     \\Targets:
     \\  x86-64, x86_64, x64  64-bit x86
     \\  x86, x86-32          32-bit x86
+    \\  aarch64, arm64, a64  AArch64 (instructions come from the A64 macro library)
     \\  rv64, riscv64        64-bit RISC-V
     \\  rv32, riscv32        32-bit RISC-V
     \\  spv, spirv           SPIR-V 1.6 module
+    \\
+    \\The target is a default for the source, not an instruction to it: a source
+    \\that selects an ISA itself (x86.use64(), riscv.use32(), the A64 macros) uses
+    \\that one. Output format is chosen in the source as well, by importing a
+    \\format include and calling its facade; the CLI has no format switch.
     \\
     \\Init template selection:
     \\  x86 + --os windows   PE32/PE64 executable through format/format.inc
     \\  x86 + --os linux     ELF32/ELF64 executable through format/format.inc
     \\  --os bin or none     Flat binary source
-    \\  RISC-V               Flat binary source
+    \\  RISC-V, AArch64      Flat binary source
     \\
     \\Format layers:
     \\  ordinary users       import("format/format.inc")
@@ -1845,6 +2036,10 @@ fn writeCliParseIssue(writer: *Io.Writer, issue: CliParseIssue) Io.Writer.Error!
             .{ paths.first, paths.second },
         ),
         .unknown_option => |option| try writer.print("error: unknown option {s}\n", .{option}),
+        .init_only_option => |option| try writer.print(
+            "error: {s} only applies to `xirasm init`, which scaffolds a project; an assembly chooses its output format by importing it, and its ISA by selecting one in the source\n",
+            .{option},
+        ),
         .unknown_help_topic => |topic| try writer.print("error: unknown help topic {s}\n", .{topic}),
         .invalid_target => |target| try writer.print("error: invalid target {s}\n", .{target}),
         .invalid_init_value => |item| try writer.print("error: invalid init value for {s}: {s}\n", .{ item.key, item.value }),
@@ -2062,6 +2257,78 @@ test "init executable templates use ordinary format facade" {
     try std.testing.expect(std.mem.indexOf(u8, elf32, "format/elf32.inc") == null);
 }
 
+// The ISA table is the single place a name is written down, so the help text has
+// to be generated from the same knowledge. Rather than build the text at run time,
+// this pins the two together: a name added to the table but not to the help fails
+// here instead of shipping a target nobody can discover.
+test "the target help lists every name the table accepts" {
+    const help = targetsHelpText();
+    for (isa_table) |entry| {
+        try std.testing.expect(std.mem.indexOf(u8, help, entry.canonical) != null);
+        for (entry.aliases) |alias| {
+            try std.testing.expect(std.mem.indexOf(u8, help, alias) != null);
+        }
+    }
+}
+
+test "every template name maps to a distinct template" {
+    for (template_table, 0..) |entry, index| {
+        const kind = templateKindForName(entry.name) orelse return error.UnknownTemplate;
+        try std.testing.expectEqual(entry.kind, kind);
+        // The named template and the explicit options must agree, or `--template`
+        // would scaffold something other than what it documents.
+        try std.testing.expectEqual(kind, initTemplateKind(initTargetForTemplate(kind)));
+        for (template_table[0..index]) |earlier| {
+            try std.testing.expect(!std.mem.eql(u8, earlier.name, entry.name));
+        }
+    }
+    try std.testing.expect(templateKindForName("nope") == null);
+}
+
+test "an aarch64 init scaffolds AArch64 rather than falling through to x86" {
+    const target = parseInitTarget("aarch64") orelse return error.UnknownTarget;
+    try std.testing.expectEqualStrings("aarch64", target.isa);
+    try std.testing.expectEqual(InitTemplateKind.flat_aarch64, initTemplateKind(target));
+
+    const source = initMainTemplate(target);
+    try std.testing.expect(std.mem.indexOf(u8, source, "arm/a64-macros.inc") != null);
+    // The bug this guards: before the template existed, an AArch64 project was
+    // scaffolded with the x86 starter.
+    try std.testing.expect(std.mem.indexOf(u8, source, "x86.use") == null);
+    try std.testing.expectEqualStrings("build/app.bin", initOutputPath(target));
+}
+
+test "isa is an alias of target and init only options explain themselves" {
+    const aliased = parseCliArgs(&.{ "xirasm", "demo.xir", "--isa", "rv64" });
+    switch (aliased) {
+        .ok => |command| switch (command) {
+            .assemble => |options| try std.testing.expectEqual(xirasm.Isa.riscv64, options.target.isa()),
+            else => return error.UnexpectedCommand,
+        },
+        .err => return error.UnexpectedParseError,
+    }
+
+    const built = parseCliArgs(&.{ "xirasm", "build", "--isa", "aarch64" });
+    switch (built) {
+        .ok => |command| switch (command) {
+            .build => |options| try std.testing.expectEqual(xirasm.Isa.aarch64, options.target.?.isa()),
+            else => return error.UnexpectedCommand,
+        },
+        .err => return error.UnexpectedParseError,
+    }
+
+    for ([_][]const u8{ "--os", "--abi", "--bits", "--arch" }) |option| {
+        const rejected = parseCliArgs(&.{ "xirasm", "demo.xir", option, "windows" });
+        switch (rejected) {
+            .err => |issue| switch (issue) {
+                .init_only_option => |reported| try std.testing.expectEqualStrings(option, reported),
+                else => return error.UnexpectedIssue,
+            },
+            .ok => return error.ExpectedRejection,
+        }
+    }
+}
+
 test "init RISC-V template remains flat" {
     const source = initMainTemplate(.{
         .isa = "riscv64",
@@ -2160,6 +2427,56 @@ test "build options prefer cli target over project config target" {
     });
     try std.testing.expectEqual(xirasm.Isa.x86_64, resolved.target.isa());
     try std.testing.expectEqual(@as(u16, 32), resolved.target.bits().?);
+}
+
+// The regression this guards: `explicitTarget` used to compare the requested
+// value against the built-in default, so `--target x64` looked like "no flag" and
+// the project file silently won. x86-64 *is* the default, which made the most
+// common request the one that was ignored. The older test above missed it because
+// it passed a non-default value.
+test "an explicit default target still beats the project config" {
+    var config = try xirasm.data.loadProjectConfig(std.testing.allocator,
+        \\[build]
+        \\source = "src/app.xir"
+        \\
+        \\[target]
+        \\isa = "riscv64"
+        \\bits = 64
+        \\
+    );
+    defer config.deinit(std.testing.allocator);
+
+    const explicit = try resolveBuildTarget(config, .{ .target = .{ .x86 = .{ .mode_bits = 64 } } });
+    try std.testing.expectEqual(xirasm.Isa.x86_64, explicit.isa());
+    try std.testing.expectEqual(@as(u16, 64), explicit.bits().?);
+
+    // Saying nothing still lets the project file decide.
+    const from_config = try resolveBuildTarget(config, .{});
+    try std.testing.expectEqual(xirasm.Isa.riscv64, from_config.isa());
+}
+
+// AArch64 had no name anywhere: `--target aarch64` was rejected while the A64
+// macro library was a supported output path, so A64 sources had to be assembled
+// with `--target x64`, which is nonsense to read and to document.
+test "aarch64 is nameable from the command line and the project file" {
+    for ([_][]const u8{ "aarch64", "arm64", "a64" }) |name| {
+        const parsed = parseTarget(name) orelse return error.UnknownTarget;
+        try std.testing.expectEqual(xirasm.Isa.aarch64, parsed.isa());
+        try std.testing.expectEqualStrings("aarch64", targetName(parsed));
+    }
+    try std.testing.expect(parseTarget("arm") == null);
+
+    var config = try xirasm.data.loadProjectConfig(std.testing.allocator,
+        \\[build]
+        \\source = "src/app.xir"
+        \\
+        \\[target]
+        \\isa = "aarch64"
+        \\
+    );
+    defer config.deinit(std.testing.allocator);
+    const resolved = try resolveBuildTarget(config, .{});
+    try std.testing.expectEqual(xirasm.Isa.aarch64, resolved.isa());
 }
 
 test "project flat assembly applies defines and includes before main source" {

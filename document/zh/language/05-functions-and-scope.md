@@ -1,4 +1,4 @@
-﻿# 第 5 章：函数与作用域
+# 第 5 章：函数与作用域
 
 ## 函数复用汇编期间的工作
 
@@ -31,6 +31,19 @@ byte (LIMIT + 2)
 `operand.eval` 用调用处捕获的值绑定求值；宏内同名变量不会改变传入表达式的含义。
 类型、整数溢出、变量声明和赋值仍遵循普通 Meta 规则。前向标号应通过
 `operand.text` 交给延迟分支辅助函数，不应提前求地址。
+
+在**指令操作数**里请直接写参数本身——`mov rax, value` 或 `mov rax, value + 1`。
+宏会在编码器看到这一行之前把参数替换成它捕获的**文本**，所以写在那里的
+`operand.eval(value)` 已经没有可求值的 operand，引用无法解析。确实需要值时先绑定：
+
+```asm
+macro double_byte(value) {
+    const n: u64 = operand.eval(value) * 2
+    emit.u8(n)
+}
+```
+
+`operand.eval` 适用于 API 实参与 `const` 初始化——那些位置要的正是值。
 
 `operand.text(op)` 取拼写；`operand.slice(op, start, end)` 取经过边界检查的
 左闭右开字节片段；`operand.split(op)` 在顶层逗号处分割，保留引号和配对的
@@ -70,6 +83,16 @@ bytes 1, 2, 3
 100,000 次，每次最多 256 个操作数、64 层操作数括号。这不替代原有 Meta 循环限制。
 保存的操作数之间最多有 128 层捕获依赖，超限报告 `MacroCaptureDepthExceeded`。
 捕获会复制可见的值绑定；不再需要原始语法时应保存求值结果，避免长期保留较大的环境和集合。
+
+源码嵌套深度同样有上限，且**每条都会带位置报错，不会无声失败**。语句在块、
+`if`/`else`、循环、函数与宏体、`struct` 体、终结器和 `late_layout` 体内最多嵌套
+128 层，更深报告 `StatementNestingTooDeep`。表达式最多嵌套 64 层括号、前缀运算符
+和 `list.of` 元素，超限报告 `ExpressionNestingTooDeep`——**扁平的运算符链不算嵌套**，
+不受此限。聚合字面量最多嵌套 64 层（`StructNestingTooDeep`）。编译期读取的文档
+（`toml.parse`、`json.parse` 及其文件变体）最多嵌套 64 层，报告 `NestingTooDeep`，
+其描述的值以及之后对它的每一次遍历都因此有界。设这些上限的原因：解析器、布局遍历和
+值遍历都是"每层嵌套多一层调用栈"，没有上限时几 KB 的嵌套分隔符就能耗尽调用栈，
+而**栈溢出连一行诊断都不会打印**。
 静态标号仍是模块标号；私有标号用 `sym.unique` 配合 `label.define`。
 `isa(text)` 可绕过宏查找，直接提交原生指令。
 

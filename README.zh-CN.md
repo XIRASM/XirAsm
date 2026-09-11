@@ -53,13 +53,24 @@ zig build -Doptimize=ReleaseSafe
 将生成的 `xirasm` 加入 `PATH`，然后创建并构建一个原生项目：
 
 ```text
-xirasm init hello --isa x86-64 --os windows --abi msvc
+xirasm init hello --template pe64
 cd hello
 xirasm build
 ```
 
-生成目录自带源码和 `xirasm.toml`，之后进目录执行 `xirasm build` 就行。Linux 上把参数换成
-`--os linux --abi sysv`，同样的命令产出的是 ELF 可执行文件。
+生成目录自带源码和 `xirasm.toml`，之后进目录执行 `xirasm build` 就行。换成
+`--template elf64` 得到的是同一套起步工程，只是产出 ELF 可执行文件；其余模板用
+`xirasm help templates` 查看。
+
+汇编单个文件**不需要任何选项**：`xirasm hello.asm` 会在源文件旁写出 `hello.bin`；
+`--isa` 只是给"自己没有选择 ISA 的源码"提供一个起始目标。输出格式不是命令行的事——
+源码自己 import 需要的格式层，汇编器只负责把源码变成字节。
+
+`--listing hello.lst` 会在产物旁边写一份列表文件。每行依次是：**地址（RVA）、文件偏移
+（FOA）、源码行号、行类型（`code`/`data`/`resv`/`algn`/`gap`/`trim`）、展开深度、字节、
+源码行**。文件里存在但不属于任何片段的字节会以 `gap` 行列出来并显示其真实内容；被裁掉的
+尾部预留空间显示为 `trim` 且**没有文件偏移**（文件里并没有那个字节）。由宏或函数展开产生
+的行会**以调用点开头**，所以宏库的列表依然可读。
 
 有一条 CLI 规则值得先知道：子命令写在选项之前，用 `xirasm build --timings`，
 不要写成 `xirasm --timings build`。
@@ -101,22 +112,25 @@ entry:
 ```
 
 ```text
-xirasm hello.asm --target x86-64 -o hello.bin
+xirasm hello.asm
 ```
 
 ## 一套工具，多种目标
 
 | 指令集 | 怎么选 | 产出什么 |
 | --- | --- | --- |
-| x86，16/32/64 位 | `--target x86-64` 或 `--target x86` | PE32/PE64、COFF32/COFF64、ELF32/ELF64、flat 镜像 |
-| AArch64 | 在源码里 `import("arm/a64-macros.inc")` | ELF64 可执行文件、PIE、共享库与目标文件、PE64、COFF64、Mach-O arm64、Android 库 |
-| RISC-V RV64/RV32 | `--target rv64` 或 `--target rv32` | flat 镜像与 RISC-V 指令流 |
-| SPIR-V 1.6 | `--target spv` | 给 GPU 与 IR 工具用的完整模块 |
+| x86，16/32/64 位 | `--isa x86-64` 或 `--isa x86` | PE32/PE64、COFF32/COFF64、ELF32/ELF64、flat 镜像 |
+| AArch64 | `--isa aarch64`，或在源码里 `import("arm/a64-macros.inc")` | ELF64 可执行文件、PIE、共享库与目标文件、PE64、COFF64、Mach-O arm64、Android 库 |
+| RISC-V RV64/RV32 | `--isa rv64` 或 `--isa rv32` | flat 镜像与 RISC-V 指令流 |
+| SPIR-V 1.6 | `--isa spv` | 给 GPU 与 IR 工具用的完整模块 |
 
-AArch64 是唯一不挂在目标开关上的那个，这点值得说清楚：它的指令层是一个 include，不是
-CLI 选项。引入之后，`mov x8, #93` 和 `svc #0` 与别的指令一样汇编；至于结果变成 ELF64
-镜像、PE64 镜像、目标文件还是 Mach-O 镜像，由格式接口决定。目前 PE、COFF、ELF 与 Mach-O
-的封装覆盖 x86-64 和 AArch64；RISC-V 与 SPIR-V 对应的是指令流和模块。
+`--isa` 是**起始目标**而不是强制要求：源码自己选了 ISA（`x86.use64()`、`riscv.use32()`、
+A64 宏库）就听源码的，这个旗标只兜住没选的源码。`--target` 是 `--isa` 的旧拼写，仍然可用。
+
+AArch64 没有后端编码器：它的指令层是一个 include，而不是汇编器里的解码器。引入之后，
+`mov x8, #93` 和 `svc #0` 与别的指令一样汇编；至于结果变成 ELF64 镜像、PE64 镜像、目标文件
+还是 Mach-O 镜像，由格式接口决定。目前 PE、COFF、ELF 与 Mach-O 的封装覆盖 x86-64 和
+AArch64；RISC-V 与 SPIR-V 对应的是指令流和模块。
 
 四类目标的工程模型和编译期语言是同一套。不必为 x86 学一套宏系统，再为 RISC-V 学另一套
 生成方式。
@@ -222,7 +236,7 @@ ISA 指令改造成一套编程语言 API。
 
 ## 状态
 
-当前版本：**0.2.22**。参见[版本说明](document/zh/releases/0.2.22.md)。
+当前版本：**0.3.0**。参见[版本说明](document/zh/releases/0.3.0.md)。
 
 XIRASM 仍处于 1.0 之前。汇编器、语言 API、格式库、CLI 与编辑器支持目前已经可以实际使用，
 公开契约在 1.0 前仍可能继续收敛。它无意取代那些成熟的宏汇编器——它们背后是几十年的工具

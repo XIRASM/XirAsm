@@ -33,8 +33,27 @@ pub const Module = struct {
     fixups: fixup.FixupStore = .{},
     types: types.TypeStore = .{},
     type_names: std.ArrayList(TypeNameBinding) = .empty,
+    /// Name lookup index for `type_names`. It borrows the names those bindings own
+    /// (it must never free them) and is only consulted while it covers every entry;
+    /// an insertion that cannot be indexed leaves it short, and lookup falls back to
+    /// scanning. Registering types was quadratic before this index existed, because
+    /// every declaration scanned the whole table to reject duplicates.
+    type_name_index: std.StringHashMapUnmanaged(types.TypeId) = .empty,
     value_functions: meta_function.Store = .{},
     virtual_sections: std.ArrayList(section.SectionId) = .empty,
+    /// How many fragments the last on-demand instruction encoding saw. Reading the
+    /// current address needs every earlier instruction encoded, and the encoding
+    /// walks all fragments, so the count is the memo that keeps that cheap.
+    materialized_fragment_count: usize = 0,
+    /// Set once a SPIR-V instruction fragment exists. The encoder validates that
+    /// every SPIR-V fragment agrees on section and version, and that check walks
+    /// the module; without this flag every x86 or RISC-V encode would pay for it.
+    has_spirv_fragments: bool = false,
+    /// How many anchored labels were ever defined, so the encoder can skip
+    /// rebuilding a module layout for a module that has none. Redefining a name
+    /// can only leave this high, which costs an unnecessary sync, never a missed
+    /// one.
+    anchored_label_count: usize = 0,
     late_layout: output_contracts.LateLayoutStore = .{},
     deferred: output_contracts.DeferredStore = .{},
     sources: source.SourceMap = .{},
@@ -62,6 +81,7 @@ pub const Module = struct {
         self.deferred.deinit(self.allocator);
         self.late_layout.deinit(self.allocator);
         self.value_functions.deinit(self.allocator);
+        self.type_name_index.deinit(self.allocator);
         for (self.type_names.items) |*binding| {
             binding.deinit(self.allocator);
         }
@@ -251,6 +271,32 @@ pub const Module = struct {
         return section_id;
     }
 
+    /// Turn a virtual region into a real output region at `origin`/`file_offset`.
+    ///
+    /// This is how scratch content reaches the file when its instructions carry
+    /// references. The section keeps its fragments, labels, and fixups, so a
+    /// reference encoded inside it is resolved against the new address by the
+    /// ordinary fixup pass, exactly like a hand-written instruction. It has to
+    /// happen before fixups are resolved, which is why late layout is the place
+    /// to call it.
+    pub fn promoteVirtualSection(
+        self: *Module,
+        section_id: section.SectionId,
+        origin: u64,
+        file_offset: u64,
+    ) !void {
+        const stored = try self.sections.get(section_id);
+        if (stored.kind != .virtual_output) return error.InvalidSection;
+        try self.sections.setKind(section_id, .main);
+        try self.sections.setOrigin(section_id, origin);
+        try self.sections.setFileOffset(section_id, file_offset);
+        for (self.virtual_sections.items, 0..) |candidate, index| {
+            if (candidate.index != section_id.index) continue;
+            _ = self.virtual_sections.orderedRemove(index);
+            break;
+        }
+    }
+
     pub fn appendIsaInstruction(
         self: *Module,
         section_id: section.SectionId,
@@ -270,6 +316,7 @@ pub const Module = struct {
         );
         errdefer removeLastFragment(&self.fragments, self.allocator);
         try self.sections.appendFragment(self.allocator, section_id, fragment_id);
+        if (instruction_target.isa() == .spirv) self.has_spirv_fragments = true;
         return fragment_id;
     }
 
@@ -331,6 +378,7 @@ pub const Module = struct {
         fragment_position: u32,
         span: source.SourceSpan,
     ) !symbol.SymbolId {
+        self.anchored_label_count += 1;
         return self.symbols.defineAnchoredLabel(self.allocator, name, section_id, offset, fragment_position, span);
     }
 
@@ -404,9 +452,18 @@ pub const Module = struct {
             .name = owned_name,
             .ty = id,
         });
+        // The index has to take every entry. When it cannot, the entry that points
+        // at the name is dropped as well, so the table never refers to freed memory.
+        errdefer {
+            _ = self.type_names.pop();
+        }
+        try self.type_name_index.put(self.allocator, owned_name, id);
     }
 
     pub fn lookupTypeName(self: *const Module, name: []const u8) ?types.TypeId {
+        if (self.type_name_index.count() == self.type_names.items.len) {
+            return self.type_name_index.get(name);
+        }
         for (self.type_names.items) |binding| {
             if (std.mem.eql(u8, binding.name, name)) return binding.ty;
         }

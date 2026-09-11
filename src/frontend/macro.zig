@@ -89,7 +89,7 @@ pub fn dispatch(
     const declaration = context.macros.items.items[index];
     const function = declaration.definition;
     const previous_expansion = module.diagnostics.active_expansion;
-    module.diagnostics.active_expansion = try module.diagnostics.beginExpansion(allocator, instruction.span, function.span);
+    module.diagnostics.active_expansion = try module.diagnostics.beginExpansion(allocator, instruction.span, function.span, .macro);
     defer module.diagnostics.active_expansion = previous_expansion;
     const environment = try context_mod.captureOperandEnvironment(context, allocator, module);
     defer environment.release(allocator);
@@ -663,8 +663,13 @@ test "macro bodies do not rerun during instruction encoding" {
     defer module.deinit();
     const count = module.fragments.items.items.len;
     const first = try @import("pass.zig").encodeInstructionFragments(allocator, &module);
+    try std.testing.expectEqual(@as(usize, 1), first.encoded_count);
+    // The second pass has nothing left to encode, because a fragment that
+    // already carries bytes is not encoded again. It must certainly not run a
+    // macro body a second time: the fragment count and the `calls` counter
+    // below are the evidence for that.
     const second = try @import("pass.zig").encodeInstructionFragments(allocator, &module);
-    try std.testing.expectEqual(first.encoded_count, second.encoded_count);
+    try std.testing.expectEqual(@as(usize, 0), second.encoded_count);
     try std.testing.expectEqual(count, module.fragments.items.items.len);
     const id = module.symbols.lookup("calls") orelse return error.MissingSymbol;
     const symbol = try module.symbols.get(id);

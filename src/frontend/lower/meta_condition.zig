@@ -48,6 +48,8 @@ pub fn evaluate(
 fn mapMetaConditionParseError(err: expr.ExpressionError) LowerError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
+        error.ExpressionNestingTooDeep => error.ExpressionNestingTooDeep,
+        error.NestingTooDeep => error.NestingTooDeep,
         error.InvalidToken,
         error.InvalidCharacter,
         error.InvalidNumber,

@@ -96,6 +96,7 @@ pub fn evalContext(
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,
         .eval_operand = @import("../macro.zig").evaluateOperand,
+        .current_span = context.statement_span,
     };
 }
 
@@ -129,6 +130,8 @@ pub fn mapLowerErrorToExpression(err: contracts.LowerError) expr.ExpressionError
 pub fn mapExpressionError(err: expr.ExpressionError) contracts.LowerError {
     return switch (err) {
         error.OutOfMemory => error.OutOfMemory,
+        error.ExpressionNestingTooDeep => error.ExpressionNestingTooDeep,
+        error.NestingTooDeep => error.NestingTooDeep,
         error.UnknownTypeName => error.UnknownTypeName,
         error.UnknownField => error.UnknownField,
         error.DivisionByZero => error.DivisionByZero,

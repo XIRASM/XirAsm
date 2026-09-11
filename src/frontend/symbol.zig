@@ -47,13 +47,27 @@ pub const Symbol = struct {
 
 pub const SymbolStore = struct {
     items: std.ArrayList(Symbol) = .empty,
+    /// Name lookup index. It borrows the names owned by `items` (it must never free
+    /// them) and it covers every entry: `lookup` consults it only while that holds,
+    /// and falls back to scanning otherwise, which keeps the store correct whatever
+    /// happens to the index. Declaring symbols was quadratic before this index
+    /// existed, because every declaration scanned the whole store.
+    names: std.StringHashMapUnmanaged(SymbolId) = .empty,
 
     pub fn deinit(self: *SymbolStore, allocator: Allocator) void {
+        self.names.deinit(allocator);
         for (self.items.items) |*symbol| {
             symbol.deinit(allocator);
         }
         self.items.deinit(allocator);
         self.* = undefined;
+    }
+
+    /// Adds a name to the lookup index. The index has to take every entry: an
+    /// allocation failure is a real failure here and propagates to the caller,
+    /// which already reports allocation errors from the name duplication above.
+    fn indexName(self: *SymbolStore, allocator: Allocator, name: []const u8, id: SymbolId) !void {
+        try self.names.put(allocator, name, id);
     }
 
     pub fn defineLabel(
@@ -105,6 +119,12 @@ pub const SymbolStore = struct {
             },
             .span = span,
         });
+        // If the index cannot take the name, the store must not keep an entry that
+        // points at it: drop the entry before the name is freed.
+        errdefer {
+            _ = self.items.pop();
+        }
+        try self.indexName(allocator, owned_name, id);
         return id;
     }
 
@@ -132,6 +152,12 @@ pub const SymbolStore = struct {
             },
             .span = span,
         });
+        // If the index cannot take the name, the store must not keep an entry that
+        // points at it: drop the entry before the name is freed.
+        errdefer {
+            _ = self.items.pop();
+        }
+        try self.indexName(allocator, owned_name, id);
         return id;
     }
 
@@ -166,6 +192,9 @@ pub const SymbolStore = struct {
     }
 
     pub fn lookup(self: *const SymbolStore, name: []const u8) ?SymbolId {
+        if (self.names.count() == self.items.items.len) {
+            return self.names.get(name);
+        }
         for (self.items.items, 0..) |symbol, index| {
             if (std.mem.eql(u8, symbol.name, name)) {
                 if (index > std.math.maxInt(u32)) return null;
@@ -253,4 +282,46 @@ test "symbol store records value bindings" {
         },
         else => return error.UnexpectedSymbolBinding,
     }
+}
+
+test "symbol lookup answers the same with and without the name index" {
+    var store: SymbolStore = .{};
+    defer store.deinit(std.testing.allocator);
+
+    var buffer: [32]u8 = undefined;
+    for (0..512) |index| {
+        const name = try std.fmt.bufPrint(&buffer, "value_{d}", .{index});
+        _ = try store.defineValue(
+            std.testing.allocator,
+            name,
+            value_mod.Value.int(@intCast(index)),
+            .let,
+            source.unknown_span,
+        );
+    }
+    try std.testing.expectEqual(@as(usize, 512), store.names.count());
+
+    // Indexed path: the map covers every entry.
+    const found = store.lookup("value_100");
+    try std.testing.expect(found != null);
+    try std.testing.expectEqual(@as(u32, 100), found.?.index);
+    try std.testing.expect(store.lookup("value_missing") == null);
+
+    // Fallback path: an index that does not cover every entry must not change
+    // any answer, so the scan is exercised deliberately.
+    store.names.clearRetainingCapacity();
+    try std.testing.expect(store.names.count() != store.items.items.len);
+    const scanned = store.lookup("value_100");
+    try std.testing.expect(scanned != null);
+    try std.testing.expectEqual(@as(u32, 100), scanned.?.index);
+    try std.testing.expect(store.lookup("value_missing") == null);
+
+    // A duplicate is still refused while scanning.
+    try std.testing.expectError(error.DuplicateSymbol, store.defineValue(
+        std.testing.allocator,
+        "value_7",
+        value_mod.Value.int(7),
+        .let,
+        source.unknown_span,
+    ));
 }

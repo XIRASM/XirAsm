@@ -8,13 +8,24 @@ const meta_std = @import("meta_std.zig");
 const module_mod = @import("module.zig");
 const output_mod = @import("output/root.zig");
 const source = @import("source.zig");
+const string_escape = @import("string_escape.zig");
 const target_mod = @import("target.zig");
 const value_mod = @import("value.zig");
 
 const Allocator = std.mem.Allocator;
 
+/// How deeply an expression may nest. Every level costs several stack frames in
+/// the parser and again in each walk of the finished tree (`Node.deinit`,
+/// `evaluateValue`, `usesCurrentOutput`), so an unbounded expression is a crash
+/// with no diagnostic rather than a diagnostic. Real expressions nest a handful
+/// of levels; this is far past anything hand-written, and a flat operator chain
+/// does not consume depth at all (it recurses through precedence, not nesting).
+pub const max_expression_nesting: u32 = 64;
+
 pub const ExpressionError = Allocator.Error || error{
     DivisionByZero,
+    ExpressionNestingTooDeep,
+    NestingTooDeep,
     FragmentTooLarge,
     InvalidArgument,
     InvalidCharacter,
@@ -219,6 +230,9 @@ pub const EvalContext = struct {
     evaluate_struct_literal: ?*const fn (context: *anyopaque, allocator: Allocator, text: []const u8, eval_ctx: *EvalContext) ExpressionError!value_mod.Value = null,
     eval_operand: ?*const fn (*anyopaque, Allocator, value_mod.OperandValue, *EvalContext) ExpressionError!value_mod.Value = null,
     undefined_symbols: []const []const u8 = &.{},
+    /// The statement being lowered. A value function reached from here reports
+    /// against it, because that is the line the reader wrote.
+    current_span: ?source.SourceSpan = null,
 };
 
 pub fn parseOwned(allocator: Allocator, input: []const u8) ExpressionError!Node {
@@ -311,6 +325,8 @@ const ExpressionParser = struct {
     allocator: Allocator,
     input: []const u8,
     pos: usize = 0,
+    /// Current expression nesting level; see `parseUnary` for why it is bounded.
+    depth: u32 = 0,
 
     fn init(allocator: Allocator, input: []const u8) ExpressionParser {
         return .{
@@ -441,6 +457,16 @@ const ExpressionParser = struct {
     }
 
     fn parseUnary(self: *ExpressionParser) ExpressionError!Node {
+        // Every nesting level of an expression passes through here: parentheses
+        // (parsePrimary -> parseExpression), prefix operators, and the elements
+        // of a `list.of(...)`. Without a bound, nested parentheses exhaust the
+        // stack while parsing and again in every later walk of the tree, and the
+        // process dies without a diagnostic. A flat operator chain is unaffected
+        // because it recurses through precedence levels, not through this call.
+        if (self.depth >= max_expression_nesting) return error.ExpressionNestingTooDeep;
+        self.depth += 1;
+        defer self.depth -= 1;
+
         self.skipWhitespace();
         const byte = self.peekByte() orelse return try self.parsePrimary();
         return switch (byte) {
@@ -553,6 +579,20 @@ const ExpressionParser = struct {
                     continue;
                 }
                 return .{ .string_literal = try text.toOwnedSlice(self.allocator) };
+            }
+
+            if (byte == '\\') {
+                // The backslash is already consumed, so the escape text starts
+                // one byte back. An escape may cover more than the two bytes
+                // `\n` does: `\uXXXX` names a code point and can decode to
+                // several UTF-8 bytes.
+                const remaining = self.input[self.pos - 1 ..];
+                if (string_escape.decodeEscape(quote, remaining)) |decoded| {
+                    try text.appendSlice(self.allocator, decoded.bytes[0..decoded.len]);
+                    var extra = decoded.consumed - 1;
+                    while (extra > 0) : (extra -= 1) _ = try self.requireByte();
+                    continue;
+                }
             }
 
             try text.append(self.allocator, byte);
@@ -1286,6 +1326,9 @@ fn evalMetaDataBuiltin(allocator: Allocator, call: BuiltinCall, ctx: *EvalContex
         error.Overflow,
         error.DuplicateKey,
         => return error.InvalidApiArgument,
+        // A document that nests past the supported depth is the caller's input
+        // problem, not a malformed call argument, so it keeps its own name.
+        error.NestingTooDeep => return error.NestingTooDeep,
     };
 
     for (args[0..initialized]) |*arg| {
@@ -1558,6 +1601,40 @@ fn builtinArgsUseOutputLoad(args: []const BuiltinArgument) bool {
     return false;
 }
 
+/// Whether the expression reads the address the assembly is currently at.
+///
+/// Those queries are answered while lowering, and instruction fragments only get
+/// a size when they are encoded, so the caller has to make the cursor current
+/// before evaluating this expression; otherwise the value is stale.
+pub fn usesCurrentAddress(node: *const Node) bool {
+    return switch (node.*) {
+        .builtin_call => |call| currentAddressBuiltin(call.name) or builtinArgsUseCurrentAddress(call.args),
+        .field_access => |access| usesCurrentAddress(access.object),
+        .unary => |unary| usesCurrentAddress(unary.operand),
+        .binary => |binary| usesCurrentAddress(binary.left) or usesCurrentAddress(binary.right),
+        .integer, .float64, .boolean, .string_literal, .bytes_literal, .symbol => false,
+    };
+}
+
+fn currentAddressBuiltin(name: []const u8) bool {
+    return std.mem.eql(u8, name, "here") or
+        std.mem.eql(u8, name, "file_offset") or
+        std.mem.eql(u8, name, "file_cursor_real") or
+        std.mem.eql(u8, name, "file_cursor_potential") or
+        std.mem.eql(u8, name, "tail_reserve_size");
+}
+
+fn builtinArgsUseCurrentAddress(args: []const BuiltinArgument) bool {
+    for (args) |arg| {
+        switch (arg) {
+            .expression => |*node| if (usesCurrentAddress(node)) return true,
+            .identifier => {},
+            .struct_literal => {},
+        }
+    }
+    return false;
+}
+
 fn evaluateBuiltinIntegerArg(allocator: Allocator, arg: BuiltinArgument, ctx: *EvalContext) ExpressionError!u64 {
     var value = try evaluateBuiltinValueArg(allocator, arg, ctx);
     defer value.deinit(allocator);
@@ -1648,17 +1725,6 @@ fn expectIntegerValue(value: value_mod.Value) ExpressionError!u64 {
 
 fn expectBooleanValue(value: value_mod.Value) ExpressionError!bool {
     return value.expectBoolean() catch error.TypeMismatch;
-}
-
-fn stringLiteralToWord(text: []const u8) u64 {
-    var value: u64 = 0;
-    const count = @min(text.len, @sizeOf(u64));
-    var index: usize = 0;
-    while (index < count) : (index += 1) {
-        const shift: std.math.Log2Int(u64) = @intCast(index * 8);
-        value |= @as(u64, text[index]) << shift;
-    }
-    return value;
 }
 
 fn parseIntegerLiteral(allocator: Allocator, token: []const u8) ExpressionError!u64 {
@@ -2090,6 +2156,38 @@ test "expression compares strings bytes and type values" {
     try std.testing.expectEqual(true, try evaluateBoolean(&type_expression, &ctx));
 }
 
+test "string literals decode escapes and keep unknown ones" {
+    const allocator = std.testing.allocator;
+    // Every `source` is XIRASM text; `expected` is the bytes it must produce.
+    const cases = [_]struct { source: []const u8, expected: []const u8 }{
+        .{ .source = "\"a\\nb\"", .expected = "a\nb" },
+        .{ .source = "\"a\\rb\"", .expected = "a\rb" },
+        .{ .source = "\"a\\tb\"", .expected = "a\tb" },
+        .{ .source = "\"a\\0b\"", .expected = "a\x00b" },
+        .{ .source = "\"a\\\\b\"", .expected = "a\\b" },
+        .{ .source = "\"a\\\"b\"", .expected = "a\"b" },
+        .{ .source = "'a\\'b'", .expected = "a'b" },
+        // A backslash this build does not decode keeps both characters: the
+        // backslash is never dropped, and `\uXXXX` from generated Windows API
+        // text survives as written.
+        .{ .source = "\"a\\ub\"", .expected = "a\\ub" },
+        .{ .source = "\"slash \\ ok\"", .expected = "slash \\ ok" },
+        // The other quote is not an escape for this literal.
+        .{ .source = "\"a\\'b\"", .expected = "a\\'b" },
+        // Doubled quotes still mean one quote.
+        .{ .source = "\"a\"\"b\"", .expected = "a\"b" },
+    };
+    for (cases) |case| {
+        var node = try parseOwned(allocator, case.source);
+        defer node.deinit(allocator);
+        try std.testing.expectEqualStrings(case.expected, node.string_literal);
+    }
+
+    var bytes_node = try parseOwned(allocator, "b\"a\\nb\"");
+    defer bytes_node.deinit(allocator);
+    try std.testing.expectEqualStrings("a\nb", bytes_node.bytes_literal);
+}
+
 test "expression rejects boolean as integer" {
     var module = try module_mod.Module.init(std.testing.allocator, @import("target.zig").Target.default);
     defer module.deinit();
@@ -2099,4 +2197,46 @@ test "expression rejects boolean as integer" {
     defer expression.deinit(std.testing.allocator);
 
     try std.testing.expectError(error.TypeMismatch, evaluateInteger(&expression, &ctx));
+}
+
+// An expression tree is parsed and then walked recursively several times
+// (`Node.deinit`, `evaluateValue`, `usesCurrentOutput`), so unbounded nesting
+// used to end in a stack overflow with no diagnostic rather than an error.
+test "expression parser bounds nesting instead of exhausting the stack" {
+    const allocator = std.testing.allocator;
+
+    // Well inside the bound the expression still parses. Each parenthesis costs
+    // one `parseUnary` call, and the innermost literal costs one more, so the
+    // usable depth is the bound itself; this test stays clear of the edge and
+    // `probes/g4/bound_check.py` measures the accepted/refused boundary.
+    const comfortable = max_expression_nesting / 2;
+    var at_limit = std.ArrayList(u8).empty;
+    defer at_limit.deinit(allocator);
+    var level: u32 = 0;
+    while (level < comfortable) : (level += 1) try at_limit.append(allocator, '(');
+    try at_limit.append(allocator, '1');
+    level = 0;
+    while (level < comfortable) : (level += 1) try at_limit.append(allocator, ')');
+    var parsed = try parseOwned(allocator, at_limit.items);
+    parsed.deinit(allocator);
+
+    // Twice the bound is refused.
+    var past_limit = std.ArrayList(u8).empty;
+    defer past_limit.deinit(allocator);
+    level = 0;
+    while (level < max_expression_nesting * 2) : (level += 1) try past_limit.append(allocator, '(');
+    try past_limit.append(allocator, '1');
+    level = 0;
+    while (level < max_expression_nesting * 2) : (level += 1) try past_limit.append(allocator, ')');
+    try std.testing.expectError(error.ExpressionNestingTooDeep, parseOwned(allocator, past_limit.items));
+
+    // A flat operator chain is not nesting: it recurses through precedence
+    // levels, so a long chain must keep working.
+    var chain = std.ArrayList(u8).empty;
+    defer chain.deinit(allocator);
+    try chain.appendSlice(allocator, "1");
+    level = 0;
+    while (level < 500) : (level += 1) try chain.appendSlice(allocator, " + 1");
+    var sum = try parseOwned(allocator, chain.items);
+    sum.deinit(allocator);
 }

@@ -21,6 +21,7 @@ pub const AdapterError = Allocator.Error || error{
     InvalidBackendFixupWidth,
     InvalidMemoryScale,
     InstructionTooLarge,
+    InstructionTextHasTerminator,
     InvalidInstructionText,
     InvalidRspIndexRegister,
     InvalidModeBits,
@@ -35,6 +36,7 @@ pub const AdapterError = Allocator.Error || error{
 
 pub const SpirvAdapterError = Allocator.Error || error{
     InstructionTooLarge,
+    InstructionTextHasTerminator,
     InvalidSpirvVersion,
     UnsupportedSpirvInstruction,
 };
@@ -74,6 +76,15 @@ pub const InstructionFacts = struct {
     current_size: u32,
     fixups: []FixupFact = &.{},
     relaxable: bool = false,
+    /// What the encoder had to say about these bytes without failing.
+    ///
+    /// The encoder reports conditions that change what the instruction does
+    /// without being errors -- an absolute address cut down to the width of the
+    /// displacement field, a segment override that 64-bit mode ignores. The
+    /// frontend never read them, so those conditions reached the file silently.
+    /// The slice is owned by the caller; every message in it is a string
+    /// literal owned by the backend.
+    warnings: []const []const u8 = &.{},
 
     pub fn deinit(self: *InstructionFacts, allocator: Allocator) void {
         allocator.free(self.bytes);
@@ -81,6 +92,7 @@ pub const InstructionFacts = struct {
             stored_fixup.deinit(allocator);
         }
         allocator.free(self.fixups);
+        allocator.free(self.warnings);
         self.* = undefined;
     }
 };
@@ -111,10 +123,19 @@ pub fn encodeInstruction(
     instruction: fragment.IsaInstructionFragment,
     options: target.Target,
 ) AdapterError!InstructionFacts {
+    // Both a source line and the string passed to `isa(...)` arrive here, so the
+    // terminator rule is stated once, for every ISA, before any backend parses
+    // the text. Without it `nop;` reaches the encoder as a mnemonic and the
+    // diagnostic blames the instruction form instead of the stray `;`.
+    if (isa_text.endsWithStatementTerminator(instruction.text)) return error.InstructionTextHasTerminator;
+
     return switch (instruction.target.isa()) {
         .x86_64 => encodeX86Instruction(allocator, instruction, options),
         .riscv64 => encodeRiscvInstruction(allocator, instruction, options),
-        .spirv => error.UnsupportedInstructionTarget,
+        // AArch64 has no encoder here: its instructions come from the generated
+        // A64 macro library, which emits bytes directly. Writing an instruction
+        // that the macros do not cover is an error rather than a silent nothing.
+        .aarch64, .spirv => error.UnsupportedInstructionTarget,
     };
 }
 
@@ -123,6 +144,8 @@ pub fn encodeSpirvSource(
     source_text: []const u8,
     options: target.Target,
 ) SpirvAdapterError!InstructionFacts {
+    if (isa_text.endsWithStatementTerminator(source_text)) return error.InstructionTextHasTerminator;
+
     const version = try spirvVersion(options);
     const bytes = backend.spirv.text.parseSourceToOwnedBytes(
         allocator,
@@ -143,7 +166,7 @@ pub fn encodeSpirvSource(
 fn spirvVersion(options: target.Target) SpirvAdapterError!backend.spirv.module.Version {
     const raw_version = switch (options) {
         .spirv => |config| config.version,
-        .x86, .riscv => return error.InvalidSpirvVersion,
+        .x86, .arm, .riscv => return error.InvalidSpirvVersion,
     };
     return switch (raw_version) {
         0x00010000 => .v1_0,
@@ -240,6 +263,10 @@ fn encodeX86Instruction(
     const current_size = sizeToU32(bytes.len) catch return error.InstructionTooLarge;
     const symbolic_operands = try fixups.toOwnedSlice(allocator);
     errdefer deinitFixupFacts(symbolic_operands, allocator);
+    // Copy the messages out before the encode result goes away. They are
+    // backend-owned literals, so only the slice needs to outlive it.
+    const warnings = try allocator.dupe([]const u8, encoded.encoded.warnings.items);
+    errdefer allocator.free(warnings);
     return .{
         .bytes = bytes,
         .min_size = if (encoded.branch_relaxation_decision == .rel8) current_size else current_size,
@@ -247,6 +274,7 @@ fn encodeX86Instruction(
         .current_size = current_size,
         .fixups = symbolic_operands,
         .relaxable = symbolic_operands.len != 0 or encoded.branch_relaxation_decision != null,
+        .warnings = warnings,
     };
 }
 

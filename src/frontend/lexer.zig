@@ -108,11 +108,36 @@ pub fn classifyLine(
         };
     }
 
-    const kind = classifyTrimmed(trimmed);
+    // A trailing `//` comment ends the line whatever the line is, so it is
+    // removed before the line is classified. Deciding the kind on the comment
+    // text instead would let a comment hide the header brace, the label colon,
+    // or an unbalanced quote, and the statement-balance scan that decides
+    // whether a statement continues onto the next line would read that comment
+    // as source text and swallow the following line.
+    //
+    // Most lines hold no `//` at all, and the scan below is a byte loop, so the
+    // vectorized search decides whether the scan is needed at all. A `//` that
+    // turns out to be inside a quoted operand leaves the line unchanged, which
+    // is what the scan would report as well.
+    const content = if (std.mem.indexOf(u8, trimmed, "//") == null)
+        trimmed
+    else
+        isaTextBeforeComment(trimmed);
+    if (content.len == 0) {
+        return .{
+            .kind = .comment,
+            .span = try makeSpan(source_id, absolute_start, absolute_end),
+            .text = trimmed,
+            .line = line,
+            .column = try columnFromOffset(offset),
+        };
+    }
+
+    const kind = classifyTrimmed(content);
     return .{
         .kind = kind,
-        .span = try makeSpan(source_id, absolute_start, absolute_end),
-        .text = trimmed,
+        .span = try makeSpan(source_id, absolute_start, absolute_start + content.len),
+        .text = content,
         .line = line,
         .column = try columnFromOffset(offset),
     };
@@ -411,6 +436,57 @@ test "lexer handles crlf line endings" {
     try std.testing.expectEqual(TokenKind.isa_line, ret.kind);
     try std.testing.expectEqualStrings("ret", ret.text);
     try std.testing.expect(lexer.done());
+}
+
+test "a trailing comment never changes how a line is classified" {
+    const input =
+        \\for i in range(0, 1) { // header comment
+        \\    mov rax, 1 // instruction comment
+        \\} // block end comment
+        \\loop: // label comment
+        \\const k: u64 = 1 // declaration comment
+        \\    ret // indented instruction
+        \\
+    ;
+
+    var lexer = Lexer.init(input);
+
+    const header = try lexer.next();
+    try std.testing.expectEqual(TokenKind.meta_line, header.kind);
+    try std.testing.expectEqualStrings("for i in range(0, 1) {", header.text);
+
+    const instruction = try lexer.next();
+    try std.testing.expectEqual(TokenKind.isa_line, instruction.kind);
+    try std.testing.expectEqualStrings("mov rax, 1", instruction.text);
+    try std.testing.expectEqual(@as(u32, 5), instruction.column);
+
+    const block_end = try lexer.next();
+    try std.testing.expectEqual(TokenKind.meta_block_end, block_end.kind);
+    try std.testing.expectEqualStrings("}", block_end.text);
+
+    const label = try lexer.next();
+    try std.testing.expectEqual(TokenKind.label, label.kind);
+    try std.testing.expectEqualStrings("loop:", label.text);
+
+    const declaration = try lexer.next();
+    try std.testing.expectEqual(TokenKind.meta_line, declaration.kind);
+    try std.testing.expectEqualStrings("const k: u64 = 1", declaration.text);
+
+    const ret = try lexer.next();
+    try std.testing.expectEqual(TokenKind.isa_line, ret.kind);
+    try std.testing.expectEqualStrings("ret", ret.text);
+}
+
+test "a comment-only line stays a comment when nothing precedes it" {
+    var lexer = Lexer.init("// nothing else\n; also nothing\n");
+
+    const slash_comment = try lexer.next();
+    try std.testing.expectEqual(TokenKind.comment, slash_comment.kind);
+    try std.testing.expectEqualStrings("// nothing else", slash_comment.text);
+
+    const semicolon_comment = try lexer.next();
+    try std.testing.expectEqual(TokenKind.comment, semicolon_comment.kind);
+    try std.testing.expectEqualStrings("; also nothing", semicolon_comment.text);
 }
 
 test "ISA comment scanner ignores quoted text" {

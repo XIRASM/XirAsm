@@ -247,6 +247,16 @@ next page boundary; the virtual addresses advance by whole pages while the file
 layout stays compact. Set `"load_align"` on the plan before `format_begin` to
 choose another page size.
 
+Each segment also honours the alignment its section declares: 16 bytes for a
+segment marked `format_executable`, 8 bytes otherwise. That alignment is applied
+to the file offset as well as to the address, because a loadable segment has to
+satisfy `p_vaddr == p_offset (mod p_align)` - the low bits of the address are
+fixed by the file offset, so moving only the address would break the relation the
+loader relies on. The result is that `sh_addr % sh_addralign == 0` holds for every
+section, which is the guarantee code doing aligned accesses counts on. The cost is
+a few bytes of file padding when a segment would otherwise start on a carry
+inside the page.
+
 ## ELF Call Summary
 
 | Function | Use |

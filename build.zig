@@ -487,6 +487,7 @@ pub fn build(b: *std.Build) void {
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_section_tail_reserve.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_org_middle_reserve.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/output_area_cursor_facts.asm"));
+    run_api_matrix.addFileArg(b.path("tests/meta/region_place_generated_code.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/string_bytes_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/crypto_helpers.asm"));
     run_api_matrix.addFileArg(b.path("tests/meta/deflate_helpers.asm"));
@@ -628,7 +629,16 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/02-missing-return.asm",
         "x64",
         &.{},
-        "InvalidExpression",
+        "ended without a return statement",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        api_reference_step,
+        exe,
+        "tests/api/reference/negative/02-return-type-mismatch.asm",
+        "x64",
+        &.{},
+        "declares a u64 return value",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -851,7 +861,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/06-isa-line-semicolon.asm",
         "x64",
         &.{},
-        "unsupported x86 instruction form",
+        "does not end with a semicolon",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -860,7 +870,7 @@ pub fn build(b: *std.Build) void {
         "tests/api/reference/negative/06-isa-call-semicolon.asm",
         "x64",
         &.{},
-        "unsupported x86 instruction form",
+        "does not end with a semicolon",
     );
     addFailingAsmFixtureWithInputs(
         b,
@@ -2429,7 +2439,7 @@ pub fn build(b: *std.Build) void {
         "tests/format/format_elf64_so_import_user_facade.asm",
         "format-elf64-so-import-user-facade.so",
         "x64",
-        "1728",
+        "1744",
         &.{
             "include/format/format.inc",
             "include/format/elfso.inc",
@@ -2452,41 +2462,41 @@ pub fn build(b: *std.Build) void {
             "4096",
             "1",
             "6",
-            "413",
-            "0x119d",
-            "0x119d",
+            "416",
+            "0x11a0",
+            "0x11a0",
             "0",
             "64",
             "4096",
             "1",
             "6",
-            "413",
-            "0x219d",
-            "0x219d",
+            "416",
+            "0x21a0",
+            "0x21a0",
             "19",
             "19",
             "4096",
             "1",
             "5",
-            "432",
-            "0x31b0",
-            "0x31b0",
+            "448",
+            "0x31c0",
+            "0x31c0",
             "32",
             "32",
             "4096",
             "1",
             "6",
-            "464",
-            "0x41d0",
-            "0x41d0",
+            "480",
+            "0x41e0",
+            "0x41e0",
             "1264",
             "1264",
             "4096",
             "2",
             "6",
-            "680",
-            "0x42a8",
-            "0x42a8",
+            "696",
+            "0x42b8",
+            "0x42b8",
             "192",
             "192",
             "8",
@@ -4287,6 +4297,57 @@ pub fn build(b: *std.Build) void {
         fixture_step,
         exe,
         fixture_checker,
+        "tests/meta/string_escapes.asm",
+        "meta-string-escapes.bin",
+        "x64",
+        "610a62ff610962ff610d62ff615c62ff612262ff612262ff615c7162ff010141ff001effc3a9ff5c753431ff610a62ff",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/macro_operand_instruction_forms.asm",
+        "meta-macro-operand-instruction-forms.bin",
+        "x64",
+        "b82a000000bb2b000000",
+    );
+    // The encoder reports a displacement it had to cut down to its field, and
+    // the frontend used to drop that warning on the floor: the instruction was
+    // assembled quietly while addressing somewhere else. The bytes are what the
+    // reference assembler emits for the same input.
+    addDiagnosticAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/absolute_address_warning.asm",
+        "meta-absolute-address-warning.bin",
+        "x64",
+        "488b042500000000",
+        &.{},
+        &.{":9:1: warning: displacement exceeds bounds"},
+    );
+    // A late_layout block starts with the default region active, so a block
+    // written inside another region appends somewhere else. The warning is the
+    // only thing that says so.
+    addDiagnosticAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/late_layout_default_region_warning.asm",
+        "meta-late-layout-default-region-warning.bin",
+        "x64",
+        "ee",
+        &.{},
+        &.{":9:1: warning: this late_layout block was written inside region 'text'"},
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
         "tests/meta/loops.asm",
         "meta-loops.bin",
         "x64",
@@ -4301,6 +4362,36 @@ pub fn build(b: *std.Build) void {
         "meta-control-flow.bin",
         "x64",
         "1122000203050701030410111201000304",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/trailing_comments.asm",
+        "meta-trailing-comments.bin",
+        "x64",
+        "019012064142",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/region_place_generated_code.asm",
+        "meta-region-place-generated-code.bin",
+        "x64",
+        "90000000000000000000000000000000e8fb7fffffe9f6ffffffcc",
+    );
+    addAsmFixture(
+        b,
+        fixture_step,
+        exe,
+        fixture_checker,
+        "tests/meta/here_after_instructions.asm",
+        "meta-here-after-instructions.bin",
+        "x64",
+        "909002000000b806000000c3",
     );
     addAsmFixture(
         b,
@@ -4795,11 +4886,17 @@ pub fn build(b: *std.Build) void {
             "XIRASM listing",
             "basic.asm",
             "Output size: 15 bytes",
-            "0000000000007c00 00000000 b8 01 00 00 00",
+            // The header names the columns, and the legend explains the two row
+            // kinds that have no source line of their own.
+            "Kind  D  Bytes",
+            "gap rows are file bytes no fragment claims",
+            "0000000000007c00 00000000",
+            "b8 01 00 00 00",
             "mov rax, 1",
-            "0000000000007c0a 0000000a aa",
+            "0000000000007c0a 0000000a",
             "emit.u8(0xaa);",
-            "0000000000007c0b 0000000b 00 00",
+            "0000000000007c0b 0000000b",
+            "00 00",
             "reserve(2);",
             "emit.u16(0x55cc);",
         },
@@ -4817,12 +4914,18 @@ pub fn build(b: *std.Build) void {
         "aa00000031c0c300000000000000000011223344",
         &.{
             "Output size: 20 bytes",
-            "0000000000401000 00000004 31 c0",
+            "0000000000401000 00000004",
+            "code",
+            "31 c0",
             "xor eax, eax",
-            "0000000000401002 00000006 c3",
+            "0000000000401002 00000006",
             "ret",
-            "0000000000402000 00000010 11 22 33 44",
+            "0000000000402000 00000010",
+            "11 22 33 44",
             "dd(0x44332211);",
+            // The sections leave a hole in the file; it is listed as its own
+            // bytes instead of silently disappearing between two rows.
+            "gap",
         },
     );
     addAsmFixture(
@@ -4895,6 +4998,129 @@ pub fn build(b: *std.Build) void {
     }) |source_path| {
         addFailingAsmFixture(b, fixture_step, exe, source_path, "x64");
     }
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/finalizer_store_past_end.asm",
+        "x64",
+        &.{},
+        "but the finished output image holds",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/finalizer_reads_tail_reserve.asm",
+        "x64",
+        &.{},
+        "does not hold",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/virtual_instruction_reference.asm",
+        "x64",
+        &.{},
+        "put the virtual region in the file with region.place",
+    );
+    // The needle pins file position as well as wording: an unclosed scratch
+    // region is only detected after the last statement runs, and reporting it
+    // without a line number is the failure this fixture exists to catch.
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/unclosed_virtual_output.asm",
+        "x64",
+        &.{},
+        ":7:1: error: a virtual output region was opened and never closed",
+    );
+    // Pins the location and the wording: an unresolved reference used to end as
+    // a count with no file and no line.
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/unresolved_macro_operand.asm",
+        "x64",
+        &.{},
+        ":8:5: error: macro operand text operand.eval(42) cannot be encoded as an operand",
+    );
+    // A member that used to render as `lowering failed: DuplicateSymbol`.
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/duplicate_symbol.asm",
+        "x64",
+        &.{},
+        ":7:1: error: this name is already declared; a label or binding is defined once (DuplicateSymbol)",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/late_layout_final_facts.asm",
+        "x64",
+        &.{},
+        "available only in a finalizer",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/function_error_notes.asm",
+        "x64",
+        &.{},
+        "function invoked here",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/value_function_arity.asm",
+        "x64",
+        &.{},
+        "declares 1 parameter, but this call passes 0",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/value_function_error_notes.asm",
+        "x64",
+        &.{},
+        "function invoked here",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/two_statements_on_one_line.asm",
+        "x64",
+        &.{},
+        "a line holds one statement",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/aggregate_literal_missing_field.asm",
+        "x64",
+        &.{},
+        "leaves a field out",
+    );
+    addFailingAsmFixtureWithInputs(
+        b,
+        fixture_step,
+        exe,
+        "tests/meta/negative/argument_type_mismatch.asm",
+        "x64",
+        &.{},
+        "has type string, but parameter v declares u64",
+    );
     addFailingAsmFixture(
         b,
         fixture_step,

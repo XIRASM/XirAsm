@@ -78,6 +78,45 @@ pub fn operandText(text: []const u8) ?[]const u8 {
     return std.mem.trim(u8, trimmed[split + 1 ..], " \t\r\n");
 }
 
+/// Reports whether ISA text ends with the Meta-language statement terminator.
+///
+/// `;` ends a Meta statement, so `nop;` is not ISA text and neither is the
+/// string passed to `isa("nop;")`. A `;` that is the last byte of a quoted
+/// operand is ordinary text and does not count, which is why the scan tracks
+/// quoting instead of only comparing the final byte.
+pub fn endsWithStatementTerminator(text: []const u8) bool {
+    var quote: ?u8 = null;
+    var last_outside_quote: ?usize = null;
+    var index: usize = 0;
+    while (index < text.len) : (index += 1) {
+        const byte = text[index];
+        if (quote) |delimiter| {
+            if (byte == '\\' and index + 1 < text.len) {
+                index += 1;
+                continue;
+            }
+            if (byte == delimiter) {
+                if (index + 1 < text.len and text[index + 1] == delimiter) {
+                    index += 1;
+                } else {
+                    quote = null;
+                }
+            }
+            continue;
+        }
+
+        switch (byte) {
+            '"', '\'' => quote = byte,
+            else => if (!std.ascii.isWhitespace(byte)) {
+                last_outside_quote = index;
+            },
+        }
+    }
+
+    const last = last_outside_quote orelse return false;
+    return text[last] == ';';
+}
+
 pub const OperandIterator = struct {
     text: []const u8,
     index: usize = 0,
@@ -191,4 +230,19 @@ test "ISA text iterator keeps nested operands together" {
 
 test "ISA text symbol references reject compound expressions" {
     try std.testing.expect(!looksLikeSymbolReference("target+4"));
+}
+
+test "only a trailing semicolon outside a quoted operand ends ISA text" {
+    try std.testing.expect(endsWithStatementTerminator("nop;"));
+    try std.testing.expect(endsWithStatementTerminator("nop ;"));
+    try std.testing.expect(endsWithStatementTerminator("nop;;"));
+    try std.testing.expect(endsWithStatementTerminator("addi x1, x2, 3; \t"));
+
+    try std.testing.expect(!endsWithStatementTerminator("nop"));
+    try std.testing.expect(!endsWithStatementTerminator(""));
+    try std.testing.expect(!endsWithStatementTerminator("   "));
+    try std.testing.expect(!endsWithStatementTerminator("db \";\""));
+    try std.testing.expect(!endsWithStatementTerminator("OpName %1 \"name;\""));
+    try std.testing.expect(!endsWithStatementTerminator("db \";\", 0"));
+    try std.testing.expect(!endsWithStatementTerminator("mov rax, [rbx + 8]"));
 }

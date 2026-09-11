@@ -4,6 +4,7 @@ const expr = @import("../expr.zig");
 const meta_function = @import("../meta_function.zig");
 const macro = @import("../macro.zig");
 const output_mod = @import("../output/root.zig");
+const source = @import("../source.zig");
 const value_mod = @import("../value.zig");
 const contracts = @import("contracts.zig");
 
@@ -24,6 +25,15 @@ pub const LowerContext = struct {
     value_function_depth: u32 = 0,
     in_meta_loop: bool = false,
     return_value: ?value_mod.Value = null,
+    /// Span of the `return` statement that produced `return_value`. The value
+    /// outlives the statement, so a diagnostic raised while checking the
+    /// declared return type would otherwise have no line to point at and would
+    /// be blamed on the call site instead.
+    return_span: ?source.SourceSpan = null,
+    /// The statement whose lowering is in progress. Expression evaluation happens
+    /// while a statement is being lowered, so this is the call site a nested
+    /// value function reports, and the line a reader can act on.
+    statement_span: ?source.SourceSpan = null,
     unique_symbol_counter: u64 = 0,
 
     pub fn deinit(self: *LowerContext, allocator: Allocator) void {

@@ -173,6 +173,11 @@ pub const LateLayoutMetaIf = struct {
 pub const LateLayoutBlock = struct {
     body: []LateLayoutStatement,
     span: source.SourceSpan,
+    /// The section index that was active where the block was written. A block
+    /// starts with the default region active instead, so a block that appends
+    /// without choosing a region writes somewhere other than where the source
+    /// reads; this is what lets that be said out loud.
+    source_section_index: ?u32 = null,
 
     pub fn deinit(self: *LateLayoutBlock, allocator: Allocator) void {
         for (self.body) |*statement| statement.deinit(allocator);

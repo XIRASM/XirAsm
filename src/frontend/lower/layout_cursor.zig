@@ -82,25 +82,54 @@ pub fn advanceActiveOutput(active: *ActiveOutput, stored_fragment: fragment.Frag
     active.offset = try nextOffsetFromFragment(stored_fragment, active.offset);
 }
 
-pub fn sectionCursor(module: *const module_mod.Module, section_id: fragment.SectionId) LowerError!u64 {
-    const stored_section = try module.sections.get(section_id);
-    var cursor: u64 = 0;
-    for (stored_section.fragments.items) |fragment_id| {
-        cursor = try nextOffsetFromFragment(module.fragments.items.items[fragment_id.index], cursor);
-    }
-    return cursor;
+/// Cursor of a section. Computing it folds newly final fragments into the
+/// section's memo, so the module is taken mutably: a caller that only holds a
+/// const module would silently pay the quadratic walk again.
+pub fn sectionCursor(module: *module_mod.Module, section_id: fragment.SectionId) LowerError!u64 {
+    return (try sectionCursors(module, section_id)).cursor;
 }
 
-pub fn sectionFileCursor(module: *const module_mod.Module, section_id: fragment.SectionId) LowerError!u64 {
+pub fn sectionFileCursor(module: *module_mod.Module, section_id: fragment.SectionId) LowerError!u64 {
+    const cursors = try sectionCursors(module, section_id);
     const stored_section = try module.sections.get(section_id);
-    var cursor: u64 = 0;
-    var file_cursor: u64 = 0;
-    for (stored_section.fragments.items) |fragment_id| {
-        const stored_fragment = module.fragments.items.items[fragment_id.index];
-        file_cursor = try nextFileOffsetFromFragment(stored_fragment, cursor, file_cursor);
+    return alignForward(cursors.file_cursor, stored_section.file_size_alignment);
+}
+
+const Cursors = struct {
+    cursor: u64,
+    file_cursor: u64,
+};
+
+/// Walk a section's fragments, folding every fragment whose size is already
+/// final into the section's cache.
+///
+/// Reading the current address asks for the cursor once per generated row, so
+/// walking from zero every time is quadratic over such a source. A fragment
+/// whose size is still unknown -- an instruction that has not been encoded yet
+/// -- is applied without being folded, so the answer stays exactly what a full
+/// walk would produce while the fold stays safe to keep.
+fn sectionCursors(module: *module_mod.Module, section_id: fragment.SectionId) LowerError!Cursors {
+    const stored_section = try module.sections.getMut(section_id);
+    var cursor: u64 = stored_section.cursor_offset;
+    var file_cursor: u64 = stored_section.cursor_file_offset;
+    var index = stored_section.cursor_folded;
+    const final_limit = module.materialized_fragment_count;
+
+    while (index < stored_section.fragments.items.len) : (index += 1) {
+        const fragment_index = stored_section.fragments.items[index].index;
+        const stored_fragment = module.fragments.items.items[fragment_index];
+        const next_file_cursor = try nextFileOffsetFromFragment(stored_fragment, cursor, file_cursor);
         cursor = try nextOffsetFromFragment(stored_fragment, cursor);
+        file_cursor = next_file_cursor;
+
+        if (fragment_index < final_limit) {
+            stored_section.cursor_folded = index + 1;
+            stored_section.cursor_offset = cursor;
+            stored_section.cursor_file_offset = file_cursor;
+        }
     }
-    return alignForward(file_cursor, stored_section.file_size_alignment);
+
+    return .{ .cursor = cursor, .file_cursor = file_cursor };
 }
 
 pub fn activeFragmentPosition(module: *const module_mod.Module, section_id: fragment.SectionId) LowerError!u32 {

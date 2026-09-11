@@ -88,8 +88,24 @@ fn checkProgramHeaders64(stderr: *Io.Writer, bytes: []const u8, phoff: usize, ar
         failed = (try expectProgramField(stderr, segment_index, "Filesz", expected.filesz, try readU64Le(bytes, try checkedAdd(usize, entry_offset, 32)))) or failed;
         failed = (try expectProgramField(stderr, segment_index, "Memsz", expected.memsz, try readU64Le(bytes, try checkedAdd(usize, entry_offset, 40)))) or failed;
         failed = (try expectProgramField(stderr, segment_index, "Align", expected.alignment, try readU64Le(bytes, try checkedAdd(usize, entry_offset, 48)))) or failed;
+        failed = (try expectProgramCongruence(stderr, segment_index, expected)) or failed;
     }
     return failed;
+}
+
+/// A LOAD segment has to satisfy `p_vaddr == p_offset (mod p_align)`; that is the
+/// relation a loader relies on, and it is the reason a section's own alignment
+/// has to be reflected in the file offset rather than only in the address. This
+/// is checked from the expectation itself, so a fixture cannot record a layout
+/// that violates it.
+fn expectProgramCongruence(stderr: *Io.Writer, row: usize, expected: ExpectedProgramHeader) !bool {
+    if (expected.segment_type != 1 or expected.alignment <= 1) return false;
+    if (expected.vaddr % expected.alignment == expected.offset % expected.alignment) return false;
+    try stderr.print(
+        "program header {d} breaks p_vaddr == p_offset (mod p_align): vaddr {d}, offset {d}, align {d}\n",
+        .{ row, expected.vaddr, expected.offset, expected.alignment },
+    );
+    return true;
 }
 
 fn checkProgramHeaders32(stderr: *Io.Writer, bytes: []const u8, phoff: usize, args: []const []const u8) !bool {

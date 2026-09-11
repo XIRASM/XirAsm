@@ -39,20 +39,33 @@ pub const SectionLayout = struct {
 
 pub const ModuleLayout = struct {
     sections: []SectionLayout,
+    /// Section-relative offset of every fragment, indexed by fragment id.
+    ///
+    /// Resolving a fixup, patching it, and syncing an anchored label each ask
+    /// for one fragment's placement, and answering by scanning that section's
+    /// fragment list made a source with N forward references quadratic (N
+    /// references times N fragments). The table is built once here instead.
+    fragment_offsets: []u64,
 
     pub fn deinit(self: *ModuleLayout, allocator: Allocator) void {
         for (self.sections) |*section_layout| {
             section_layout.deinit(allocator);
         }
         allocator.free(self.sections);
+        allocator.free(self.fragment_offsets);
         self.* = undefined;
     }
 
+    /// Section layouts are stored in section-id order, so an id indexes them.
     pub fn sectionLayout(self: *const ModuleLayout, id: section.SectionId) ?*const SectionLayout {
-        for (self.sections) |*section_layout| {
-            if (section_layout.section.index == id.index) return section_layout;
-        }
-        return null;
+        if (id.index >= self.sections.len) return null;
+        return &self.sections[id.index];
+    }
+
+    /// Placement of one fragment, or null when no section owns it.
+    pub fn fragmentOffset(self: *const ModuleLayout, id: fragment.FragmentId) ?u64 {
+        if (id.index >= self.fragment_offsets.len) return null;
+        return self.fragment_offsets[id.index];
     }
 };
 
@@ -66,12 +79,20 @@ pub fn layoutModule(allocator: Allocator, module: *const module_mod.Module) Layo
         allocator.free(section_layouts);
     }
 
+    var fragment_offsets = try allocator.alloc(u64, module.fragments.items.items.len);
+    errdefer allocator.free(fragment_offsets);
+    @memset(fragment_offsets, 0);
+
     for (module.sections.items.items, 0..) |stored_section, index| {
         section_layouts[index] = try layoutSection(allocator, module, .{ .index = @intCast(index) }, stored_section);
         initialized_count += 1;
+        for (section_layouts[index].fragments) |entry| {
+            if (entry.fragment.index >= fragment_offsets.len) return error.InvalidFragment;
+            fragment_offsets[entry.fragment.index] = entry.offset;
+        }
     }
 
-    return .{ .sections = section_layouts };
+    return .{ .sections = section_layouts, .fragment_offsets = fragment_offsets };
 }
 
 pub fn layoutSection(

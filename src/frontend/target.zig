@@ -1,11 +1,20 @@
 pub const Isa = enum {
     x86_64,
+    aarch64,
     riscv64,
     spirv,
 };
 
 pub const X86Target = struct {
     mode_bits: u16 = 64,
+};
+
+/// AArch64 has no mode bits and no encoder in this assembler: its instructions
+/// are produced by the generated A64 macro library, which emits bytes directly.
+/// The target exists so a source can ask `target.isa == "aarch64"` and so the CLI
+/// and project file can name the platform honestly instead of borrowing x86-64.
+pub const ArmTarget = struct {
+    bits: u16 = 64,
 };
 
 pub const RiscvTarget = struct {
@@ -18,6 +27,7 @@ pub const SpirvTarget = struct {
 
 pub const Target = union(enum) {
     x86: X86Target,
+    arm: ArmTarget,
     riscv: RiscvTarget,
     spirv: SpirvTarget,
 
@@ -28,6 +38,10 @@ pub const Target = union(enum) {
             16, 32, 64 => .{ .x86 = .{ .mode_bits = bit_width } },
             else => error.InvalidModeBits,
         };
+    }
+
+    pub fn initArm() Target {
+        return .{ .arm = .{} };
     }
 
     pub fn initRiscv(xlen_bits: u16) !Target {
@@ -44,6 +58,7 @@ pub const Target = union(enum) {
     pub fn isa(self: Target) Isa {
         return switch (self) {
             .x86 => .x86_64,
+            .arm => .aarch64,
             .riscv => .riscv64,
             .spirv => .spirv,
         };
@@ -52,6 +67,7 @@ pub const Target = union(enum) {
     pub fn bits(self: Target) ?u16 {
         return switch (self) {
             .x86 => |cfg| cfg.mode_bits,
+            .arm => |cfg| cfg.bits,
             .riscv => |cfg| cfg.xlen,
             .spirv => null,
         };
@@ -60,7 +76,7 @@ pub const Target = union(enum) {
     pub fn isDefault(self: Target) bool {
         return switch (self) {
             .x86 => |cfg| cfg.mode_bits == 64,
-            .riscv, .spirv => false,
+            .arm, .riscv, .spirv => false,
         };
     }
 };

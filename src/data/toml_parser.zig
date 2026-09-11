@@ -8,7 +8,18 @@ pub const ParseError = error{
     InvalidUtf8,
     Overflow,
     DuplicateKey,
+    NestingTooDeep,
 };
+
+/// How deeply arrays, inline tables and array-of-tables may nest.
+///
+/// `parseValue` descends one call chain per level, and the tree it builds is
+/// walked recursively again by `storeToNode`/`convertNode`, so an unbounded
+/// document is a crash rather than a diagnostic: a few hundred kilobytes of
+/// `x = [[[[...` used to kill the process with no message at all. Bounding the
+/// parse bounds every later walk of the same tree. Real configuration files
+/// nest a handful of levels.
+pub const max_document_nesting: usize = 64;
 
 pub const Node = struct {
     tag: Tag,
@@ -86,6 +97,8 @@ const Parser = struct {
     pos: usize,
     line: usize,
     col: usize,
+    /// Current value nesting level; see `max_document_nesting`.
+    depth: usize = 0,
 
     fn parseDocument(self: *Parser, aa: Allocator) ParseError!Node {
         var root_store = TableStore{ .entries = .empty };
@@ -209,6 +222,12 @@ const Parser = struct {
     }
 
     fn parseValue(self: *Parser, aa: Allocator) ParseError!Node {
+        // Every nested value passes through here (array elements, inline-table
+        // values), so this one bound covers the whole document shape.
+        if (self.depth >= max_document_nesting) return error.NestingTooDeep;
+        self.depth += 1;
+        defer self.depth -= 1;
+
         self.skipWhitespace();
         if (self.pos >= self.source.len) return error.Syntax;
 
@@ -495,7 +514,8 @@ const Parser = struct {
         while (self.pos < self.source.len) {
             const ch = self.source[self.pos];
             if (ch == '"') {
-                if (self.pos + 2 <= self.source.len and self.source[self.pos + 1] == '"' and self.source[self.pos + 2] == '"') {
+                // Three bytes are needed for the terminator, so the bound must admit `pos + 2`.
+                if (self.pos + 3 <= self.source.len and self.source[self.pos + 1] == '"' and self.source[self.pos + 2] == '"') {
                     self.pos += 3;
                     self.col += 3;
                     return result.toOwnedSlice(aa);
@@ -605,7 +625,8 @@ const Parser = struct {
         var end = self.pos;
         while (end < self.source.len) {
             if (self.source[end] == '\'') {
-                if (end + 2 <= self.source.len and self.source[end + 1] == '\'' and self.source[end + 2] == '\'') {
+                // As in the basic-string scanner, reading `[end + 2]` needs `end + 3 <= len`.
+                if (end + 3 <= self.source.len and self.source[end + 1] == '\'' and self.source[end + 2] == '\'') {
                     const slice = self.source[start..end];
                     self.pos = end + 3;
                     self.col += (end + 3) - start;
@@ -618,23 +639,27 @@ const Parser = struct {
     }
 
     fn parseUnicodeEscape(self: *Parser, digits: usize) ParseError!u21 {
-        var code: u21 = 0;
+        // Accumulate wider than u21: eight hex digits do not fit 21 bits, and
+        // truncating as we go would let a code point above U+10FFFF wrap back
+        // into the valid range instead of being rejected.
+        var wide: u32 = 0;
         var i: usize = 0;
         while (i < digits) : (i += 1) {
             if (self.pos >= self.source.len) return error.Syntax;
             const ch = self.source[self.pos];
             self.pos += 1;
             self.col += 1;
-            code <<= 4;
-            code |= switch (ch) {
+            if (wide > 0x10FFFF) return error.Syntax;
+            wide = (wide << 4) | switch (ch) {
                 '0'...'9' => ch - '0',
                 'a'...'f' => ch - 'a' + 10,
                 'A'...'F' => ch - 'A' + 10,
                 else => return error.Syntax,
             };
         }
+        if (wide > 0x10FFFF) return error.Syntax;
+        const code: u21 = @intCast(wide);
         if (code >= 0xD800 and code <= 0xDFFF) return error.Syntax;
-        if (code > 0x10FFFF) return error.Syntax;
         return code;
     }
 
@@ -1069,6 +1094,66 @@ test "toml parser: basic key-value" {
     try testing.expect(node.tag == .table);
     try testing.expectEqualStrings("TOML Example", getEntry(node, "title").?.data.string);
     try testing.expectEqual(@as(i64, 40), getEntry(node, "weight").?.data.int64);
+}
+
+// The terminator scan reads three bytes, so the bound must admit all three.
+// These files end without a trailing newline, which is what makes the last
+// byte of the file the second quote: the old bound `pos + 2 <= len` then read
+// one byte past the end of the buffer.
+test "toml parser: multiline terminator at end of file" {
+    const testing = std.testing;
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = \"\"\"ab\"\""));
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = '''ab''"));
+    // A bare CR after the two quotes is still an unterminated string.
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = \"\"\"ab\"\"\r"));
+
+    // The same shapes closed properly still parse, with and without a newline.
+    for ([_][]const u8{ "x = \"\"\"ab\"\"\"", "x = \"\"\"ab\"\"\"\n", "x = '''ab'''", "x = '''ab'''\n" }) |source| {
+        var result = try parse(testing.allocator, source);
+        defer result.deinit();
+        const entry = getEntry(result.node, "x") orelse return error.MissingKey;
+        try testing.expectEqualStrings("ab", entry.data.string);
+    }
+}
+
+// Eight hex digits do not fit u21, so accumulating in u21 discarded the high
+// bits before the range check and an out-of-range escape wrapped into the valid
+// range instead of being rejected.
+test "toml parser: unicode escape above the last code point is rejected" {
+    const testing = std.testing;
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = \"\\U00200000\"\n"));
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = \"\\U00110000\"\n"));
+    try testing.expectError(error.Syntax, parse(testing.allocator, "x = \"\\uD800\"\n"));
+
+    var result = try parse(testing.allocator, "x = \"\\U0010FFFF\"\n");
+    defer result.deinit();
+    const entry = getEntry(result.node, "x") orelse return error.MissingKey;
+    try testing.expectEqualStrings("\u{10FFFF}", entry.data.string);
+}
+
+// `parseValue` descends one call chain per nesting level and the tree it builds
+// is walked recursively again, so an unbounded document used to kill the
+// process: a few hundred kilobytes of `x = [[[[` produced no message at all.
+test "toml parser: document nesting is bounded" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    var deep = std.ArrayList(u8).empty;
+    defer deep.deinit(allocator);
+    try deep.appendSlice(allocator, "x = ");
+    var level: usize = 0;
+    while (level < max_document_nesting) : (level += 1) try deep.append(allocator, '[');
+    level = 0;
+    while (level < max_document_nesting) : (level += 1) try deep.append(allocator, ']');
+
+    // At the bound the document still parses.
+    var result = try parse(allocator, deep.items);
+    result.deinit();
+
+    // One level past it is refused rather than exhausting the stack.
+    try deep.insert(allocator, 4, '[');
+    try deep.append(allocator, ']');
+    try testing.expectError(error.NestingTooDeep, parse(allocator, deep.items));
 }
 
 test "toml parser: integer variants" {

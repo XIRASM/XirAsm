@@ -18,6 +18,21 @@ pub const Callbacks = struct {
     eval_value_at_context: *const fn (Allocator, *module_mod.Module, *LowerContext, ActiveOutput, *const expr.Node) LowerError!value_mod.Value,
 };
 
+/// Why a literal did not become a value, in words. Callers report it against the
+/// statement that wrote the literal, because the expression layer keeps only the
+/// fact that an operand failed.
+pub fn literalErrorDetail(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.MissingStructFieldValue => "the aggregate literal leaves a field out",
+        error.UnknownField => "the aggregate literal names a field the type does not declare",
+        error.DuplicateFieldName => "the aggregate literal sets the same field twice",
+        error.UnknownTypeName => "the aggregate literal names a type that is not declared",
+        error.ExpectedStruct => "this name is not a struct or union type",
+        error.InvalidValueDeclaration => "a field value does not match the field type",
+        else => null,
+    };
+}
+
 pub fn structValueFromLiteral(
     allocator: Allocator,
     module: *module_mod.Module,

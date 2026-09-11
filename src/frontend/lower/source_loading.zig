@@ -20,8 +20,11 @@ const max_include_depth = 128;
 pub const Callbacks = struct {
     lower_statements_into_context: *const fn (Allocator, *module_mod.Module, []const ast.Statement, *LowerContext) LowerError!void,
     add_lower_error_diagnostic: *const fn (Allocator, *module_mod.Module, source.SourceSpan, anyerror) Allocator.Error!void,
+    /// A source that fails to parse is not a lowering failure, so it is reported
+    /// through its own channel.
+    add_parse_error_diagnostic: *const fn (Allocator, *module_mod.Module, source.SourceSpan, anyerror) Allocator.Error!void,
     source_path_arg_at_context: *const fn (Allocator, *module_mod.Module, *LowerContext, ActiveOutput, ast.ApiCallStatement, usize) LowerError![]u8,
-    section_cursor: *const fn (*const module_mod.Module, contracts.SectionId) LowerError!u64,
+    section_cursor: *const fn (*module_mod.Module, contracts.SectionId) LowerError!u64,
     require_arg_count: *const fn (ast.ApiCallStatement, usize) LowerError!void,
 };
 
@@ -122,10 +125,10 @@ fn lowerIntoModuleInternal(
 
     var source_parser = parser.Parser.init(allocator, input);
     var statements = source_parser.parse() catch |err| {
-        try callbacks.add_lower_error_diagnostic(
+        try callbacks.add_parse_error_diagnostic(
             allocator,
             module,
-            source_parser.errorSpan() orelse source.unknown_span,
+            source_parser.failureSpan(),
             err,
         );
         return err;
@@ -166,14 +169,10 @@ fn lowerIntoModuleWithIdentityInternal(
     const source_id = try module.addSource(path, input);
     var source_parser = parser.Parser.initWithSource(allocator, source_id, input);
     var statements = source_parser.parse() catch |err| {
-        try callbacks.add_lower_error_diagnostic(
+        try callbacks.add_parse_error_diagnostic(
             allocator,
             module,
-            source_parser.errorSpan() orelse .{
-                .source = source_id,
-                .start = 0,
-                .end = 0,
-            },
+            source_parser.failureSpan(),
             err,
         );
         return err;

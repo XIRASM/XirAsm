@@ -83,7 +83,7 @@ OpMemoryModel Logical GLSL450
 %1 = OpTypeVoid
 ```
 
-整个输出只能包含同一 section、同一版本的 SPIR-V 指令片段。混入其他 ISA、数据写出、预留或对齐操作都会被拒绝。SPIR-V 结果 ID 目前必须写成 `%1`、`%2` 等数字形式，暂不接受符号 ID。命令行的 `--target spv` 和 `--target spirv` 都选择 SPIR-V 1.6。
+整个输出只能包含同一 section、同一版本的 SPIR-V 指令片段。混入其他 ISA、数据写出、预留或对齐操作都会被拒绝。SPIR-V 结果 ID 目前必须写成 `%1`、`%2` 等数字形式，暂不接受符号 ID。命令行的 `--isa spv` 和 `--isa spirv`（旧拼写 `--target` 同样可用）都选择 SPIR-V 1.6。
 
 ## 动态处理器指令
 

@@ -133,9 +133,13 @@ def main():
             ('version-overflow', 'const bad: map = format_macho64_target_x86_64(1, 0x100000000)', 'Mach-O version exceeds'),
             ('object-zerofill-order', f'const bad: map = format_macho64_object({target}, list.of({bss}, {data}))', 'Mach-O zerofill sections must be last'),
             ('duplicate-section', f'const bad: map = format_macho64_object({target}, list.of({code}, {code}))', 'Mach-O section name is duplicated'),
-            ('end-without-begin', plan + 'format_begin(image); format_section_end(image, "__text");', 'lowering failed'),
-            ('nested-section', plan + 'format_begin(image); format_section_begin(image, "__text"); format_section_begin(image, "__text");', 'lowering failed'),
-            ('unclosed-section', plan + 'format_begin(image); format_section_begin(image, "__text"); format_finish(image);', 'lowering failed'),
+            # XIRASM parses one statement per line, so the statements below stay on
+            # their own lines. Written on one line they become a single statement
+            # and fail with an argument error instead of the format diagnostic
+            # being checked here.
+            ('end-without-begin', plan + 'format_begin(image);\nformat_section_end(image, "__text");', 'Mach-O section is not open'),
+            ('nested-section', plan + 'format_begin(image);\nformat_section_begin(image, "__text");\nformat_section_begin(image, "__text");', 'Mach-O previous section is still open'),
+            ('unclosed-section', plan + 'format_begin(image);\nformat_section_begin(image, "__text");\nformat_finish(image);', 'Mach-O final section is still open'),
             ('section-u32-offset', 'macho_section64("a", "b", 0, 1, 0x100000000, 0, 0, 0, 0, 0, 0, 0);', 'InvalidApiInteger'),
         ]
         duplicate = (ROOT / 'tests/format/format_macho64_arm64_duplicate_sections.asm').read_text()

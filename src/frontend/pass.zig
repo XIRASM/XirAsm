@@ -5,11 +5,14 @@ const diagnostic = @import("diagnostic.zig");
 const fixup = @import("fixup.zig");
 const fragment = @import("fragment.zig");
 const layout = @import("layout.zig");
+const layout_cursor = @import("lower/layout_cursor.zig");
 const module_mod = @import("module.zig");
 
 const Allocator = std.mem.Allocator;
 
 pub const PassError = Allocator.Error || error{
+    ExpressionNestingTooDeep,
+    NestingTooDeep,
     FrontendDiagnostics,
     FragmentTooLarge,
     InstructionTooLarge,
@@ -47,6 +50,19 @@ pub fn encodeInstructionFragments(
     allocator: Allocator,
     module: *module_mod.Module,
 ) PassError!EncodeInstructionsResult {
+    return encodeInstructionFragmentsFrom(allocator, module, 0);
+}
+
+/// Encodes the instruction fragments from `start_index` on. Fragments are only
+/// appended while lowering, so a caller that needs the sizes of the fragments
+/// written since its last call can skip the ones already encoded instead of
+/// walking the whole module, which would be quadratic over a source that reads
+/// the current address once per generated row.
+pub fn encodeInstructionFragmentsFrom(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    start_index: usize,
+) PassError!EncodeInstructionsResult {
     if (try validateSpirvModuleFragments(allocator, module)) |first_instruction| {
         return encodeSpirvModuleFragments(allocator, module, first_instruction);
     }
@@ -54,9 +70,26 @@ pub fn encodeInstructionFragments(
     var encoded_count: usize = 0;
     var changed_count: usize = 0;
 
-    for (module.fragments.items.items, 0..) |stored_fragment, index| {
+    // Start at `start_index` instead of skipping below it. Everything before the
+    // watermark was encoded by an earlier call and cannot change again, and
+    // re-walking it here is what made a source that reads the current address
+    // once per row quadratic.
+    var index = start_index;
+    while (index < module.fragments.items.items.len) : (index += 1) {
+        const stored_fragment = module.fragments.items.items[index];
         switch (stored_fragment) {
             .isa_instruction => |instruction| {
+                // Encoding is a pure function of the instruction text and the
+                // fragment's own target: the expression resolver folds literal
+                // arithmetic and never reads module state, and the mode falls
+                // back to the module only when the fragment declares none. A
+                // fragment that already has bytes therefore encodes to the same
+                // bytes, and encoding it again only re-ran the fixup dedupe --
+                // which scans the whole fixup store -- for every earlier
+                // fragment. That is what made a source with N forward
+                // references quadratic.
+                if (instruction.encoded_bytes.len != 0) continue;
+
                 const id: fragment.FragmentId = .{ .index = @intCast(index) };
                 var facts = backend_adapter.encodeInstruction(allocator, instruction, module.target) catch |err| switch (err) {
                     error.AmbiguousMemorySize => {
@@ -214,6 +247,15 @@ pub fn encodeInstructionFragments(
                     },
                     error.OutOfMemory => return error.OutOfMemory,
                     error.InstructionTooLarge => return error.InstructionTooLarge,
+                    error.InstructionTextHasTerminator => {
+                        try module.diagnostics.add(
+                            allocator,
+                            diagnostic.Severity.err,
+                            instruction.span,
+                            "ISA text does not end with a semicolon; remove the trailing ';', which terminates Meta statements rather than instructions",
+                        );
+                        return error.FrontendDiagnostics;
+                    },
                     error.InvalidInstructionText => return error.InvalidInstructionText,
                     error.InvalidModeBits => return error.InvalidModeBits,
                 };
@@ -230,12 +272,22 @@ pub fn encodeInstructionFragments(
                     facts.relaxable,
                 );
                 try recordInstructionFixups(module, id, facts.fixups);
+                // The encoder warns about conditions that change what the
+                // instruction does without failing the encode -- an absolute
+                // address cut down to its displacement field is one. Dropping
+                // them here is what made such an instruction silent.
+                for (facts.warnings) |message| {
+                    try module.diagnostics.add(allocator, diagnostic.Severity.warning, instruction.span, message);
+                }
                 encoded_count += 1;
             },
             else => {},
         }
     }
 
+    // Skipping this because nothing was encoded is wrong: a label's offset also
+    // moves when a reserve or alignment fragment is appended after it, and that
+    // changes no instruction at all.
     try syncAnchoredLabelOffsets(allocator, module);
     return .{
         .encoded_count = encoded_count,
@@ -247,6 +299,10 @@ fn validateSpirvModuleFragments(
     allocator: Allocator,
     module: *module_mod.Module,
 ) PassError!?fragment.IsaInstructionFragment {
+    // A module that never took a SPIR-V fragment cannot hold two modules that
+    // disagree, and this scan used to run on every x86 and RISC-V encode.
+    if (!module.has_spirv_fragments) return null;
+
     var first_instruction: ?fragment.IsaInstructionFragment = null;
     for (module.fragments.items.items) |stored_fragment| {
         const instruction = switch (stored_fragment) {
@@ -257,11 +313,11 @@ fn validateSpirvModuleFragments(
         if (first_instruction) |first| {
             const first_version = switch (first.target) {
                 .spirv => |config| config.version,
-                .x86, .riscv => return error.InvalidModeBits,
+                .x86, .arm, .riscv => return error.InvalidModeBits,
             };
             const active_version = switch (instruction.target) {
                 .spirv => |config| config.version,
-                .x86, .riscv => return error.InvalidModeBits,
+                .x86, .arm, .riscv => return error.InvalidModeBits,
             };
             if (instruction.section.index != first.section.index or active_version != first_version) {
                 try addSpirvDiagnostic(
@@ -329,6 +385,15 @@ fn encodeSpirvModuleFragments(
                 module,
                 first_instruction.span,
                 "unsupported SPIR-V instruction or operand syntax",
+            );
+            return error.FrontendDiagnostics;
+        },
+        error.InstructionTextHasTerminator => {
+            try addSpirvDiagnostic(
+                allocator,
+                module,
+                first_instruction.span,
+                "ISA text does not end with a semicolon; remove the trailing ';', which terminates Meta statements rather than instructions",
             );
             return error.FrontendDiagnostics;
         },
@@ -447,6 +512,8 @@ pub fn resolveFixups(
                 pending_count += 1;
             },
             error.OutOfMemory => return error.OutOfMemory,
+            error.ExpressionNestingTooDeep => return error.ExpressionNestingTooDeep,
+            error.NestingTooDeep => return error.NestingTooDeep,
             error.InvalidFixupTarget => return error.InvalidFixupTarget,
             error.InvalidFragment => return error.InvalidFragment,
             error.InvalidSection => return error.InvalidSection,
@@ -464,6 +531,8 @@ pub fn resolveFixups(
         }
     }
 
+    if (pending_count != 0) try reportPendingFixups(module, items);
+
     return .{
         .items = items,
         .resolved_count = resolved_count,
@@ -471,7 +540,81 @@ pub fn resolveFixups(
     };
 }
 
+/// Report fixups that never resolved at the line that wrote them.
+///
+/// The failure used to end as `error: 1 unresolved fixup(s)` with no file and
+/// no line, which is the least actionable message the tool can produce: the
+/// reader knows something is unresolved but not which reference or where. The
+/// first few are named individually and the rest are counted, so a generated
+/// table with thousands of bad references stays readable.
+fn reportPendingFixups(module: *module_mod.Module, items: []const FixupResolveState) Allocator.Error!void {
+    const max_named = 3;
+    var named: usize = 0;
+    var total: usize = 0;
+    var first_id: ?fixup.FixupId = null;
+
+    for (items) |item| {
+        const fixup_id = switch (item) {
+            .pending => |id| id,
+            .resolved => continue,
+        };
+        total += 1;
+        if (first_id == null) first_id = fixup_id;
+        if (named == max_named) continue;
+        named += 1;
+
+        const stored_fixup = module.fixups.items.items[fixup_id.index];
+        try addPendingFixupDiagnostic(module, stored_fixup);
+    }
+
+    if (total > named) {
+        const stored_fixup = module.fixups.items.items[first_id.?.index];
+        const message = try std.fmt.allocPrint(
+            module.allocator,
+            "{d} more references could not be resolved (UnresolvedFixup)",
+            .{total - named},
+        );
+        defer module.allocator.free(message);
+        try module.diagnostics.add(module.allocator, .err, stored_fixup.span, message);
+    }
+}
+
+fn addPendingFixupDiagnostic(module: *module_mod.Module, stored_fixup: fixup.Fixup) Allocator.Error!void {
+    const target = fixupTargetText(stored_fixup);
+    // A macro parameter is captured operand text, not a value, so writing an
+    // operand builtin straight into an instruction operand leaves a reference
+    // the encoder cannot turn into bytes. Name that instead of the generic
+    // wording, because the fix is specific.
+    const message = if (std.mem.startsWith(u8, target, "operand."))
+        try std.fmt.allocPrint(
+            module.allocator,
+            "macro operand text {s} cannot be encoded as an operand; bind it to a const first, as in `const value: u64 = operand.eval(text)` (UnresolvedFixup)",
+            .{target},
+        )
+    else
+        try std.fmt.allocPrint(
+            module.allocator,
+            "the reference {s} does not resolve to a value this fixup can patch (UnresolvedFixup)",
+            .{target},
+        );
+    defer module.allocator.free(message);
+    try module.diagnostics.add(module.allocator, .err, stored_fixup.span, message);
+}
+
+fn fixupTargetText(stored_fixup: fixup.Fixup) []const u8 {
+    return switch (stored_fixup.target) {
+        .symbol => |symbol| symbol,
+        .expression_text => |text| text,
+    };
+}
+
 fn syncAnchoredLabelOffsets(allocator: Allocator, module: *module_mod.Module) PassError!void {
+    // The layout below walks every section and fragment and allocates an entry
+    // per fragment. A module without anchored labels has nothing to sync, and
+    // paying for the layout on every encode is what made reading the current
+    // address once per row quadratic.
+    if (module.anchored_label_count == 0) return;
+
     var module_layout = try layout.layoutModule(allocator, module);
     defer module_layout.deinit(allocator);
 
@@ -504,17 +647,23 @@ fn labelOffsetForFragmentPosition(
     if (position == stored_section.fragments.items.len) return section_layout.logical_size;
 
     const fragment_id = stored_section.fragments.items[position];
-    const entry = fragmentLayout(section_layout, fragment_id) orelse return error.InvalidFragment;
-    return entry.offset;
+    return module_layout.fragmentOffset(fragment_id) orelse error.InvalidFragment;
 }
 
+/// Record the fixups one encoded instruction produced.
+///
+/// There is no duplicate check here on purpose. A fragment is encoded exactly
+/// once -- the encode loop skips a fragment that already carries bytes, because
+/// encoding cannot change them -- so its facts reach this function exactly once.
+/// The check that used to live here scanned the whole fixup store for every
+/// fact, which made recording quadratic: 16000 forward references spent most of
+/// their time proving they were not duplicates.
 fn recordInstructionFixups(
     module: *module_mod.Module,
     fragment_id: fragment.FragmentId,
     facts: []const backend_adapter.FixupFact,
 ) PassError!void {
     for (facts) |fact| {
-        if (hasInstructionFixup(module, fragment_id, fact)) continue;
         const fixup_id = if (isSimpleSymbolFact(fact.target))
             try module.addFixup(fragment_id, fact.target, fact.kind, fact.offset, fact.width_bits, fact.span)
         else
@@ -563,9 +712,8 @@ fn activeContextForFixup(
 ) PassError!fixup.ResolveContext {
     const stored_fragment = try fragmentForFixup(module, stored_fixup.fragment);
     const section_id = fragmentSection(stored_fragment);
-    const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
-    const fragment_layout = fragmentLayout(section_layout, stored_fixup.fragment) orelse return error.InvalidFragment;
-    const active_offset = std.math.add(u64, fragment_layout.offset, stored_fixup.offset) catch return error.OffsetOverflow;
+    const fragment_offset = module_layout.fragmentOffset(stored_fixup.fragment) orelse return error.InvalidFragment;
+    const active_offset = std.math.add(u64, fragment_offset, stored_fixup.offset) catch return error.OffsetOverflow;
     return .{
         .module = module,
         .active_section = section_id,
@@ -585,16 +733,6 @@ fn fragmentSection(stored_fragment: fragment.Fragment) fragment.SectionId {
         .alignment => |payload| payload.section,
         .isa_instruction => |payload| payload.section,
     };
-}
-
-fn fragmentLayout(
-    section_layout: *const layout.SectionLayout,
-    fragment_id: fragment.FragmentId,
-) ?layout.FragmentLayout {
-    for (section_layout.fragments) |entry| {
-        if (entry.fragment.index == fragment_id.index) return entry;
-    }
-    return null;
 }
 
 fn instructionFactsChanged(
@@ -805,8 +943,11 @@ test "pass keeps instruction fixup recording idempotent" {
     try std.testing.expectEqual(@as(usize, 1), first.encoded_count);
     try std.testing.expectEqual(@as(usize, 1), module.fixups.items.items.len);
 
+    // The second pass has nothing to do: the fragment already carries bytes and
+    // re-encoding cannot change them, so it neither re-encodes nor re-records a
+    // fixup. Re-encoding was what made a fixup-heavy source quadratic.
     const second = try encodeInstructionFragments(std.testing.allocator, &module);
-    try std.testing.expectEqual(@as(usize, 1), second.encoded_count);
+    try std.testing.expectEqual(@as(usize, 0), second.encoded_count);
     try std.testing.expectEqual(@as(usize, 1), module.fixups.items.items.len);
 }
 
@@ -870,4 +1011,98 @@ test "pass resolves fixup expressions with layout active context" {
         .resolved => |resolved| try std.testing.expectEqual(@as(u64, 8), resolved.value),
         else => return error.UnexpectedResolveState,
     }
+}
+
+/// The walk the cursor memo has to reproduce, kept here as the reference.
+fn walkedSectionCursor(module: *const module_mod.Module, section_id: fragment.SectionId) !u64 {
+    const stored_section = try module.sections.get(section_id);
+    var cursor: u64 = 0;
+    for (stored_section.fragments.items) |fragment_id| {
+        cursor = try layout_cursor.nextOffsetFromFragment(
+            module.fragments.items.items[fragment_id.index],
+            cursor,
+        );
+    }
+    return cursor;
+}
+
+test "section cursor memo agrees with a full walk across an encoding" {
+    const target = @import("target.zig").Target.default;
+    const span = @import("source.zig").unknown_span;
+    var module = try module_mod.Module.init(std.testing.allocator, target);
+    defer module.deinit();
+    const section_id = module.default_section;
+
+    _ = try module.emitBytes(section_id, &.{ 0xaa, 0xbb, 0xcc }, span);
+    _ = try module.addAlignment(section_id, 8, 0, span);
+    _ = try module.appendIsaInstruction(section_id, target, "nop", span);
+    _ = try module.emitBytes(section_id, &.{0xdd}, span);
+    _ = try module.reserve(section_id, 4, 1, span);
+
+    // The instruction has no size yet. The memo must not fold that zero in, so
+    // it stops short of it and still answers what a full walk answers.
+    try std.testing.expectEqual(
+        try walkedSectionCursor(&module, section_id),
+        try layout_cursor.sectionCursor(&module, section_id),
+    );
+
+    _ = try encodeInstructionFragments(module.allocator, &module);
+
+    // After encoding the instruction has a size, so the memo may fold it, and
+    // the answer must still match the full walk exactly.
+    try std.testing.expectEqual(
+        try walkedSectionCursor(&module, section_id),
+        try layout_cursor.sectionCursor(&module, section_id),
+    );
+    // Asking again is stable: the second call folds nothing new.
+    try std.testing.expectEqual(
+        try walkedSectionCursor(&module, section_id),
+        try layout_cursor.sectionCursor(&module, section_id),
+    );
+}
+
+test "encode from a watermark encodes only the fragments after it" {
+    const target = @import("target.zig").Target.default;
+    const span = @import("source.zig").unknown_span;
+    var module = try module_mod.Module.init(std.testing.allocator, target);
+    defer module.deinit();
+    const section_id = module.default_section;
+
+    _ = try module.appendIsaInstruction(section_id, target, "nop", span);
+    const first = try encodeInstructionFragments(module.allocator, &module);
+    try std.testing.expectEqual(@as(usize, 1), first.encoded_count);
+
+    _ = try module.appendIsaInstruction(section_id, target, "ret", span);
+    // Starting at the watermark must encode the new fragment alone: re-walking
+    // the earlier one is exactly the quadratic path this guards.
+    const second = try encodeInstructionFragmentsFrom(module.allocator, &module, 1);
+    try std.testing.expectEqual(@as(usize, 1), second.encoded_count);
+
+    const nothing = try encodeInstructionFragmentsFrom(module.allocator, &module, 2);
+    try std.testing.expectEqual(@as(usize, 0), nothing.encoded_count);
+}
+
+test "encoding refreshes an anchored label whose position it moved" {
+    const target = @import("target.zig").Target.default;
+    const span = @import("source.zig").unknown_span;
+    var module = try module_mod.Module.init(std.testing.allocator, target);
+    defer module.deinit();
+    const section_id = module.default_section;
+
+    _ = try module.emitBytes(section_id, &.{ 1, 2, 3 }, span);
+    _ = try module.appendIsaInstruction(section_id, target, "nop", span);
+    // Anchored at the end of the section, with a placeholder offset: only the
+    // sync after encoding can know that the `nop` is one byte.
+    const symbol_id = try module.defineAnchoredLabel("mark", section_id, 999, 2, span);
+    try std.testing.expectEqual(
+        @as(u64, 999),
+        module.symbols.items.items[symbol_id.index].binding.label.offset,
+    );
+
+    _ = try encodeInstructionFragments(module.allocator, &module);
+
+    try std.testing.expectEqual(
+        @as(u64, 4),
+        module.symbols.items.items[symbol_id.index].binding.label.offset,
+    );
 }

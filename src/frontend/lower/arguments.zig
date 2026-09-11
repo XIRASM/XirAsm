@@ -3,6 +3,7 @@ const std = @import("std");
 const ast = @import("../ast.zig");
 const expr = @import("../expr.zig");
 const module_mod = @import("../module.zig");
+const source = @import("../source.zig");
 const value_mod = @import("../value.zig");
 const aggregate_literal = @import("aggregate_literal.zig");
 const contracts = @import("contracts.zig");
@@ -47,16 +48,36 @@ pub fn valueAtContext(
         .expression => |*node| callbacks.eval_value_at_context(allocator, module, context, active, node),
         .string => |text| .{ .string = try allocator.dupe(u8, text) },
         .struct_literal => |literal| .{
-            .@"struct" = try aggregate_literal.structValueFromLiteral(
+            .@"struct" = aggregate_literal.structValueFromLiteral(
                 allocator,
                 module,
                 context,
                 active,
                 literal,
                 aggregateCallbacks(callbacks),
-            ),
+            ) catch |err| {
+                if (err == error.OutOfMemory) return error.OutOfMemory;
+                // The literal is written in the statement being lowered, and the
+                // expression layer would keep only "an operand failed".
+                try addLiteralDiagnostic(module, context.statement_span, err);
+                return err;
+            },
         },
     };
+}
+
+fn addLiteralDiagnostic(
+    module: *module_mod.Module,
+    span: ?source.SourceSpan,
+    err: anyerror,
+) Allocator.Error!void {
+    const location = span orelse return;
+    const message = if (aggregate_literal.literalErrorDetail(err)) |detail|
+        try std.fmt.allocPrint(module.allocator, "{s} ({s})", .{ detail, @errorName(err) })
+    else
+        try std.fmt.allocPrint(module.allocator, "the aggregate literal is not valid ({s})", .{@errorName(err)});
+    defer module.allocator.free(message);
+    try module.diagnostics.add(module.allocator, .err, location, message);
 }
 
 pub fn booleanAtContext(

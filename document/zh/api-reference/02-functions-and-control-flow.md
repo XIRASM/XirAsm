@@ -53,6 +53,10 @@ emit_byte 42
 执行。编码和布局不重跑宏体。静态标号仍属模块，私有名称用 `sym.unique` 和
 `label.define`。宏可注册合法收尾块，但保存的 `defer`/`late_layout` 中不能定义或调用宏。
 限制为函数/宏共享 128 层调用、累计 100,000 次宏调用、每次 256 个操作数和 64 层括号。
+源码嵌套同样有上限且**带位置报错**：语句 128 层（`StatementNestingTooDeep`）、
+表达式 64 层括号/前缀运算符/`list.of` 元素（`ExpressionNestingTooDeep`，扁平运算符链不受限）、
+聚合字面量 64 层（`StructNestingTooDeep`）、`toml.parse`/`json.parse` 读取的文档 64 层
+（`NestingTooDeep`）。
 保存的操作数之间最多有 128 层捕获依赖，超限为 `MacroCaptureDepthExceeded`。
 快照复制可见值绑定；保存求值结果可以避免不必要的环境和大型集合常驻。
 

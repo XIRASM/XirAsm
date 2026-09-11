@@ -183,6 +183,64 @@ pub fn lowerApiCall(
             .file_offset = 0,
             .file_aligned = false,
             .target = active.target,
+            .opened_at = active.opened_at,
+        };
+        return;
+    }
+
+    if (std.mem.eql(u8, call.callee, "region.place")) {
+        // Scratch content becomes a real region here, at coordinates chosen by
+        // the caller. Doing it before fixups are resolved is what lets an
+        // instruction inside the scratch carry a reference: the section keeps
+        // its fragments, labels, and fixups, so those resolve against the new
+        // address by the ordinary fixup pass.
+        try callbacks.require_arg_count(call, 3);
+        var value = try callbacks.value_arg_at_context(module.allocator, module, context, active.*, call, 0);
+        defer value.deinit(module.allocator);
+        const label_name = switch (value) {
+            .string => |text| text,
+            .operand, .void, .integer, .float32, .float64, .boolean, .bytes, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
+        };
+        const origin = try callbacks.integer_arg_at_context(module, context, active.*, call, 1);
+        const file_offset = try callbacks.integer_arg_at_context(module, context, active.*, call, 2);
+
+        const symbol_id = module.symbols.lookup(label_name) orelse return error.UndefinedSymbol;
+        const symbol = try module.symbols.get(symbol_id);
+        const label = switch (symbol.binding) {
+            .label => |binding| binding,
+            .unknown, .absolute, .value => {
+                try module.diagnostics.add(
+                    allocator,
+                    .err,
+                    call.span,
+                    "region.place expects the name of a label declared inside a virtual region",
+                );
+                return error.FrontendDiagnostics;
+            },
+        };
+        const placed = try module.sections.get(label.section);
+        if (placed.kind != .virtual_output) {
+            try module.diagnostics.add(
+                allocator,
+                .err,
+                call.span,
+                "region.place expects a label declared inside a virtual region; this label is already part of real output",
+            );
+            return error.FrontendDiagnostics;
+        }
+        try module.promoteVirtualSection(label.section, origin, file_offset);
+        // Name the region after the label when that name is free, so listings and
+        // warnings show something the source can be searched for, and continue
+        // emitting into it after the content it already carries.
+        if (!module.sections.hasName(label_name)) {
+            try module.sections.setName(module.allocator, label.section, label_name);
+        }
+        active.* = .{
+            .section_id = label.section,
+            .offset = try layout_cursor.sectionCursor(module, label.section),
+            .file_offset = try layout_cursor.sectionFileCursor(module, label.section),
+            .file_aligned = false,
+            .target = active.target,
         };
         return;
     }
@@ -222,12 +280,18 @@ pub fn lowerApiCall(
             .file_offset = 0,
             .file_aligned = false,
             .target = active.target,
+            .opened_at = active.opened_at,
         };
         return;
     }
 
     if (std.mem.eql(u8, call.callee, "virtual.begin")) {
         if (call.args.len != 0 and call.args.len != 1) return error.InvalidApiArity;
+        // The default origin is "the current address", and the cursor only
+        // includes an instruction once that instruction is encoded. Without this
+        // sync the region starts short by the size of every instruction written
+        // before it, which is a wrong address in the emitted image.
+        try callbacks.sync_active_output_offset_for_layout_api(module, active);
         const origin = if (call.args.len == 1)
             try callbacks.integer_arg_at_context(module, context, active.*, call, 0)
         else
@@ -240,6 +304,7 @@ pub fn lowerApiCall(
             .file_offset = 0,
             .file_aligned = false,
             .target = active.target,
+            .opened_at = call.span,
         };
         return;
     }
@@ -474,6 +539,7 @@ pub fn apiCallHasOutputSideEffect(callee: []const u8) bool {
         std.mem.eql(u8, callee, "emit.u64") or
         dataOperation(callee) != null or
         std.mem.eql(u8, callee, "region.begin") or
+        std.mem.eql(u8, callee, "region.place") or
         std.mem.eql(u8, callee, "region.file_align") or
         std.mem.eql(u8, callee, "emit.bytes") or
         std.mem.eql(u8, callee, "emit.file") or
@@ -564,6 +630,7 @@ pub fn isAllowedLateLayoutApi(callee: []const u8) bool {
         std.mem.eql(u8, callee, "assert") or
         std.mem.eql(u8, callee, "origin") or
         std.mem.eql(u8, callee, "region.begin") or
+        std.mem.eql(u8, callee, "region.place") or
         std.mem.eql(u8, callee, "region.file_align") or
         std.mem.eql(u8, callee, "output.org") or
         std.mem.eql(u8, callee, "output.section") or

@@ -65,14 +65,29 @@ Put the resulting `xirasm` executable on `PATH`, then create and build a native
 project:
 
 ```text
-xirasm init hello --isa x86-64 --os windows --abi msvc
+xirasm init hello --template pe64
 cd hello
 xirasm build
 ```
 
 The generated project carries its own source and `xirasm.toml`, so after that the
-build is just `xirasm build`. On Linux, `--os linux --abi sysv` produces an ELF
-executable from the same commands.
+build is just `xirasm build`. `--template elf64` produces the same starter as an
+ELF executable, and `xirasm help templates` lists the rest.
+
+Assembling a single file needs no options at all: `xirasm hello.asm` writes
+`hello.bin` beside it, and `--isa` only supplies a starting target for a source
+that does not select one itself. Output format is not a command-line concern —
+the source imports the format layer it wants and the assembler just turns the
+source into bytes.
+
+`--listing hello.lst` writes a listing beside the output. Its rows lead with the
+address, then the file offset, the source line, a row kind (`code`, `data`,
+`resv`, `algn`, `gap`, `trim`), the expansion depth, the bytes, and the source
+line. Bytes that the file holds but no fragment claims appear as `gap` rows with
+their actual contents; reserved space trimmed from the file tail appears as `trim`
+with no file offset, because the file holds no byte there. A line produced by a
+macro or function expansion leads with the call site that produced it, so a
+listing of a macro library stays readable.
 
 One CLI rule worth knowing up front: subcommands come before their options, so it
 is `xirasm build --timings`, not `xirasm --timings build`.
@@ -116,24 +131,29 @@ entry:
 ```
 
 ```text
-xirasm hello.asm --target x86-64 -o hello.bin
+xirasm hello.asm
 ```
 
 ## One Tool, Multiple Targets
 
 | Instruction set | How you select it | What it produces |
 | --- | --- | --- |
-| x86, 16/32/64-bit | `--target x86-64` or `--target x86` | PE32/PE64, COFF32/COFF64, ELF32/ELF64, flat images |
-| AArch64 | `import("arm/a64-macros.inc")` in the source | ELF64 executables, PIE, shared libraries and objects, PE64, COFF64, Mach-O arm64, Android libraries |
-| RISC-V RV64/RV32 | `--target rv64` or `--target rv32` | flat images and RISC-V instruction streams |
-| SPIR-V 1.6 | `--target spv` | complete modules for GPU and IR tooling |
+| x86, 16/32/64-bit | `--isa x86-64` or `--isa x86` | PE32/PE64, COFF32/COFF64, ELF32/ELF64, flat images |
+| AArch64 | `--isa aarch64`, or `import("arm/a64-macros.inc")` in the source | ELF64 executables, PIE, shared libraries and objects, PE64, COFF64, Mach-O arm64, Android libraries |
+| RISC-V RV64/RV32 | `--isa rv64` or `--isa rv32` | flat images and RISC-V instruction streams |
+| SPIR-V 1.6 | `--isa spv` | complete modules for GPU and IR tooling |
 
-AArch64 is the one that does not fit a target flag, so it is worth being plain
-about it: the instruction layer is an include, not a CLI option. Once imported,
-`mov x8, #93` and `svc #0` assemble like any other instruction, and the format
-facade decides whether the result becomes an ELF64 image, a PE64 image, an object
-file, or a Mach-O image. The PE, COFF, ELF, and Mach-O facades cover x86-64 and
-AArch64 today; RISC-V and SPIR-V are assembled to instruction streams and modules.
+The ISA flag is a starting target, not a requirement: a source that selects an ISA
+itself (`x86.use64()`, `riscv.use32()`, the A64 macros) decides, and the flag only
+covers sources that do not. `--target` is the older spelling of `--isa` and still
+works.
+
+AArch64 has no backend encoder: its instruction layer is an include, not a decoder
+in the assembler. Once imported, `mov x8, #93` and `svc #0` assemble like any other
+instruction, and the format facade decides whether the result becomes an ELF64
+image, a PE64 image, an object file, or a Mach-O image. The PE, COFF, ELF, and
+Mach-O facades cover x86-64 and AArch64 today; RISC-V and SPIR-V are assembled to
+instruction streams and modules.
 
 The project model and the compile-time language are the same across all four. You
 do not learn one macro system for x86 and a different generation language for
@@ -257,7 +277,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.2.22**. See the [release notes](document/releases/0.2.22.md).
+Current version: **0.3.0**. See the [release notes](document/releases/0.3.0.md).
 
 XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI, and
 editor support are usable today, and public contracts may still be refined before

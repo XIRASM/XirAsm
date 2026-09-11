@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const string_escape = @import("string_escape.zig");
 const value_mod = @import("value.zig");
 
 const Allocator = std.mem.Allocator;
@@ -399,20 +400,17 @@ fn unquoteToken(allocator: Allocator, token: []const u8) Error![]u8 {
     errdefer output.deinit(allocator);
     var index: usize = 1;
     while (index + 1 < token.len) : (index += 1) {
+        // A backslash escapes only the sequences `string_escape` knows.
+        // Anything else keeps both characters instead of dropping the
+        // backslash, so a capture reads the same text a source string literal
+        // would. The slice stops before the closing delimiter, so an escape can
+        // never read past the token.
         if (token[index] == '\\') {
-            index += 1;
-            if (index + 1 > token.len) return error.InvalidArgument;
-            const escaped = switch (token[index]) {
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                '\\' => '\\',
-                '"' => '"',
-                '\'' => '\'',
-                else => token[index],
-            };
-            try output.append(allocator, escaped);
-            continue;
+            if (string_escape.decodeEscape(quote, token[index .. token.len - 1])) |decoded| {
+                try output.appendSlice(allocator, decoded.bytes[0..decoded.len]);
+                index += decoded.consumed - 1;
+                continue;
+            }
         }
         try output.append(allocator, token[index]);
     }
@@ -637,6 +635,30 @@ test "match tokens captures integer and quoted tokens" {
     defer quoted_result.deinit(std.testing.allocator);
     const quoted_captures = try (try quoted_result.expectMap()).entryByKey("captures").?.value.expectMap();
     try std.testing.expectEqualStrings("OK", try quoted_captures.entryByKey("text").?.value.expectString());
+}
+
+test "quoted captures decode escapes exactly like string literals" {
+    const allocator = std.testing.allocator;
+    const cases = [_]struct { input: []const u8, expected: []const u8 }{
+        .{ .input = "db \"a\\nb\"", .expected = "a\nb" },
+        .{ .input = "db \"a\\tb\"", .expected = "a\tb" },
+        .{ .input = "db \"a\\\\b\"", .expected = "a\\b" },
+        .{ .input = "db \"x\\\"y\"", .expected = "x\"y" },
+        .{ .input = "db 'x\\'y'", .expected = "x'y" },
+        // Unknown escapes keep both characters instead of dropping the
+        // backslash, so a capture reads the same text a literal would.
+        .{ .input = "db \"a\\qb\"", .expected = "a\\qb" },
+        .{ .input = "db \"slash \\ ok\"", .expected = "slash \\ ok" },
+    };
+    for (cases) |case| {
+        const input = try allocator.dupe(u8, case.input);
+        defer allocator.free(input);
+        var pattern = [_]u8{ '=', 'd', 'b', ' ', 't', 'e', 'x', 't', ':', 'q', 'u', 'o', 't', 'e', 'd' };
+        var result = try matchTokensValue(allocator, .{ .string = &pattern }, .{ .string = input });
+        defer result.deinit(allocator);
+        const captures = try (try result.expectMap()).entryByKey("captures").?.value.expectMap();
+        try std.testing.expectEqualStrings(case.expected, try captures.entryByKey("text").?.value.expectString());
+    }
 }
 
 test "typed capture mismatches are misses and token ranges backtrack" {

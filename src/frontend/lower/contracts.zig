@@ -27,6 +27,10 @@ pub const LowerError = Allocator.Error || error{
     InvalidAlignment,
     InvalidStructDeclaration,
     InvalidStructField,
+    StatementNestingTooDeep,
+    StructNestingTooDeep,
+    ExpressionNestingTooDeep,
+    NestingTooDeep,
     UnionFieldDefaultNotAllowed,
     DuplicateMetaFunction,
     InvalidMetaBlock,
@@ -93,6 +97,7 @@ pub const LowerError = Allocator.Error || error{
     OffsetOverflow,
     OutputRegionClosed,
     FinalizerCannotChangeLayout,
+    TrailingTextAfterCall,
 };
 
 pub const IncludeResolver = struct {
@@ -141,6 +146,11 @@ pub const ActiveOutput = struct {
     file_offset: u64,
     file_aligned: bool = false,
     target: target.Target,
+    /// The `virtual.begin` call that opened this scratch region. End-of-input
+    /// finds an unclosed region long after the statement that opened it, so the
+    /// span has to travel with the output to report the failure where a reader
+    /// can see it instead of as a bare `assembly failed: UnclosedVirtualOutput`.
+    opened_at: ?source.SourceSpan = null,
 };
 
 pub const OutputStoreTarget = struct {

@@ -267,12 +267,58 @@ emit.bytes(encoded);
 
 虚拟区域适合做资源表、导出表、字符串池、校验数据等临时构造。里面可以写数据、`reserve`、`align`、定义标号、写 ISA 指令，也可以用 `load.*` 和 `store.*` 读写这些临时字节。
 
-但它有两个边界：
+但它有三个边界：
 
 - 每个 `virtual.begin` 必须有对应的 `virtual.end`。
 - 虚拟区域里不能启动主输出区域；`output.section` 和 `output.org` 只能在回到真实输出后调用。
+- 需要回填的指令在虚拟区域里保持"未回填"：`emit.bytes` 拷贝的是虚拟字节的**快照**，而快照发生在回填之前，所以里面还是编码时的占位值。scratch 里如果放的是带引用的代码，请用 `region.place` 把整个区域落位（见下）。
 
-虚拟区域里的地址不是最终文件位置。要让虚拟内容进入文件，必须像上面的例子一样显式 `emit.bytes(...)` 或用格式库提供的复制流程。
+虚拟区域里的地址不是最终文件位置。要让虚拟内容进入文件，可以用 `emit.bytes(...)` 或格式库提供的复制流程拷贝字节，也可以用 `region.place` 把整个区域落位。
+
+## `region.place`：把 scratch 内容落进文件
+
+`region.place(label, origin, file_offset)` 把 `label` 所在的虚拟区域变成真实输出区域，坐标由调用者指定。和 `emit.bytes` 不同，它保留该区域的指令、标号和引用，所以 scratch 里写的跳转与调用会由正常的 fixup 流程按**落位后的地址**解析：
+
+```asm
+x86.use64();
+
+main_target:
+emit.u8(0x90)
+
+virtual.begin(0x9000);
+gen_start:
+call main_target
+jmp gen_start
+virtual.end();
+
+late_layout {
+    region.place("gen_start", 0x8000, 0x10);
+}
+```
+
+落位后的区域从文件偏移 `0x10` 开始写字节，两个引用都能命中目标：`call main_target` 指向主输出，`jmp gen_start` 指向落位后的地址。
+
+落位会让该区域成为当前活动区域，并把位置放在它已有内容**之后**，所以后续输出直接续写在里面。区域以该标号命名，列表与告警显示的就是这个名字。落位要发生在 fixup 解析之前，所以 `late_layout` 是自然的调用位置。普通发射期从 scratch 里读出来的值（`load.*`、`label_addr`）描述的是**scratch 地址**，不是落位后的地址。
+
+## `load.*` / `store.*` 只作用于当前活动区域
+
+发射期里，`load.*` 和 `store.*` 寻址的是**当前活动区域自己的字节范围**。在虚拟区域里，它们读写的就是 scratch 字节：
+
+```asm
+virtual.begin(0x3000);
+
+emit.bytes(b"AB");
+store.u8(0x3000, 0x5a);
+const patched: bytes = load.bytes(0x3000, 2)
+
+virtual.end();
+
+emit.bytes(patched);
+```
+
+`virtual.end()` 之后活动区域回到外围区域，同一个调用寻址的就是真实输出字节。从 scratch 读出来的值是**拷贝**：block 结束后依然有效，这也是虚拟区域把中间结果交给主输出的方式。
+
+虚拟区域不会读写其它区域的字节，外围输出也不会按地址去读 scratch 字节。两侧通过**值**交汇；当 scratch 里放的是带引用的代码时，通过 `region.place` 交汇。
 
 ## 省略虚拟 origin：从当前位置的逻辑地址开始
 

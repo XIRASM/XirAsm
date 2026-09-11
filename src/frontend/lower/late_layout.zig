@@ -4,6 +4,7 @@ const ast = @import("../ast.zig");
 const fragment = @import("../fragment.zig");
 const module_mod = @import("../module.zig");
 const output_mod = @import("../output/root.zig");
+const source = @import("../source.zig");
 const contracts = @import("contracts.zig");
 const context_mod = @import("context.zig");
 const deferred = @import("deferred.zig");
@@ -14,8 +15,8 @@ const LowerContext = context_mod.LowerContext;
 const LowerError = contracts.LowerError;
 
 pub const RuntimeCallbacks = struct {
-    section_cursor: *const fn (module: *const module_mod.Module, section_id: fragment.SectionId) LowerError!u64,
-    section_file_cursor: *const fn (module: *const module_mod.Module, section_id: fragment.SectionId) LowerError!u64,
+    section_cursor: *const fn (module: *module_mod.Module, section_id: fragment.SectionId) LowerError!u64,
+    section_file_cursor: *const fn (module: *module_mod.Module, section_id: fragment.SectionId) LowerError!u64,
     run_api_call: *const fn (
         allocator: Allocator,
         module: *module_mod.Module,
@@ -76,17 +77,85 @@ fn runBlocksOnce(
         module.diagnostics.active_expansion = block.span.expansion;
         defer module.diagnostics.active_expansion = previous_expansion;
         const diagnostic_start = module.diagnostics.items.items.len;
+        const written_section = active.section_id;
+        const fragments_before = sectionFragmentCount(module, written_section);
         runStatements(allocator, module, &active, &output_stack, &context, block.body, callbacks) catch |err| {
             if (err == error.OutOfMemory) return err;
-            if (block.span.expansion != null and module.diagnostics.items.items.len == diagnostic_start) {
-                try module.diagnostics.add(allocator, .err, block.span, @errorName(err));
-                return error.FrontendDiagnostics;
-            }
-            return err;
+            if (module.diagnostics.items.items.len > diagnostic_start) return err;
+            try addLateLayoutDiagnostic(allocator, module, block.span, err);
+            return error.FrontendDiagnostics;
         };
+        // A late-layout block starts with the default region active, not the
+        // region that was active where the block was written. A block that
+        // appends without choosing a region therefore lands somewhere other than
+        // where the source reads, and only a warning says so -- the overlap
+        // warning cannot, because the two regions usually do not overlap.
+        if (block.source_section_index) |source_index| {
+            if (source_index != written_section.index and
+                sectionFragmentCount(module, written_section) != fragments_before)
+            {
+                const message = try std.fmt.allocPrint(
+                    allocator,
+                    "this late_layout block was written inside region '{s}', but a late_layout block starts with region '{s}' active and its bytes went there; call region.place or output.section inside the block to choose the region",
+                    .{
+                        sectionName(module, .{ .index = source_index }),
+                        sectionName(module, written_section),
+                    },
+                );
+                defer allocator.free(message);
+                try module.diagnostics.add(allocator, .warning, block.span, message);
+            }
+        }
     }
 
-    if (output_stack.items.len != 0) return error.UnclosedVirtualOutput;
+    if (output_stack.items.len != 0) {
+        if (active.opened_at) |span| {
+            try addLateLayoutDiagnostic(allocator, module, span, error.UnclosedVirtualOutput);
+            return error.FrontendDiagnostics;
+        }
+        return error.UnclosedVirtualOutput;
+    }
+}
+
+/// A late-layout block runs during assembly, long after its statements were
+/// parsed, so a failure in it has no lowering-time diagnostic to fall back on.
+/// Without this the reader sees only `assembly failed: <error name>`, with no
+/// file and no line.
+fn sectionFragmentCount(module: *const module_mod.Module, section_id: fragment.SectionId) usize {
+    const stored = module.sections.get(section_id) catch return 0;
+    return stored.fragments.items.len;
+}
+
+fn sectionName(module: *const module_mod.Module, section_id: fragment.SectionId) []const u8 {
+    const stored = module.sections.get(section_id) catch return "?";
+    return stored.name;
+}
+
+fn addLateLayoutDiagnostic(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    span: source.SourceSpan,
+    err: anyerror,
+) Allocator.Error!void {
+    const message = if (lateLayoutErrorDetail(err)) |detail|
+        try std.fmt.allocPrint(allocator, "{s} ({s})", .{ detail, @errorName(err) })
+    else
+        try std.fmt.allocPrint(allocator, "late layout failed: {s}", .{@errorName(err)});
+    defer allocator.free(message);
+    try module.diagnostics.add(allocator, .err, span, message);
+}
+
+fn lateLayoutErrorDetail(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.InvalidExpression => "an expression in this late-layout statement is not valid; final region facts (region_file_size, region_logical_size, region_file_offset) are available only in a finalizer",
+        error.InvalidApiCall => "the call syntax is not valid",
+        error.InvalidApiArgument => "a call argument does not match what the call expects",
+        error.InvalidMetaIf => "the late-layout condition is not valid",
+        error.InvalidMetaStatement => "this statement is not valid inside late_layout",
+        error.UnclosedVirtualOutput => "a scratch region opened here was never closed with virtual.end()",
+        error.InvalidAlignment => "the alignment must be a nonzero power of two",
+        else => null,
+    };
 }
 
 fn runStatements(
@@ -99,7 +168,13 @@ fn runStatements(
     callbacks: RuntimeCallbacks,
 ) LowerError!void {
     for (statements) |statement| {
-        try runStatement(allocator, module, active, output_stack, context, statement, callbacks);
+        const diagnostic_start = module.diagnostics.items.items.len;
+        runStatement(allocator, module, active, output_stack, context, statement, callbacks) catch |err| {
+            if (err == error.OutOfMemory) return err;
+            if (module.diagnostics.items.items.len > diagnostic_start) return err;
+            try addLateLayoutDiagnostic(allocator, module, statement.span(), err);
+            return error.FrontendDiagnostics;
+        };
     }
 }
 

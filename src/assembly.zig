@@ -76,6 +76,9 @@ pub fn assembleFlat(
     };
     errdefer writer_result.deinit(allocator);
 
+    try warnOnRegionFileOverlap(module, writer_result.regions);
+    try warnOnSparseOutput(module, writer_result.regions, writer_result.bytes.len);
+
     {
         stageBegin(observer, .patch);
         defer stageEnd(observer, .patch);
@@ -149,11 +152,9 @@ fn runDeferredFinalizers(
         const diagnostic_start = module.diagnostics.items.items.len;
         runDeferredScopedStatements(&state, block.body) catch |err| {
             if (err == error.OutOfMemory) return err;
-            if (block.span.expansion != null and module.diagnostics.items.items.len == diagnostic_start) {
-                try module.diagnostics.add(module.allocator, .err, block.span, @errorName(err));
-                return error.FrontendDiagnostics;
-            }
-            return err;
+            if (module.diagnostics.items.items.len > diagnostic_start) return err;
+            try addFinalizerDiagnostic(&state, block.span, err);
+            return error.FrontendDiagnostics;
         };
     }
 }
@@ -168,8 +169,48 @@ const FinalizerState = struct {
 
 fn runDeferredStatements(state: *FinalizerState, statements: []const frontend.DeferredStatement) anyerror!void {
     for (statements) |statement| {
-        try runDeferredStatement(state, statement);
+        const diagnostic_start = state.module.diagnostics.items.items.len;
+        runDeferredStatement(state, statement) catch |err| {
+            // `break` and `continue` are control flow for the enclosing
+            // finalizer loop, not failures, so they keep travelling.
+            if (err == error.OutOfMemory or err == error.MetaLoopBreak or err == error.MetaLoopContinue) return err;
+            if (state.module.diagnostics.items.items.len > diagnostic_start) return err;
+            try addFinalizerDiagnostic(state, statement.span(), err);
+            return error.FrontendDiagnostics;
+        };
     }
+}
+
+/// A finalizer runs after the output image is sealed, so a failure here has no
+/// lowering-time diagnostic to fall back on. Without this the reader sees only
+/// `assembly failed: <error name>`, with no file, no line, and no reason -- and
+/// the format library writes most of its backfills as plain `defer` blocks.
+fn addFinalizerDiagnostic(state: *FinalizerState, span: frontend.SourceSpan, err: anyerror) !void {
+    const message = if (finalizerErrorDetail(err)) |detail|
+        try std.fmt.allocPrint(state.allocator, "{s} ({s})", .{ detail, @errorName(err) })
+    else
+        try std.fmt.allocPrint(state.allocator, "the finalizer failed: {s}", .{@errorName(err)});
+    defer state.allocator.free(message);
+    try state.module.diagnostics.add(state.allocator, .err, span, message);
+}
+
+fn finalizerErrorDetail(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.InvalidApiArgument => "the finalizer touched bytes the finished output image does not hold; a reserved tail is not in the file",
+        error.InvalidApiInteger => "the value does not fit the width of this finalizer store",
+        error.InvalidApiArity => "this finalizer call passes the wrong number of arguments",
+        error.OffsetOverflow => "the address is too large for the output image",
+        error.InvalidSection => "the address does not belong to a region of the output image",
+        error.FinalizerCannotChangeLayout => "a finalizer can patch bytes, but it cannot emit bytes, define labels, or change regions",
+        error.UndefinedSymbol => "the name is not defined where the finalizer uses it",
+        error.DivisionByZero => "the expression divides by zero",
+        error.InvalidOperand => "this operand cannot be evaluated in a finalizer",
+        else => null,
+    };
+}
+
+fn byteCountWord(count: usize) []const u8 {
+    return if (count == 1) "byte" else "bytes";
 }
 
 fn runDeferredStatement(state: *FinalizerState, statement: frontend.DeferredStatement) anyerror!void {
@@ -311,10 +352,11 @@ fn runDeferredStoreBytes(state: *FinalizerState, call: frontend.ast.ApiCallState
         .string => |text| text,
         .operand, .void, .integer, .float32, .float64, .boolean, .type, .@"struct", .list, .map => return error.InvalidApiArgument,
     };
-    if (target.explicit_section)
-        try state.image.storeBytesInSection(target.section, target.address, bytes)
+    const result = if (target.explicit_section)
+        state.image.storeBytesInSection(target.section, target.address, bytes)
     else
-        try state.image.storeBytes(target.address, bytes);
+        state.image.storeBytes(target.address, bytes);
+    result catch |err| return reportFinalizerStoreFailure(state, call, target.address, bytes.len, err);
 }
 
 fn runDeferredStoreInteger(
@@ -325,10 +367,44 @@ fn runDeferredStoreInteger(
     if (call.args.len != 2) return error.InvalidApiArity;
     const target = try deferredOutputTarget(state, call, 0);
     const value = try deferredIntegerArg(state, call, 1);
-    if (target.explicit_section)
-        try state.image.storeIntegerInSection(target.section, target.address, value, byte_count)
+    const result = if (target.explicit_section)
+        state.image.storeIntegerInSection(target.section, target.address, value, byte_count)
     else
-        try state.image.storeInteger(target.address, value, byte_count);
+        state.image.storeInteger(target.address, value, byte_count);
+    result catch |err| return reportFinalizerStoreFailure(state, call, target.address, byte_count, err);
+}
+
+/// The image reports one argument error for every address it cannot reach, which
+/// does not say which write failed or why. `target.address` is already resolved
+/// here, so the diagnostic can name the address, the width, and the file length.
+fn reportFinalizerStoreFailure(
+    state: *FinalizerState,
+    call: frontend.ast.ApiCallStatement,
+    address: u64,
+    byte_count: usize,
+    err: anyerror,
+) anyerror {
+    if (err == error.OutOfMemory) return err;
+    const message = switch (err) {
+        error.InvalidApiArgument, error.OffsetOverflow => std.fmt.allocPrint(
+            state.allocator,
+            "this store writes {d} {s} at 0x{x}, but the finished output image holds {d} {s}; a reserved tail is not in the file ({s})",
+            .{ byte_count, byteCountWord(byte_count), address, state.image.bytes.len, byteCountWord(state.image.bytes.len), @errorName(err) },
+        ),
+        error.InvalidApiInteger => std.fmt.allocPrint(
+            state.allocator,
+            "the value does not fit the {d} {s} written at 0x{x} ({s})",
+            .{ byte_count, byteCountWord(byte_count), address, @errorName(err) },
+        ),
+        else => std.fmt.allocPrint(
+            state.allocator,
+            "this store cannot be applied to the finished output image: {s}",
+            .{@errorName(err)},
+        ),
+    } catch return error.OutOfMemory;
+    defer state.allocator.free(message);
+    state.module.diagnostics.add(state.allocator, .err, call.span, message) catch return error.OutOfMemory;
+    return error.FrontendDiagnostics;
 }
 
 fn runDeferredAssert(state: *FinalizerState, call: frontend.ast.ApiCallStatement) !void {
@@ -530,9 +606,12 @@ fn patchResolvedFixups(
                 }
                 const section_id = try sectionForFragment(module, stored_fixup.fragment);
                 const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
-                const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
-                const fragment_layout = fragmentLayout(section_layout, stored_fixup.fragment) orelse return error.InvalidFragment;
-                patchOneFixup(bytes, section_layout.*, image_region, fragment_layout, stored_fixup, resolved.value) catch |err| {
+                const image_region = imageRegionForSection(image_regions, section_id) orelse {
+                    try reportInstructionOutsideImage(module, stored_fixup.span, fixupTargetText(stored_fixup));
+                    return error.FrontendDiagnostics;
+                };
+                const fragment_offset = module_layout.fragmentOffset(stored_fixup.fragment) orelse return error.InvalidFragment;
+                patchOneFixup(bytes, section_layout.*, image_region, fragment_offset, stored_fixup, resolved.value) catch |err| {
                     try addFixupPatchDiagnostic(module, stored_fixup, resolved.value, err);
                     return error.FrontendDiagnostics;
                 };
@@ -563,7 +642,7 @@ fn hasEarlierFixupForFragment(
 
 fn patchResolvedRiscvInstruction(
     bytes: []u8,
-    module: *const frontend.Module,
+    module: *frontend.Module,
     module_layout: *const frontend.ModuleLayout,
     image_regions: []const frontend.output.ImageRegion,
     fixup_result: frontend.FixupPassResult,
@@ -599,9 +678,12 @@ fn patchResolvedRiscvInstruction(
 
     const section_id = instruction.section;
     const section_layout = module_layout.sectionLayout(section_id) orelse return error.InvalidSection;
-    const image_region = imageRegionForSection(image_regions, section_id) orelse return error.InvalidSection;
-    const fragment_layout = fragmentLayout(section_layout, fragment_id) orelse return error.InvalidFragment;
-    const instruction_address = std.math.add(u64, section_layout.origin, fragment_layout.offset) catch return error.OffsetOverflow;
+    const image_region = imageRegionForSection(image_regions, section_id) orelse {
+        try reportInstructionOutsideImage(module, instruction.span, resolution_storage[0].target);
+        return error.FrontendDiagnostics;
+    };
+    const fragment_offset = module_layout.fragmentOffset(fragment_id) orelse return error.InvalidFragment;
+    const instruction_address = std.math.add(u64, section_layout.origin, fragment_offset) catch return error.OffsetOverflow;
     var encoded = try frontend.encodeResolvedRiscvInstruction(
         instruction,
         module.target,
@@ -609,13 +691,18 @@ fn patchResolvedRiscvInstruction(
         resolution_storage[0..resolution_count],
     );
     const encoded_bytes = encoded.asSlice();
-    if (encoded_bytes.len != fragment_layout.file_size or encoded_bytes.len != instruction.current_size) {
+    // An instruction fragment's file size is always its current size: the layout
+    // gives it `logical_size` and trims only a trailing `reserve`, so comparing
+    // against `fragment_offset`'s neighbour is unnecessary -- and looking the
+    // fragment's layout entry up here cost a scan of the whole section for every
+    // branch that needed re-encoding.
+    if (encoded_bytes.len != instruction.current_size) {
         return error.InvalidFixupTarget;
     }
-    const patch_end_relative = std.math.add(u64, fragment_layout.offset, encoded_bytes.len) catch return error.OffsetOverflow;
+    const patch_end_relative = std.math.add(u64, fragment_offset, encoded_bytes.len) catch return error.OffsetOverflow;
     if (patch_end_relative > image_region.file_size) return error.InvalidFixupTarget;
 
-    const patch_offset = std.math.add(u64, image_region.file_offset, fragment_layout.offset) catch return error.OffsetOverflow;
+    const patch_offset = std.math.add(u64, image_region.file_offset, fragment_offset) catch return error.OffsetOverflow;
     const patch_start = try sizeToUsize(patch_offset);
     const patch_end = std.math.add(usize, patch_start, encoded_bytes.len) catch return error.OffsetOverflow;
     if (patch_end > bytes.len) return error.InvalidFixupTarget;
@@ -644,13 +731,6 @@ fn fixupAt(module: *const frontend.Module, id: frontend.FixupId) !frontend.Fixup
     return module.fixups.items.items[id.index];
 }
 
-fn fragmentLayout(section_layout: *const frontend.SectionLayout, fragment_id: frontend.FragmentId) ?frontend.FragmentLayout {
-    for (section_layout.fragments) |entry| {
-        if (entry.fragment.index == fragment_id.index) return entry;
-    }
-    return null;
-}
-
 fn sectionForFragment(module: *const frontend.Module, fragment_id: frontend.FragmentId) !frontend.section.SectionId {
     if (fragment_id.index >= module.fragments.items.items.len) return error.InvalidFragment;
     return switch (module.fragments.items.items[fragment_id.index]) {
@@ -661,16 +741,95 @@ fn sectionForFragment(module: *const frontend.Module, fragment_id: frontend.Frag
     };
 }
 
+/// A region placed far past the data before it turns the output into mostly
+/// zeros. One digit too many in a file offset -- writing `0x1_0000_0000` where
+/// `0x40_0000` was meant -- costs gigabytes of disk and a long write, and
+/// nothing in the source looks wrong. Holes are allowed on purpose, so this
+/// warns instead of failing.
+fn warnOnSparseOutput(
+    module: *frontend.Module,
+    image_regions: []const frontend.output.ImageRegion,
+    output_bytes: usize,
+) !void {
+    const hole_threshold: u64 = 1 << 20;
+    var written: u64 = 0;
+    for (image_regions) |region| {
+        written = std.math.add(u64, written, region.file_size) catch return;
+    }
+    const total: u64 = @intCast(output_bytes);
+    if (total <= written) return;
+    const holes = total - written;
+    if (holes < hole_threshold) return;
+
+    const message = try std.fmt.allocPrint(
+        module.allocator,
+        "the output is {d} bytes but the source writes only {d} of them; {d} bytes are holes, so check a region's file offset",
+        .{ total, written, holes },
+    );
+    defer module.allocator.free(message);
+    try module.diagnostics.add(
+        module.allocator,
+        frontend.diagnostic.Severity.warning,
+        frontend.source.unknown_span,
+        message,
+    );
+}
+
+/// `region.begin` places output by file offset, so two regions can claim the
+/// same file bytes and the later one silently overwrites the earlier one. The
+/// language leaves ordering, holes, and overlap to the caller, so this warns
+/// instead of failing -- but it is the one path that can quietly change bytes
+/// that were already written.
+fn warnOnRegionFileOverlap(
+    module: *frontend.Module,
+    image_regions: []const frontend.output.ImageRegion,
+) !void {
+    for (image_regions, 0..) |region, index| {
+        if (region.file_size == 0) continue;
+        const region_end = std.math.add(u64, region.file_offset, region.file_size) catch continue;
+        for (image_regions[index + 1 ..]) |other| {
+            if (other.file_size == 0) continue;
+            const other_end = std.math.add(u64, other.file_offset, other.file_size) catch continue;
+            if (region.file_offset >= other_end or other.file_offset >= region_end) continue;
+
+            const message = try std.fmt.allocPrint(
+                module.allocator,
+                "region '{s}' writes file bytes 0x{x}..0x{x} and region '{s}' writes 0x{x}..0x{x}; the shared bytes are written twice, and the later region wins",
+                .{
+                    sectionName(module, region.section),
+                    region.file_offset,
+                    region_end,
+                    sectionName(module, other.section),
+                    other.file_offset,
+                    other_end,
+                },
+            );
+            defer module.allocator.free(message);
+            try module.diagnostics.add(
+                module.allocator,
+                frontend.diagnostic.Severity.warning,
+                frontend.source.unknown_span,
+                message,
+            );
+        }
+    }
+}
+
+fn sectionName(module: *frontend.Module, section_id: frontend.section.SectionId) []const u8 {
+    const stored = module.sections.get(section_id) catch return "?";
+    return stored.name;
+}
+
 fn patchOneFixup(
     bytes: []u8,
     section_layout: frontend.SectionLayout,
     image_region: frontend.output.ImageRegion,
-    fragment_layout: frontend.FragmentLayout,
+    fragment_offset: u64,
     stored_fixup: frontend.Fixup,
     target_value: u64,
 ) AssemblyError!void {
     const width_bytes = try fixupWidthBytes(stored_fixup.width_bits);
-    const section_relative_patch_offset = std.math.add(u64, fragment_layout.offset, stored_fixup.offset) catch return error.FixupAddressOverflow;
+    const section_relative_patch_offset = std.math.add(u64, fragment_offset, stored_fixup.offset) catch return error.FixupAddressOverflow;
     const patch_end_relative = std.math.add(u64, section_relative_patch_offset, width_bytes) catch return error.FixupAddressOverflow;
     if (patch_end_relative > image_region.file_size) return error.FixupPatchOutOfBounds;
     const patch_offset = std.math.add(u64, image_region.file_offset, section_relative_patch_offset) catch return error.FixupAddressOverflow;
@@ -773,7 +932,7 @@ test "fixup patching distinguishes invalid widths bounds and address overflow" {
             &bytes,
             section_layout,
             image_region,
-            .{ .fragment = .{ .index = 0 }, .offset = 0, .logical_size = 1, .file_size = 1 },
+            0,
             base_fixup,
             0,
         ),
@@ -788,7 +947,7 @@ test "fixup patching distinguishes invalid widths bounds and address overflow" {
             &bytes,
             section_layout,
             image_region,
-            .{ .fragment = .{ .index = 0 }, .offset = std.math.maxInt(u64), .logical_size = 1, .file_size = 1 },
+            std.math.maxInt(u64),
             overflow_fixup,
             0,
         ),
@@ -807,6 +966,31 @@ fn relativePatchValue(target_value: u64, next_ip: u64, width_bits: u16) Assembly
         else => return error.InvalidFixupWidth,
     }
     return @intCast(value);
+}
+
+/// An instruction whose region is not part of the output image cannot receive
+/// its resolved reference. A virtual region is the usual cause: its bytes enter
+/// the file only where the source copies them, and a copy is a snapshot taken
+/// before references are patched. Writing the field now would not reach that
+/// copy, and skipping the write would leave the encoded placeholder in it, so
+/// the instruction is refused where it is written instead.
+fn reportInstructionOutsideImage(
+    module: *frontend.Module,
+    span: frontend.SourceSpan,
+    target: []const u8,
+) !void {
+    const message = try std.fmt.allocPrint(
+        module.allocator,
+        "instruction referencing '{s}' needs a resolved field, but its region is not part of the output image; put the virtual region in the file with region.place, because bytes copied out with emit.bytes keep the encoded placeholder",
+        .{target},
+    );
+    defer module.allocator.free(message);
+    try module.diagnostics.add(
+        module.allocator,
+        frontend.diagnostic.Severity.err,
+        span,
+        message,
+    );
 }
 
 fn addFixupPatchDiagnostic(
@@ -1067,9 +1251,50 @@ fn exerciseDeferredOperandError(allocator: Allocator, expression: []const u8, ex
         return error.TestExpectedError;
     } else |err| switch (err) {
         error.OutOfMemory => return err,
+        // A failure inside a finalizer is now reported where it happened, so the
+        // error arrives as diagnostics; the category name stays in the message.
+        error.FrontendDiagnostics => try std.testing.expect(diagnosticsMention(&module, @errorName(expected))),
         else => try std.testing.expectEqual(expected, err),
     }
     try std.testing.expectEqual(fragment_count, module.fragments.items.items.len);
+}
+
+test "sparse output warns instead of filling gigabytes quietly" {
+    var module = try frontend.Module.init(std.testing.allocator, frontend.target.Target.default);
+    defer module.deinit();
+
+    // A single byte placed four gigabytes into the file: the one-digit file
+    // offset slip this warning exists for.
+    const far = [_]frontend.output.ImageRegion{.{
+        .section = module.default_section,
+        .origin = 0x1000,
+        .file_offset = 0x1_0000_0000,
+        .logical_size = 1,
+        .file_size = 1,
+    }};
+    try warnOnSparseOutput(&module, &far, 0x1_0000_0001);
+    try std.testing.expect(diagnosticsMention(&module, "bytes are holes"));
+
+    // A region that accounts for the whole file is not sparse, and a hole below
+    // the threshold is ordinary padding.
+    const tight = [_]frontend.output.ImageRegion{.{
+        .section = module.default_section,
+        .origin = 0x1000,
+        .file_offset = 0,
+        .logical_size = 16,
+        .file_size = 16,
+    }};
+    const before = module.diagnostics.items.items.len;
+    try warnOnSparseOutput(&module, &tight, 16);
+    try warnOnSparseOutput(&module, &tight, 16 + (1 << 19));
+    try std.testing.expectEqual(before, module.diagnostics.items.items.len);
+}
+
+fn diagnosticsMention(module: *const frontend.Module, needle: []const u8) bool {
+    for (module.diagnostics.items.items) |entry| {
+        if (std.mem.indexOf(u8, entry.message, needle) != null) return true;
+    }
+    return false;
 }
 
 test "deferred operand failures preserve errors and release captured state" {
@@ -1148,10 +1373,44 @@ fn exerciseDeferredCapturedError(allocator: Allocator) !void {
         error.OutOfMemory => return err,
         else => try std.testing.expectEqual(error.FrontendDiagnostics, err),
     }
-    try std.testing.expectEqualStrings("UndefinedSymbol", module.diagnostics.items.items[0].message);
+    try std.testing.expect(diagnosticsMention(&module, "UndefinedSymbol"));
 }
 
 test "deferred composite failures clean up snapshots and preserve macro diagnostics" {
     var no_resize = std.testing.FailingAllocator.init(std.testing.allocator, .{ .resize_fail_index = 0 });
     try std.testing.checkAllAllocationFailures(no_resize.allocator(), exerciseDeferredCapturedError, .{});
+}
+
+test "overlapping output regions warn about the file bytes they share" {
+    var module = try frontend.lowerSource(std.testing.allocator,
+        \\region.begin("first", 0x1000, 0)
+        \\emit.bytes(b"AAAAAAAA")
+        \\region.begin("second", 0x2000, 4)
+        \\emit.bytes(b"BBBBBBBB")
+        \\
+    , .{});
+    defer module.deinit();
+
+    var result = try assembleFlat(std.testing.allocator, &module, null);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 12), result.bytes.len);
+    try std.testing.expect(diagnosticsMention(&module, "shared bytes are written twice"));
+}
+
+test "adjacent output regions do not warn" {
+    var module = try frontend.lowerSource(std.testing.allocator,
+        \\region.begin("first", 0x1000, 0)
+        \\emit.bytes(b"AAAA")
+        \\region.begin("second", 0x2000, 4)
+        \\emit.bytes(b"BBBB")
+        \\
+    , .{});
+    defer module.deinit();
+
+    var result = try assembleFlat(std.testing.allocator, &module, null);
+    defer result.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 8), result.bytes.len);
+    try std.testing.expect(!diagnosticsMention(&module, "shared bytes are written twice"));
 }

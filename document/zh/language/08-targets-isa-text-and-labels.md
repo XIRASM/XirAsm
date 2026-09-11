@@ -1,4 +1,4 @@
-﻿# 第 8 章：目标、指令与标号
+# 第 8 章：目标、指令与标号
 
 编译期语言决定生成什么；汇编器模型决定生成的指令和数据放在哪里、由哪个指令集编码，以及符号引用如何变成具体值。
 
@@ -17,12 +17,16 @@
 命令行选项设置初始目标：
 
 ```text
-xirasm program.xir -o program.bin --target x86-64
-xirasm program.xir -o program.bin --target x86
-xirasm program.xir -o program.bin --target rv64
-xirasm program.xir -o program.bin --target rv32
-xirasm module.spvasm -o module.spv --target spv
+xirasm program.xir --isa x86-64
+xirasm program.xir --isa x86
+xirasm program.xir --isa rv64
+xirasm program.xir --isa rv32
+xirasm module.spvasm --isa spv
 ```
+
+汇编单个文件不需要任何选项：`xirasm program.xir` 会在源文件旁写出 `program.bin`，
+`-o` 只是覆盖这个路径。`--isa`（旧拼写 `--target`）给"自己没有选择 ISA 的源码"提供
+起始目标；源码里写了 `x86.use32()` 或 import 了 A64 宏库，就以源码为准。
 
 没有显式选择时，XIRASM 默认使用 64 位 x86。源码仍然可以写明指令模式；示例、可复用 include 和依赖特定位宽的代码都建议显式声明：
 
@@ -92,7 +96,7 @@ OpMemoryModel Logical GLSL450
 %1 = OpTypeVoid
 ```
 
-命令行可用 `--target spv` 或 `--target spirv`，两者都选择 SPIR-V 1.6。同一个 SPIR-V 输出只能包含同一个 section、同一个模块版本的 SPIR-V 指令行，不能混入 x86/RISC-V 指令，也不能混入数据写出、预留或对齐片段。结果 ID 目前必须写成 `%1` 这类数字形式，不接受符号 ID。
+命令行可用 `--isa spv`、`--isa spirv`（旧拼写 `--target` 同样可用），都选择 SPIR-V 1.6。同一个 SPIR-V 输出只能包含同一个 section、同一个模块版本的 SPIR-V 指令行，不能混入 x86/RISC-V 指令，也不能混入数据写出、预留或对齐片段。结果 ID 目前必须写成 `%1` 这类数字形式，不接受符号 ID。
 
 ## 查询目标
 
@@ -192,6 +196,18 @@ target:
     mov rax, target + 4
     ret
 ```
+
+距离还没确定的跳转按 **near**（近跳）形式编码，所以即使两条指令相邻，`jmp target` 也是五字节。距离已知时写明要哪种形式：
+
+```asm
+x86.use64();
+
+loop:
+    nop
+    jmp short loop
+```
+
+`short` 选两字节形式，`near` 选宽形式，与普通 x86 汇编一致。
 
 汇编器会以符号形式保留表达式，等地址确定后再求值。
 

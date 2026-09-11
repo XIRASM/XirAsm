@@ -562,6 +562,11 @@ re-execute them. Static labels remain module labels; use `sym.unique` and
 stored `defer`/`late_layout` bodies cannot contain macro definitions or calls.
 Limits: 128 shared function/macro call depth, 100,000 cumulative macro calls,
 256 operands per call, and 64 nested operand delimiters.
+Source nesting is bounded and reported with a location: statements 128 levels
+(`StatementNestingTooDeep`), expressions 64 levels of parentheses, prefix
+operators and `list.of` elements (`ExpressionNestingTooDeep`, flat operator
+chains exempt), aggregate literals 64 levels (`StructNestingTooDeep`), and
+documents read by `toml.parse`/`json.parse` 64 levels (`NestingTooDeep`).
 References through previously saved operand captures are limited to 128 levels
 (`MacroCaptureDepthExceeded`). Snapshots copy visible value bindings; storing
 evaluated values avoids retaining unnecessary environments and large collections.
@@ -1453,8 +1458,8 @@ OpMemoryModel Logical GLSL450
 The complete output must contain only SPIR-V ISA fragments in one section and
 at one version. Mixing SPIR-V with another ISA, emitted data, reservations, or
 alignment operations is rejected. Symbolic SPIR-V result IDs are not currently
-accepted; use `%1`, `%2`, and other numeric IDs. CLI `--target spv` and
-`--target spirv` both select version 1.6.
+accepted; use `%1`, `%2`, and other numeric IDs. CLI `--isa spv` and
+`--isa spirv` (older spelling `--target`) both select version 1.6.
 
 #### Generated ISA Text
 
@@ -2856,8 +2861,9 @@ assert(map.get(captures, "value") == 42);
 ```
 
 `quoted` accepts either single or double quotes, removes the delimiters, and
-decodes `\n`, `\r`, `\t`, escaped quotes, and escaped backslashes. Other escaped
-characters keep the escaped character.
+decodes the same escape set string and byte literals use: `\n`, `\r`, `\t`,
+`\0`, `\\`, `\uXXXX` for one code point, and the quote that opened the token.
+Every other backslash is not an escape, so both characters are kept as written.
 
 `tokens` returns a list of token strings. It may capture zero or more tokens.
 Parentheses, brackets, and braces inside the captured range must remain

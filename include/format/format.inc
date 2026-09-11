@@ -2287,7 +2287,29 @@ fn format_segment_begin(plan: map, name: string) {
     const attributes: u64 = map.get(segment, "attributes")
     const purpose: u64 = attributes & format_segment_purpose_mask
     const flags: u64 = format_elf_segment_flags(attributes)
-    const file_offset: u64 = file_cursor_real()
+    // A LOAD segment address is derived from the file offset by keeping the two
+    // congruent modulo the page, which is the relation the ELF layer promises;
+    // the low bits of that address are therefore fixed by the file offset, so the
+    // section's own sh_addralign can only be honoured by moving the file offset.
+    // Advancing the file position to that alignment here (rather than padding the
+    // previous segment) keeps both facts in step and adds no bytes to any region,
+    // so a segment that only reserved room still reports SHT_NOBITS.
+    //
+    // LLD composes the same two steps for the first section of every PT_LOAD
+    // (lld/ELF/Writer.cpp `fixSectionAlignments`): the section gets an alignment
+    // expression equal to its own sh_addralign, and the placement then advances by
+    // whole pages while preserving the position inside the page. Because the page
+    // is a multiple of every section alignment, aligning first keeps the page
+    // congruence and satisfies sh_addralign in the same move. Without this, a
+    // shared object whose first segment ended with a page carry put the next one
+    // at, say, 0x219D while declaring an alignment of 8.
+    let file_offset: u64 = file_cursor_real()
+    if kind == format_kind_elfso64 {
+        const section_align: u64 = format_elfso_section_alignment(attributes)
+        if section_align > 1 {
+            file_offset = elfso_align_up(file_offset, section_align);
+        }
+    }
     let image_base = 0
     let load_page: u64 = elf_default_page_align
     if kind == format_kind_elfso64 {

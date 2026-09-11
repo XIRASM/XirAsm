@@ -155,7 +155,17 @@ fn lowerStatementsIntoModuleContext(
 
     try lowerStatementSlice(allocator, module, &active, &output_stack, statements, context);
 
-    if (output_stack.items.len != 0) return error.UnclosedVirtualOutput;
+    // An unbalanced `virtual.begin` is found here, after every statement has
+    // run, so this error cannot borrow the statement-level fallback: without a
+    // recorded diagnostic the reader gets `assembly failed:
+    // UnclosedVirtualOutput` with no file and no line. The open call's span
+    // travelled with the active output; report the failure there.
+    if (output_stack.items.len != 0) {
+        if (active.opened_at) |span| {
+            try addLowerErrorDiagnostic(allocator, module, span, error.UnclosedVirtualOutput);
+        }
+        return error.UnclosedVirtualOutput;
+    }
 }
 
 fn lowerStatementSlice(
@@ -230,6 +240,13 @@ fn lowerStatement(
     statement: ast.Statement,
     context: *LowerContext,
 ) LowerError!void {
+    // Expression evaluation runs while a statement is being lowered, so remember
+    // which statement that is: a value function reached from the expression
+    // reports against this line instead of against its own body.
+    const previous_statement_span = context.statement_span;
+    context.statement_span = statement.span();
+    defer context.statement_span = previous_statement_span;
+
     switch (statement) {
         .label => |label| {
             if (context.value_function_depth != 0) return error.SideEffectInValueFunction;
@@ -315,6 +332,7 @@ fn lowerStatement(
                 context.return_value = null;
             }
             context.return_value = try evalValueAtContext(allocator, module, context, active.*, &meta_return.value);
+            context.return_span = meta_return.span;
             return error.MetaFunctionReturned;
         },
         .meta_block => |meta_block| {
@@ -325,14 +343,20 @@ fn lowerStatement(
             if (output_stack.items.len != 0) return error.InvalidMetaDefer;
             var block = if (context.scopes.items.len == 0)
                 try deferred.cloneBlockFromAst(allocator, meta_defer, deferredCallbacks())
-            else
-                try deferred.freezeBlockFromAst(
+            else blk: {
+                // The finalizer freezes `here()` now, and the cursor only counts
+                // an instruction once it is encoded: without this sync a frozen
+                // address is short by the size of the instructions written
+                // before the defer.
+                try syncActiveOutputOffsetForLayoutApi(module, active);
+                break :blk try deferred.freezeBlockFromAst(
                     allocator,
                     context,
                     try activeAddress(module, active.*),
                     meta_defer,
                     deferredCallbacks(),
                 );
+            };
             errdefer block.deinit(allocator);
             try module.appendDeferredBlock(block);
         },
@@ -341,9 +365,16 @@ fn lowerStatement(
             if (output_stack.items.len != 0) return error.InvalidLateLayout;
             var block = if (context.scopes.items.len == 0)
                 try late_layout_mod.cloneBlockFromAst(allocator, late_layout, lateLayoutBuildCallbacks())
-            else
-                try late_layout_mod.freezeBlockFromAst(allocator, module, context, active.*, late_layout, lateLayoutBuildCallbacks());
+            else blk: {
+                // Same reason as the finalizer above: a frozen `here()` must
+                // include the instructions written before the block.
+                try syncActiveOutputOffsetForLayoutApi(module, active);
+                break :blk try late_layout_mod.freezeBlockFromAst(allocator, module, context, active.*, late_layout, lateLayoutBuildCallbacks());
+            };
             errdefer block.deinit(allocator);
+            // Remember the region the source was in here: the block itself will
+            // start with the default region active.
+            block.source_section_index = active.section_id.index;
             try module.appendLateLayoutBlock(block);
         },
         .meta_line, .meta_block_start, .meta_block_end => return error.InvalidMetaStatement,
@@ -355,6 +386,27 @@ fn addLowerErrorDiagnostic(
     module: *module_mod.Module,
     span: source.SourceSpan,
     err: anyerror,
+) Allocator.Error!void {
+    try addStatementErrorDiagnostic(allocator, module, span, err, "lowering failed");
+}
+
+/// A source that does not parse did not fail while lowering, so it must not be
+/// reported as one: the wrong phase sends a reader to the wrong place.
+fn addParseErrorDiagnostic(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    span: source.SourceSpan,
+    err: anyerror,
+) Allocator.Error!void {
+    try addStatementErrorDiagnostic(allocator, module, span, err, "invalid statement");
+}
+
+fn addStatementErrorDiagnostic(
+    allocator: Allocator,
+    module: *module_mod.Module,
+    span: source.SourceSpan,
+    err: anyerror,
+    fallback_prefix: []const u8,
 ) Allocator.Error!void {
     if (err == error.InvalidMetaStatement) {
         try module.diagnostics.add(
@@ -383,9 +435,68 @@ fn addLowerErrorDiagnostic(
         );
         return;
     }
-    const message = try std.fmt.allocPrint(allocator, "lowering failed: {s}", .{@errorName(err)});
+    if (err == error.UnexpectedEndOfStatement) {
+        try module.diagnostics.add(
+            allocator,
+            .err,
+            span,
+            "the statement ends before its parentheses or braces close",
+        );
+        return;
+    }
+    if (statementErrorDetail(err)) |detail| {
+        // The reason first, because that is what a reader needs, then the
+        // category name, which stays searchable and is what the negative
+        // fixtures match on.
+        const message = try std.fmt.allocPrint(allocator, "{s} ({s})", .{ detail, @errorName(err) });
+        defer allocator.free(message);
+        try module.diagnostics.add(allocator, .err, span, message);
+        return;
+    }
+    const message = try std.fmt.allocPrint(allocator, "{s}: {s}", .{ fallback_prefix, @errorName(err) });
     defer allocator.free(message);
     try module.diagnostics.add(allocator, .err, span, message);
+}
+
+/// Why a statement failed, for the failures whose name alone does not say what
+/// to change. `null` keeps the raw name, which is the honest answer when the
+/// cause is not known here.
+fn statementErrorDetail(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.InvalidExpression => "an expression in this statement is not valid",
+        error.InvalidApiCall => "the call syntax is not valid",
+        error.InvalidApiArgument => "a call argument does not match what the call expects",
+        error.InvalidApiArity => "the call passes the wrong number of arguments",
+        error.InvalidValueDeclaration => "the declaration syntax is not valid",
+        error.TrailingTextAfterCall => "a line holds one statement: this call is followed by more text, so write the rest on its own line",
+        error.DivisionByZero => "the expression divides by zero",
+        error.ExpressionNestingTooDeep => "the expression nests deeper than the supported limit; name the inner parts as constants or bind them first",
+        error.NestingTooDeep => "the document this statement reads nests deeper than the supported limit",
+        error.StatementNestingTooDeep => "the statement nests deeper than the supported limit; a block, loop, function or macro body is only nested so far",
+        error.StructNestingTooDeep => "the aggregate literal nests deeper than the supported limit",
+        error.MissingStructFieldValue => "the aggregate literal leaves a field out",
+        error.UnknownField => "the aggregate literal names a field the type does not declare",
+        error.DuplicateFieldName => "the aggregate literal sets the same field twice",
+        error.UnknownTypeName => "the type name is not declared",
+        error.ExpectedStruct => "this name is not a struct or union type",
+        error.UndefinedSymbol => "the name is not defined where it is used",
+        error.SideEffectInValueFunction => "a value-returning function cannot emit instructions or change layout; declare it without a return type to run it as a procedure",
+        error.MissingMetaReturn => "a value-returning function ended without reaching a return statement",
+        error.InvalidMetaFunction => "the function declaration or call is not valid",
+        error.IncludeCycle => "the include chain contains a cycle",
+        error.UnclosedVirtualOutput => "a virtual output region was opened and never closed",
+        error.FileNotAvailable => "the file this statement reads cannot be opened",
+        error.IncludeNotAvailable => "the imported or included source file cannot be found",
+        error.DuplicateMetaFunction => "a function with this name is already declared",
+        error.DuplicateMacro => "a macro with this name is already declared",
+        error.DuplicateSymbol => "this name is already declared; a label or binding is defined once",
+        error.DuplicateTypeName => "a type with this name is already declared",
+        error.MetaCallDepthExceeded => "calls nested past the supported depth; check for recursion between functions and macros",
+        error.MetaLoopLimitExceeded => "the loop ran past the supported iteration limit",
+        error.UnmatchedVirtualEnd => "virtual.end has no matching virtual.begin",
+        error.OutputRegionClosed => "the active region was closed by region.file_align and cannot take more bytes",
+        else => null,
+    };
 }
 
 fn lowerIsaCall(
@@ -498,7 +609,29 @@ fn evalStructLiteralValue(
         else => error.InvalidApiArgument,
     };
     defer literal.deinit(allocator);
-    return .{ .@"struct" = aggregate_literal.structValueFromLiteral(allocator, eval_ctx.module, lower_context, active, literal, aggregateLiteralCallbacks()) catch |err| return mapLowerErrorToExpression(err) };
+    const struct_value = aggregate_literal.structValueFromLiteral(allocator, eval_ctx.module, lower_context, active, literal, aggregateLiteralCallbacks()) catch |err| {
+        if (err == error.OutOfMemory) return error.OutOfMemory;
+        try addAggregateLiteralDiagnostic(allocator, eval_ctx, err);
+        return mapLowerErrorToExpression(err);
+    };
+    return .{ .@"struct" = struct_value };
+}
+
+/// A literal that does not fit its type is reported against the statement that
+/// wrote it. The expression layer keeps only the fact that an operand failed, so
+/// the reason has to be said here.
+fn addAggregateLiteralDiagnostic(
+    allocator: Allocator,
+    eval_ctx: *expr.EvalContext,
+    err: anyerror,
+) Allocator.Error!void {
+    const span = eval_ctx.current_span orelse return;
+    const message = if (aggregate_literal.literalErrorDetail(err)) |detail|
+        try std.fmt.allocPrint(allocator, "{s} ({s})", .{ detail, @errorName(err) })
+    else
+        try std.fmt.allocPrint(allocator, "the aggregate literal is not valid ({s})", .{@errorName(err)});
+    defer allocator.free(message);
+    try eval_ctx.module.diagnostics.add(allocator, .err, span, message);
 }
 
 pub fn evalModuleValueFunction(
@@ -521,7 +654,7 @@ pub fn evalModuleValueFunction(
     };
     var output_stack: std.ArrayList(ActiveOutput) = .empty;
     defer output_stack.deinit(allocator);
-    return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, eval_ctx.output_image, &output_stack, function_index, args, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
+    return meta_function_runtime.evalValueFunctionAt(allocator, eval_ctx.module, lower_context, active, eval_ctx.output_image, &output_stack, function_index, args, eval_ctx.current_span, metaFunctionCallbacks()) catch |err| return mapLowerErrorToExpression(err);
 }
 
 pub fn evalModuleOperand(
@@ -657,11 +790,13 @@ fn evalIntegerAtContext(
     active: ActiveOutput,
     node: *const expr.Node,
 ) LowerError!u64 {
+    var synchronized = active;
+    try expression_materialization.syncForExpression(module, &synchronized, node);
     try materializeInstructionBytesForExpression(module, node);
     return expression_bridge.evalIntegerAtContext(
         module,
         context,
-        activeExpressionContext(context, active),
+        activeExpressionContext(context, synchronized),
         expressionCallbacks(),
         node,
     );
@@ -674,12 +809,14 @@ fn evalValueAtContext(
     active: ActiveOutput,
     node: *const expr.Node,
 ) LowerError!value_mod.Value {
+    var synchronized = active;
+    try expression_materialization.syncForExpression(module, &synchronized, node);
     try materializeInstructionBytesForExpression(module, node);
     return expression_bridge.evalValueAtContext(
         allocator,
         module,
         context,
-        activeExpressionContext(context, active),
+        activeExpressionContext(context, synchronized),
         expressionCallbacks(),
         node,
     );
@@ -764,6 +901,7 @@ fn sourceLoadingCallbacks() source_loading.Callbacks {
     return .{
         .lower_statements_into_context = lowerStatementsIntoModuleContext,
         .add_lower_error_diagnostic = addLowerErrorDiagnostic,
+        .add_parse_error_diagnostic = addParseErrorDiagnostic,
         .source_path_arg_at_context = sourcePathArgAtContext,
         .section_cursor = sectionCursor,
         .require_arg_count = requireArgCount,
@@ -876,6 +1014,10 @@ fn mapParseError(err: parser.ParseError) LowerError {
         error.InvalidValueDeclaration => error.InvalidValueDeclaration,
         error.InvalidStructDeclaration => error.InvalidStructDeclaration,
         error.InvalidStructField => error.InvalidStructField,
+        error.StatementNestingTooDeep => error.StatementNestingTooDeep,
+        error.StructNestingTooDeep => error.StructNestingTooDeep,
+        error.ExpressionNestingTooDeep => error.ExpressionNestingTooDeep,
+        error.NestingTooDeep => error.NestingTooDeep,
         error.UnionFieldDefaultNotAllowed => error.UnionFieldDefaultNotAllowed,
         error.InvalidMetaBlock => error.InvalidMetaBlock,
         error.InvalidMetaStatement => error.InvalidMetaStatement,
@@ -896,6 +1038,7 @@ fn mapParseError(err: parser.ParseError) LowerError {
         error.UnexpectedEndOfMetaWhile => error.UnexpectedEndOfMetaWhile,
         error.TooManyStatements => error.TooManyStatements,
         error.UnexpectedEndOfStatement => error.UnexpectedEndOfStatement,
+        error.TrailingTextAfterCall => error.TrailingTextAfterCall,
         error.LegacyDirectiveSyntax => error.LegacyDirectiveSyntax,
     };
 }

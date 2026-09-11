@@ -88,7 +88,10 @@ fn shouldKeepIsaIdentifier(active_target: target.Target, text: []const u8, start
     return switch (active_target) {
         .x86 => isKnownX86IsaWord(name),
         .riscv => frontend_isa_text.isKnownRiscvWord(name),
-        .spirv => false,
+        // An A64 line is matched by the macro library, which receives the operand
+        // text as written, so nothing beyond the mnemonic and the command prefix
+        // is treated as an ISA keyword here.
+        .arm, .spirv => false,
     };
 }
 
@@ -241,6 +244,13 @@ fn skipQuotedText(text: []const u8, quote_index: usize) ?usize {
     const quote = text[quote_index];
     var index = quote_index + 1;
     while (index < text.len) : (index += 1) {
+        // A backslash escapes the next character. Instruction text read by the
+        // token layer already assumes this, so the terminator scan has to agree
+        // or a quoted `\"` would end the string here and somewhere else not.
+        if (text[index] == '\\' and index + 1 < text.len) {
+            index += 1;
+            continue;
+        }
         if (text[index] != quote) continue;
         if (index + 1 < text.len and text[index + 1] == quote) {
             index += 1;
@@ -252,6 +262,12 @@ fn skipQuotedText(text: []const u8, quote_index: usize) ?usize {
 }
 
 fn isExpressionBuiltinName(name: []const u8) bool {
+    // `operand.eval` is deliberately absent. A macro substitutes the captured
+    // operand as text, so by the time instruction text is scanned the call is
+    // `operand.eval(<literal>)` with no operand binding left to evaluate, and
+    // evaluating it here failed as a bare invalid expression. Left out, the
+    // unresolved reference is reported with the guidance that actually helps:
+    // bind the value to a const first.
     return std.mem.eql(u8, name, "sizeof") or
         std.mem.eql(u8, name, "lengthof") or
         std.mem.eql(u8, name, "offset_of") or

@@ -66,6 +66,8 @@ payload_end:
 
 `load.u8`、`load.u16`、`load.u32`、`load.u64` 读取最终输出中的小端整数。`load.bytes(address, count)` 读取一段字节。
 
+`load.*` 和 `store.*` 只能碰到最终镜像里真实存在的字节。尾部 `reserve` 不在文件里，终结器读写那一段会失败，诊断会写明地址、宽度和文件长度。
+
 ```asm
 origin(0x4000);
 

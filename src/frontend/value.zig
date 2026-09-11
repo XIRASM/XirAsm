@@ -25,6 +25,25 @@ pub const ValueType = enum {
     operand,
 };
 
+/// The word a diagnostic uses for a value of this category, so a message can
+/// say "produces a string" instead of naming an internal tag.
+pub fn valueTypeName(value_type: ValueType) []const u8 {
+    return switch (value_type) {
+        .void => "void",
+        .boolean => "bool",
+        .integer => "integer",
+        .f32 => "f32",
+        .f64 => "f64",
+        .string => "string",
+        .bytes => "bytes",
+        .type => "type",
+        .@"struct" => "struct",
+        .list => "list",
+        .map => "map",
+        .operand => "operand",
+    };
+}
+
 pub const MutableValueLookup = union(enum) {
     missing,
     immutable,

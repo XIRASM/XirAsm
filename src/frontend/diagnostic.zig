@@ -26,17 +26,33 @@ pub const DiagnosticStore = struct {
     expansions: std.ArrayList(Expansion) = .empty,
     active_expansion: ?u32 = null,
 
+    pub const ExpansionKind = enum {
+        macro,
+        function,
+    };
+
     pub const Expansion = struct {
         invocation: source.SourceSpan,
         definition: source.SourceSpan,
+        kind: ExpansionKind = .macro,
     };
 
-    pub fn beginExpansion(self: *DiagnosticStore, allocator: Allocator, invocation: source.SourceSpan, definition: source.SourceSpan) Allocator.Error!u32 {
+    /// Record that the code being lowered comes from an invocation of `definition`
+    /// at `invocation`. Diagnostics raised inside then point at the site that
+    /// caused them, which matters when the definition lives in a library include
+    /// and the reader only wrote the call.
+    pub fn beginExpansion(
+        self: *DiagnosticStore,
+        allocator: Allocator,
+        invocation: source.SourceSpan,
+        definition: source.SourceSpan,
+        kind: ExpansionKind,
+    ) Allocator.Error!u32 {
         if (self.expansions.items.len >= std.math.maxInt(u32)) return error.OutOfMemory;
         const index: u32 = @intCast(self.expansions.items.len);
         var caller = invocation;
         caller.expansion = self.active_expansion;
-        try self.expansions.append(allocator, .{ .invocation = caller, .definition = definition });
+        try self.expansions.append(allocator, .{ .invocation = caller, .definition = definition, .kind = kind });
         return index;
     }
 
@@ -61,8 +77,16 @@ pub const DiagnosticStore = struct {
         while (origin) |index| {
             if (index >= self.expansions.items.len) break;
             const expansion = self.expansions.items[index];
-            try self.addSingle(allocator, .note, expansion.invocation, "macro invoked here");
-            try self.addSingle(allocator, .note, expansion.definition, "macro defined here");
+            const invoked_message = switch (expansion.kind) {
+                .macro => "macro invoked here",
+                .function => "function invoked here",
+            };
+            const defined_message = switch (expansion.kind) {
+                .macro => "macro defined here",
+                .function => "function defined here",
+            };
+            try self.addSingle(allocator, .note, expansion.invocation, invoked_message);
+            try self.addSingle(allocator, .note, expansion.definition, defined_message);
             origin = expansion.invocation.expansion;
         }
     }

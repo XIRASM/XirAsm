@@ -123,7 +123,7 @@ calls.
 Save the source as `hello.xir`, then run:
 
 ```text
-xirasm hello.xir -o hello.bin --target x86-64
+xirasm hello.xir --isa x86-64
 ```
 
 The output is six bytes:
@@ -183,12 +183,15 @@ This distinction is fundamental:
 The following rules are enough to read the examples in the first part of this
 guide:
 
-- `//` starts a line comment. It may appear after instruction lines and after API
-  call statements; quoted operands may contain `//` as ordinary text.
+- `//` starts a line comment. A line comment ends the line whatever the statement
+  is: an instruction line, an API call, a declaration, an assignment, a label, a
+  block header, or a control statement. Quoted operands may contain `//` as
+  ordinary text.
 - A label ends with `:`.
 - ISA instruction lines do not end with semicolons.
-- Function and API calls end with `;`.
-- `return` statements end with `;`.
+- Function and API calls, and `return` statements, are written with a trailing
+  `;`. The terminator is not required at the end of a line; the API reference
+  states the exact rule.
 - `const` and `let` declarations do not end with semicolons.
 - Blocks use `{` and `}`.
 - Function and control-flow headers end with `{`; do not put that opening
@@ -386,6 +389,38 @@ const signature: bytes = b"MZ"
 
 Use a string for textual names, paths, generated instruction text, and APIs that expect
 text. Use `bytes` when the exact byte sequence is the value being modeled.
+
+### Escape Sequences
+
+A quoted literal decodes the same small escape set whether it uses single or
+double quotes and whether or not it carries the `b` prefix:
+
+| Escape | Byte |
+| --- | --- |
+| `\n` | line feed, `0x0a` |
+| `\r` | carriage return, `0x0d` |
+| `\t` | tab, `0x09` |
+| `\0` | NUL, `0x00` |
+| `\\` | one backslash |
+| `\"` inside `"…"`, `\'` inside `'…'` | the quote that opened the literal |
+| `\uXXXX` | the UTF-8 bytes of that code point |
+
+Writing the opening quote twice also yields one quote, so `"a""b"` and `"a\"b"`
+are both `a"b`.
+
+`\uXXXX` takes exactly four hexadecimal digits and names one code point, so
+`"\u0041"` is the single byte `A` and `"\u00e9"` is the two bytes `c3 a9`. It is
+there because generated platform text spells control characters that way: the
+Windows API tables write `"\u0000"` for the NUL byte they mean.
+
+Every other backslash is not an escape: both characters stand as written, so
+`"\u41"`, `"\uzzzz"`, and `"slash \ ok"` all keep their backslash. The trade is
+explicit: because `\t` and `\n` *are* escapes, backslash-and-letter text used as
+data has to double the backslash, so `"a\\tb"` is four bytes (`a`, `\`, `t`, `b`)
+while `"a\tb"` is three (`a`, tab, `b`).
+
+The `quoted` capture of `match.tokens` decodes the same set, so instruction text
+carried as a value and text spelled out in a literal read identically.
 
 Some output APIs accept either category:
 
@@ -1313,6 +1348,22 @@ overflow, types, variable declarations, and assignments obey ordinary Meta
 rules. Forward labels should be passed as text to a deferred branch helper,
 rather than evaluated before their address is known.
 
+In an **instruction operand**, write the parameter itself — `mov rax, value` or
+`mov rax, value + 1`. A macro substitutes the parameter with its captured text
+before the encoder ever sees the line, so `operand.eval(value)` written there has
+no operand left to evaluate and the reference does not resolve. Bind it first
+when a real value is needed:
+
+```asm
+macro double_byte(value) {
+    const n: u64 = operand.eval(value) * 2
+    emit.u8(n)
+}
+```
+
+`operand.eval` belongs in API arguments and in `const` initializers, where a
+value is what the call wants.
+
 `operand.text(value)` returns its spelling. `operand.slice(value, start, end)`
 selects a checked byte range while retaining captured bindings.
 `operand.split(value)` splits at top-level commas, respecting quotes and balanced
@@ -1368,6 +1419,21 @@ Captured environments may reference earlier saved operands up to 128 levels;
 deeper chains report `MacroCaptureDepthExceeded`. Captures copy visible value
 bindings, so retaining operands alongside large collections has a memory cost.
 Evaluate and store ordinary values when the original syntax is no longer needed.
+
+Source nesting is bounded too, and each bound is reported with its location
+instead of failing silently. Statements nest up to 128 levels deep inside blocks,
+`if`/`else`, loops, function and macro bodies, `struct` bodies, finalizers and
+`late_layout` bodies; going deeper reports `StatementNestingTooDeep`. An
+expression nests up to 64 levels of parentheses, prefix operators and `list.of`
+elements and reports `ExpressionNestingTooDeep` — a flat operator chain is not
+nesting and stays unlimited. Aggregate literals nest up to 64 levels
+(`StructNestingTooDeep`). A document read at compile time by `toml.parse` or
+`json.parse` (and their file variants) nests up to 64 levels and reports
+`NestingTooDeep`, which also bounds every later walk of the value it describes.
+The reason these bounds exist: the parser, the layout walkers and the value
+walkers each descend one call level per nesting level, so without a bound a few
+kilobytes of nested delimiters could exhaust the stack — and a stack overflow
+reports nothing at all.
 
 Static labels inside a macro remain module labels. For a private label, create
 a name with `sym.unique` and define it with `label.define`. Use `isa(text)` to
@@ -2140,12 +2206,18 @@ family and the width information required by that ISA.
 The command line selects the initial target:
 
 ```text
-xirasm program.xir -o program.bin --target x86-64
-xirasm program.xir -o program.bin --target x86
-xirasm program.xir -o program.bin --target rv64
-xirasm program.xir -o program.bin --target rv32
-xirasm module.spvasm -o module.spv --target spv
+xirasm program.xir --isa x86-64
+xirasm program.xir --isa x86
+xirasm program.xir --isa rv64
+xirasm program.xir --isa rv32
+xirasm module.spvasm --isa spv
 ```
+
+No option is needed to assemble one file: `xirasm program.xir` writes
+`program.bin` beside it, and `-o` only overrides that path. `--isa` (older
+spelling `--target`) supplies a starting target for a source that does not select
+one itself; a source that says `x86.use32()` or imports the A64 macro library
+decides for itself.
 
 XIRASM defaults to 64-bit x86 when no other target is selected. Source code may
 still select an explicit instruction mode. Doing so makes the source
@@ -2221,8 +2293,8 @@ OpMemoryModel Logical GLSL450
 %1 = OpTypeVoid
 ```
 
-The command-line aliases are `--target spv` and `--target spirv`; both select
-SPIR-V 1.6. A SPIR-V output must contain only SPIR-V ISA lines in one section
+The command-line names are `--isa spv`, `--isa spirv`, and the older `--target`
+spelling; all select SPIR-V 1.6. A SPIR-V output must contain only SPIR-V ISA lines in one section
 and at one module version. It cannot be mixed with x86 or RISC-V instructions,
 data emission, reservation, or alignment fragments. Use numeric `%id` spelling
 such as `%1`; symbolic SPIR-V IDs are not currently accepted.
@@ -2334,6 +2406,21 @@ target:
 
 The expression resolves to the address of `target` plus four. The reference is
 kept symbolic until the instruction and label layout are known.
+
+A branch whose distance is not yet known is encoded in its near form, which is
+why `jmp target` is five bytes even when the two instructions are adjacent. Say
+which form you want when the distance is known:
+
+```asm
+x86.use64();
+
+loop:
+    nop
+    jmp short loop
+```
+
+`short` selects the two-byte form and `near` the wide one, as they do in ordinary
+x86 assembly.
 
 Prefer readable constants and labels over constructing instruction strings.
 Use generated instruction text only when the mnemonic, operand shape, or symbol name is
@@ -2800,6 +2887,23 @@ one active field explicitly.
 
 Fields can be read with normal field access, as shown by the two emission calls
 in the example.
+
+Field access reads a field of a value, so it needs a value to read from: write the
+literal into a binding first, then read the field.
+
+```asm
+struct Pair {
+    left: u32
+    right: u32
+}
+
+const pair: Pair = Pair { left: 1, right: 2 }
+
+emit.u8(pair.left);
+```
+
+`Pair { left: 1, right: 2 }.left` is not accepted. Write the literal into a
+binding, and read the field from that binding.
 
 Aggregate values exist during assembly. They are not automatically written to
 the output merely because they were declared.
@@ -3712,15 +3816,84 @@ before being placed in real output. Inside them you may emit data, reserve,
 align, define labels, write ISA instructions, and use `load.*` or `store.*` on
 the temporary bytes.
 
-Two boundaries matter:
+Three boundaries matter:
 
 - every `virtual.begin` must have a matching `virtual.end`;
 - `output.section` and `output.org` cannot be called from inside a virtual
   region. Return to real output before starting real regions.
+- an instruction that needs a resolved field stays unresolved while the region is
+  scratch: `emit.bytes` copies a snapshot of the scratch bytes, and that snapshot
+  is taken before references are patched, so it would keep the encoded
+  placeholder. Place the region itself with `region.place` (see below) when the
+  scratch holds code with references.
 
 Addresses inside a virtual region are not final file positions. To place
-virtual bytes in the file, explicitly copy them into a real region with
-`emit.bytes(...)` or through a format helper.
+virtual bytes in the file, either copy them into a real region with
+`emit.bytes(...)` or through a format helper, or place the whole region with
+`region.place`.
+
+### `region.place` Puts Scratch Content in the File
+
+`region.place(label, origin, file_offset)` turns the virtual region that contains
+`label` into a real output region at those coordinates. Unlike `emit.bytes`, it
+keeps the region's instructions, labels, and references, so a branch or a call
+written inside the scratch is resolved against the placed address by the ordinary
+fixup pass:
+
+```asm
+x86.use64();
+
+main_target:
+emit.u8(0x90)
+
+virtual.begin(0x9000);
+gen_start:
+call main_target
+jmp gen_start
+virtual.end();
+
+late_layout {
+    region.place("gen_start", 0x8000, 0x10);
+}
+```
+
+The placed region writes file bytes from `0x10` on, and both references reach
+their targets: `call main_target` is resolved against the main output and
+`jmp gen_start` against the placed address.
+
+Placement makes the region active, positioned after the content it already
+carries, so later output continues inside it. The region is named after the
+label, which is what listings and warnings show. Place the region before fixups
+are resolved, which is why `late_layout` is the natural place to call it. Values
+read out of the scratch during ordinary emission, through `load.*` or
+`label_addr`, describe the scratch addresses, not the placed ones.
+
+### `load.*` and `store.*` Reach the Active Region Only
+
+During emission, `load.*` and `store.*` address the active region's own byte
+range. Inside a virtual region they read and patch the scratch bytes:
+
+```asm
+virtual.begin(0x3000);
+
+emit.bytes(b"AB");
+store.u8(0x3000, 0x5a);
+const patched: bytes = load.bytes(0x3000, 2)
+
+virtual.end();
+
+emit.bytes(patched);
+```
+
+After `virtual.end()` the active region is the surrounding one again, so the same
+call addresses real output bytes. A value read out of scratch is a copy: it stays
+valid after the block ends, and it is the way a virtual region hands its result to
+the main output.
+
+A virtual region does not read or write another region's bytes, and the
+surrounding output does not read scratch bytes by address. The two sides meet
+through values, and, when the scratch holds code with references, through
+`region.place`.
 
 ### Omitting the Virtual Origin
 
@@ -4090,6 +4263,10 @@ A `defer` body may contain:
 
 Expressions inside those statements may use ordinary pure operators and value
 functions, labels, `load.*`, and stable region facts.
+
+`load.*` and `store.*` reach only the bytes the finished image holds. A tail
+`reserve` is not in the file, so a finalizer that reads or writes there fails
+with a diagnostic naming the address, the width, and the file length.
 
 Each deferred block has its own local scope. A local declared in one block is
 not visible in another.

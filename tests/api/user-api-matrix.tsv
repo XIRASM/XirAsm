@@ -50,6 +50,7 @@ api.virtual_begin	api	virtual.begin	call.callee, "virtual.begin"	virtual.begin(	
 api.virtual_end	api	virtual.end	call.callee, "virtual.end"	virtual.end()	Isolated virtual output region end.
 api.region_begin	api	region.begin	call.callee, "region.begin"	region.begin(	Start a logical output region with explicit origin and raw file offset.
 api.region_file_align	api	region.file_align	call.callee, "region.file_align"	region.file_align(	Align the active region's raw size without advancing logical addresses.
+api.region_place	api	region.place	call.callee, "region.place"	region.place(	Promote a virtual region into real output, so the references its instructions carry resolve against the placed address.
 api.output_org	api	output.org	call.callee, "output.org"	output.org(	Start a new output area after the active potential file cursor.
 api.output_section	api	output.section	call.callee, "output.section"	output.section(	Start a new output area after the active real file cursor, trimming tail reserve.
 api.store_u8	api	store.u8	storeByteCount(call.callee)	store.u8(	Write one byte into module byte space or deferred final output image.

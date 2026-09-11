@@ -364,13 +364,23 @@ fn tomlTableToMap(allocator: Allocator, entries: []const toml.Node.Entry) Error!
 }
 
 fn jsonValueToValue(allocator: Allocator, node: std.json.Value) Error!value_mod.Value {
+    return jsonValueToValueAt(allocator, node, 0);
+}
+
+/// JSON documents arrive from `json.parse`/`json.file`, whose parser is
+/// iterative and accepts any nesting depth, so this conversion is the first
+/// recursive descent over them: without a bound a two-megabyte file of nested
+/// `[` exhausts the stack and the process dies with no diagnostic. The name is
+/// shared with the TOML document bound; both mean "this document nests too deep".
+fn jsonValueToValueAt(allocator: Allocator, node: std.json.Value, depth: usize) Error!value_mod.Value {
+    if (depth >= toml.max_document_nesting) return error.NestingTooDeep;
     return switch (node) {
         .null => .void,
         .bool => |stored| .{ .boolean = stored },
         .integer => |stored| jsonIntegerToValue(stored),
         .string => |text| .{ .string = try allocator.dupe(u8, text) },
-        .array => |items| .{ .list = .{ .items = try jsonArrayToList(allocator, items.items) } },
-        .object => |object| .{ .map = .{ .entries = try jsonObjectToMap(allocator, object) } },
+        .array => |items| .{ .list = .{ .items = try jsonArrayToList(allocator, items.items, depth + 1) } },
+        .object => |object| .{ .map = .{ .entries = try jsonObjectToMap(allocator, object, depth + 1) } },
         .float, .number_string => return error.TypeMismatch,
     };
 }
@@ -380,7 +390,7 @@ fn jsonIntegerToValue(stored: i64) Error!value_mod.Value {
     return value_mod.Value.int(@intCast(stored));
 }
 
-fn jsonArrayToList(allocator: Allocator, items: []const std.json.Value) Error![]value_mod.Value {
+fn jsonArrayToList(allocator: Allocator, items: []const std.json.Value, depth: usize) Error![]value_mod.Value {
     const output = try allocator.alloc(value_mod.Value, items.len);
     var initialized: usize = 0;
     errdefer {
@@ -391,13 +401,13 @@ fn jsonArrayToList(allocator: Allocator, items: []const std.json.Value) Error![]
     }
 
     for (items, 0..) |item, index| {
-        output[index] = try jsonValueToValue(allocator, item);
+        output[index] = try jsonValueToValueAt(allocator, item, depth);
         initialized += 1;
     }
     return output;
 }
 
-fn jsonObjectToMap(allocator: Allocator, object: std.json.ObjectMap) Error![]value_mod.MapEntry {
+fn jsonObjectToMap(allocator: Allocator, object: std.json.ObjectMap, depth: usize) Error![]value_mod.MapEntry {
     const output = try allocator.alloc(value_mod.MapEntry, object.count());
     var initialized: usize = 0;
     errdefer {
@@ -413,7 +423,7 @@ fn jsonObjectToMap(allocator: Allocator, object: std.json.ObjectMap) Error![]val
         errdefer allocator.free(key);
         output[initialized] = .{
             .key = key,
-            .value = try jsonValueToValue(allocator, entry.value_ptr.*),
+            .value = try jsonValueToValueAt(allocator, entry.value_ptr.*, depth),
         };
         initialized += 1;
     }
