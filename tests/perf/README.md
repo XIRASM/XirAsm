@@ -96,3 +96,25 @@ binaries (3,185,664 B before, 3,187,712 B after):
 | `os/win32/defs.inc` | 489.2 s | 3.42 s |
 | `os/win32/comdefs.inc` | 476.4 s | 1.03 s |
 | `arm/a64-macros.inc` (control) | 232.7 ms | 196.7 ms |
+
+## A64 DSL throughput
+
+`a64_100k.asm` is the AArch64 counterpart of `x86_100k.asm`: 10,000 iterations of
+ten instructions, all of them written in natural ISA text and therefore routed
+through the generated A64 macro library. The same frontend, the same 100,000
+instructions, a different instruction source.
+
+| source | parse_lower | per instruction | output |
+| --- | ---: | ---: | ---: |
+| `x86_100k.asm` (native encoder) | 657.8 ms | 6.6 us | 760,001 B |
+| `a64_100k.asm` (DSL macros) | 367,974 ms | 3.67 ms | 400,001 B |
+
+The two fixtures do not carry the same instruction set and do not produce the same
+size, so the ratio measures what the frontend spends per source line, not which ISA
+is faster.
+
+An A64 instruction reaches its encoding through the generated macro library, so
+`a64_100k.asm` covers the whole path a DSL user takes: matching the operand text,
+resolving operands, choosing an encoding form. Work on that path belongs to
+`tools/arm64/`, which generates the library and records the Arm specification its
+forms come from.

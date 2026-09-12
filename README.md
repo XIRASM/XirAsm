@@ -49,7 +49,7 @@ needed if you want to change XIRASM itself:
 - the VS Code extension and language server (VSIX).
 
 Get the current release from [the project site](https://xirasm-site.pages.dev/#downloads)
-or from the [GitHub release](https://github.com/XIRASM/XirAsm/releases/latest), which
+or from the [GitHub release](https://github.com/xir-kuku/XirAsm/releases/latest), which
 lists the SHA-256 of every package. Each archive carries the executable, the
 `include` library, the test corpus, and the English and Chinese documentation.
 
@@ -259,7 +259,7 @@ instruction encodings and ELF, COFF, and Mach-O structure, and Android SDK tools
 
 ## Editor and Documentation
 
-The standalone [XIRASM VS Code extension](https://github.com/XIRASM/xir-vscode)
+The standalone [XIRASM VS Code extension](https://github.com/xir-kuku/xir-vscode)
 provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 - [Language Guide](document/language.md) - learn the assembly and compile-time

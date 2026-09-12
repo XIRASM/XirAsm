@@ -38,7 +38,7 @@ Windows 的 PE、Linux 的 ELF、macOS 的 Mach-O、flat 二进制、SPIR-V 模�
 - VS Code 扩展与语言服务器（VSIX）。
 
 从[项目网站](https://xirasm-site.pages.dev/#downloads)或
-[GitHub Release](https://github.com/XIRASM/XirAsm/releases/latest)获取当前版本，
+[GitHub Release](https://github.com/xir-kuku/XirAsm/releases/latest)获取当前版本，
 Release 正文列出每个包的 SHA-256。每个包内含可执行文件、`include` 库、测试用例以及
 中英文文档。
 
@@ -222,7 +222,7 @@ ISA 指令改造成一套编程语言 API。
 
 ## 编辑器与文档
 
-独立的 [XIRASM VS Code 扩展](https://github.com/XIRASM/xir-vscode)
+独立的 [XIRASM VS Code 扩展](https://github.com/xir-kuku/xir-vscode)
 提供语法高亮、补全、导航与编译器诊断。
 
 - [完整中文文档 PDF](document/zh/pdf/xirasm中文文档0.3.0.pdf) - 合并语言指南、
