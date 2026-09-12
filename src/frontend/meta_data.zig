@@ -490,8 +490,15 @@ test "meta list_dir sorts by byte value and is_dir follows the resolver" {
         .is_dir = Fake.isDir,
     };
 
+    // A path argument is an owned mutable slice, so the literal is copied rather
+    // than cast: `@constCast` would hand the callee a pointer into read-only data.
+    const dir_name = try allocator.dupe(u8, "some/dir");
+    defer allocator.free(dir_name);
+    const other_dir_name = try allocator.dupe(u8, "other/dir");
+    defer allocator.free(other_dir_name);
+
     var listing = try evalBuiltin(allocator, "fs.list_dir", &.{
-        .{ .string = @constCast("some/dir") },
+        .{ .string = dir_name },
     }, resolver, null);
     defer listing.deinit(allocator);
     const items = try listing.expectList();
@@ -502,13 +509,13 @@ test "meta list_dir sorts by byte value and is_dir follows the resolver" {
     try std.testing.expectEqualStrings("sub", try items.items[3].expectString());
 
     var is_dir = try evalBuiltin(allocator, "fs.is_dir", &.{
-        .{ .string = @constCast("some/dir") },
+        .{ .string = dir_name },
     }, resolver, null);
     defer is_dir.deinit(allocator);
     try std.testing.expect(try is_dir.expectBoolean());
 
     var other = try evalBuiltin(allocator, "fs.is_dir", &.{
-        .{ .string = @constCast("other/dir") },
+        .{ .string = other_dir_name },
     }, resolver, null);
     defer other.deinit(allocator);
     try std.testing.expect(!try other.expectBoolean());
@@ -521,10 +528,10 @@ test "meta list_dir sorts by byte value and is_dir follows the resolver" {
         .exists = Fake.exists,
     };
     try std.testing.expectError(error.FileNotAvailable, evalBuiltin(allocator, "fs.list_dir", &.{
-        .{ .string = @constCast("some/dir") },
+        .{ .string = dir_name },
     }, bare, null));
     var absent = try evalBuiltin(allocator, "fs.is_dir", &.{
-        .{ .string = @constCast("some/dir") },
+        .{ .string = dir_name },
     }, bare, null);
     defer absent.deinit(allocator);
     try std.testing.expect(!try absent.expectBoolean());
@@ -532,8 +539,10 @@ test "meta list_dir sorts by byte value and is_dir follows the resolver" {
 
 test "meta data parses toml into map values" {
     const allocator = std.testing.allocator;
+    const toml_text = try allocator.dupe(u8, "name = \"cfg\"\n[target]\nbits = 64\n");
+    defer allocator.free(toml_text);
     var result = try evalBuiltin(allocator, "toml.parse", &.{
-        .{ .string = @constCast("name = \"cfg\"\n[target]\nbits = 64\n") },
+        .{ .string = toml_text },
     }, null, null);
     defer result.deinit(allocator);
 

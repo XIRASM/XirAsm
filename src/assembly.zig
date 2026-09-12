@@ -526,6 +526,7 @@ fn deferredEvalContext(state: *FinalizerState) frontend.expr.EvalContext {
         .output_image = state.image,
         .local_context = state.lower_context,
         .resolve_local = frontend.lower.resolveLocalValue,
+        .lookup_local = frontend.lower.lookupLocalValueAlias,
         .call_user_function = frontend.lower.evalModuleValueFunction,
         .evaluate_struct_literal = frontend.lower.evalModuleStructLiteralValue,
         .eval_operand = frontend.lower.evalModuleOperand,

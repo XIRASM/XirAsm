@@ -276,7 +276,7 @@ provides highlighting, completion, navigation, and compiler-backed diagnostics.
 
 ## Status
 
-Current version: **0.3.0**. See the [release notes](document/releases/0.3.0.md).
+Current version: **0.3.1**. See the [release notes](document/releases/0.3.1.md).
 
 XIRASM is pre-1.0 software. The assembler, language APIs, format library, CLI, and
 editor support are usable today, and public contracts may still be refined before

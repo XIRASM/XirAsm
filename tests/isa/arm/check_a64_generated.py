@@ -4,6 +4,7 @@ import argparse
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -369,12 +370,21 @@ def verify_rejections(args, out, forms):
         directory = out / f"reject-{threading.get_ident()}"
         directory.mkdir(exist_ok=True)
         asm, binary = directory / "reject.asm", directory / "reject.bin"
+        # Each of these cases costs one whole-library parse because it is a
+        # separate process, so the binary must not survive from the previous case
+        # in this worker's directory: a stale file would be read as this case's
+        # output and reported as "unexpectedly accepted".
+        if binary.exists():
+            binary.unlink()
         asm.write_text('import("arm/a64-macros.inc")\n' + entry + '\n', encoding="ascii")
         result = run([args.xirasm.resolve(), asm, "-o", binary], out)
         if result.returncode == 0 or binary.exists():
             stopped.set()
             raise RuntimeError(f"negative case unexpectedly accepted: {entry}")
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    # Every case is a process whose cost is dominated by parsing the generated
+    # library, so this phase is CPU-bound: size the pool to the machine rather
+    # than to a hardcoded number that leaves cores idle.
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 8) as pool:
         for index, _ in enumerate(pool.map(check, (entry for _, entry in entries))):
             if index % 2048 == 0:
                 print(f"PASS rejection {index+1}/{len(entries)}", flush=True)

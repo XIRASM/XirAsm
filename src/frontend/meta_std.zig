@@ -1354,8 +1354,13 @@ test "meta std deflate decompresses what it compressed" {
     var compressed = try evalBuiltin(std.testing.allocator, "deflate.compress", &.{.{ .bytes = &text }});
     defer compressed.deinit(std.testing.allocator);
     const stream = try compressed.expectBytes();
+    // `expectBytes` hands back a read-only view of storage `compressed` owns, and
+    // a `.bytes` argument is a mutable slice, so the test copies it rather than
+    // casting the constness away.
+    const stream_copy = try std.testing.allocator.dupe(u8, stream);
+    defer std.testing.allocator.free(stream_copy);
 
-    var restored = try evalBuiltin(std.testing.allocator, "deflate.decompress", &.{.{ .bytes = @constCast(stream) }});
+    var restored = try evalBuiltin(std.testing.allocator, "deflate.decompress", &.{.{ .bytes = stream_copy }});
     defer restored.deinit(std.testing.allocator);
     try std.testing.expectEqualSlices(u8, &text, try restored.expectBytes());
 

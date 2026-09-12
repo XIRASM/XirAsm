@@ -297,6 +297,37 @@ pub const MapValue = struct {
     }
 };
 
+/// The module-level value bindings as they stood when a capture was taken.
+///
+/// A capture keeps the bindings it could see so that evaluating it later reads
+/// the same values even after the module moves on. Copying every generated
+/// table once per capture is what made a 100k-instruction source take minutes,
+/// so captures taken without any module-level value changing share a single
+/// snapshot, and the reference count makes that sharing explicit.
+///
+/// `references` starts at one, held by whoever built the snapshot. A builder
+/// that also hands the snapshot to someone else must `retain` once per holder,
+/// which is what `moduleBindingSnapshot` does for its cache and its caller.
+pub const BindingSnapshot = struct {
+    references: usize = 1,
+    entries: MapValue,
+
+    /// Take one more reference, to be paired with exactly one `release`.
+    pub fn retain(self: *BindingSnapshot) std.mem.Allocator.Error!void {
+        self.references = std.math.add(usize, self.references, 1) catch return error.OutOfMemory;
+    }
+
+    /// Drop one reference, releasing the bindings once none are left. Calling it
+    /// without a matching `retain` underflows the count and frees early, so each
+    /// holder releases exactly once.
+    pub fn release(self: *BindingSnapshot, allocator: std.mem.Allocator) void {
+        self.references -= 1;
+        if (self.references != 0) return;
+        self.entries.deinit(allocator);
+        allocator.destroy(self);
+    }
+};
+
 pub const OperandEnvironment = struct {
     pub const max_depth = 128;
 
@@ -307,17 +338,38 @@ pub const OperandEnvironment = struct {
     active_offset: u64 = 0,
     active_file_offset: ?u64 = null,
     references: usize = 1,
+    /// Module-level bindings, shared with every other capture taken at the same
+    /// point. One environment must never release this on its own.
+    module_snapshot: *BindingSnapshot,
+    /// The capturing scope's locals. These change on nearly every statement, so
+    /// they are copied per capture rather than shared.
     bindings: MapValue,
 
+    /// The capture's view of a name: a local first, then the module-level
+    /// bindings it was taken with. A local of the same name shadows the module
+    /// binding, which is the order the previously merged map produced.
+    ///
+    /// The entry is **borrowed**: it belongs to this environment, or to the
+    /// snapshot this environment shares, and stays valid exactly as long as this
+    /// environment does. A caller must read it and never release it.
+    pub fn capturedEntry(self: *const OperandEnvironment, name: []const u8) ?*const MapEntry {
+        if (self.bindings.entryByKey(name)) |entry| return entry;
+        return self.module_snapshot.entries.entryByKey(name);
+    }
+
+    /// Take one more reference, to be paired with exactly one `release`.
     pub fn retain(self: *OperandEnvironment) std.mem.Allocator.Error!void {
         self.references = std.math.add(usize, self.references, 1) catch return error.OutOfMemory;
     }
 
+    /// Drop one reference, releasing this capture's locals and its reference to
+    /// the shared snapshot once none are left.
     pub fn release(self: *OperandEnvironment, _: std.mem.Allocator) void {
         self.references -= 1;
         if (self.references != 0) return;
         const owner = self.allocator;
         self.bindings.deinit(owner);
+        self.module_snapshot.release(owner);
         owner.destroy(self);
     }
 };

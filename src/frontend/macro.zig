@@ -322,7 +322,7 @@ const CapturedIntegerResolver = struct {
     environment: *const value.OperandEnvironment,
 
     pub fn resolve(self: CapturedIntegerResolver, name: []const u8) ?u64 {
-        const entry = self.environment.bindings.entryByKey(name) orelse return null;
+        const entry = self.environment.capturedEntry(name) orelse return null;
         return if (entry.value == .integer) entry.value.integer.value else null;
     }
 };
@@ -390,8 +390,22 @@ pub fn evaluateOperand(raw_context: *anyopaque, allocator: Allocator, operand: v
     }
     try context.scopes.append(allocator, .{});
     // Function bodies see the captured environment; parameters subsequently
-    // create their ordinary inner scope. Mixed templates use aliases per piece.
-    for (operand.pieces[0].environment.bindings.entries) |entry| {
+    // create their ordinary inner scope, and mixed templates use aliases per
+    // piece.
+    //
+    // A capture reads its own locals first and the module-level bindings it was
+    // taken with second, so both are defined here as ordinary locals: the
+    // module-level ones first, skipping any that a local of the same name already
+    // shadows, which is the single merged map this used to inject. Defining them
+    // is also what keeps a nested capture made during evaluation reading the
+    // values this capture saw rather than the module as it stands now.
+    for (environment.module_snapshot.entries.entries) |entry| {
+        if (environment.bindings.entryByKey(entry.key) != null) continue;
+        var cloned = try entry.value.clone(allocator);
+        errdefer cloned.deinit(allocator);
+        context_mod.defineLocalValue(context, allocator, entry.key, cloned, .@"const") catch |err| return @import("lower/expression_bridge.zig").mapLowerErrorToExpression(err);
+    }
+    for (environment.bindings.entries) |entry| {
         var cloned = try entry.value.clone(allocator);
         errdefer cloned.deinit(allocator);
         context_mod.defineLocalValue(context, allocator, entry.key, cloned, .@"const") catch |err| return @import("lower/expression_bridge.zig").mapLowerErrorToExpression(err);
@@ -431,7 +445,7 @@ const CapturedSymbolMapper = struct {
             const end = std.math.add(usize, offset, piece.text.len) catch return error.InvalidOperand;
             defer offset = end;
             if (start >= end) continue;
-            const entry = piece.environment.bindings.entryByKey(name) orelse {
+            const entry = piece.environment.capturedEntry(name) orelse {
                 if (allow_unbound or std.mem.eql(u8, name, "target") or self.module.lookupTypeName(name) != null) return allocator.dupe(u8, name);
                 // Defer missing-value errors until evaluation to preserve
                 // ordinary boolean short-circuiting.
@@ -509,6 +523,149 @@ fn expectBytes(input: []const u8, expected: []const u8) !void {
     var result = try @import("../assembly.zig").assembleFlat(std.testing.allocator, &module, null);
     defer result.deinit(std.testing.allocator);
     try std.testing.expectEqualSlices(u8, expected, result.bytes);
+}
+
+test "a macro capture keeps the module bindings it was taken with" {
+    // `probe mode` captures `mode` while it is 0, and the macro body assigns 5
+    // before evaluating the captured operand. The capture has to read 0, because
+    // that is the value it was taken with: keeping that view is the whole reason
+    // a capture holds one instead of resolving against the live module.
+    try expectBytes(
+        \\let mode: u64 = 0
+        \\macro probe(x) {
+        \\    mode = 5
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\probe mode
+    , &.{0});
+}
+
+test "a captured operand reads the caller's binding, not the macro body's" {
+    // Chapter 5 of the language guide, "Statement Macros": the macro body
+    // declares its own LIMIT of 100 and the captured text still reads the
+    // caller's 7, so `operand.eval` resolves against the bindings the capture
+    // was taken with. This is the behaviour fix C has to preserve.
+    try expectBytes(
+        \\macro shadowed(value) {
+        \\    const LIMIT: u64 = 100
+        \\    const n: u64 = operand.eval(value)
+        \\    emit.u8(n)
+        \\}
+        \\const LIMIT: u64 = 7
+        \\shadowed LIMIT + 1
+    , &.{8});
+}
+
+test "a captured operand evaluates against the caller's bindings" {
+    // Also chapter 5: `byte LIMIT + 1` gives 8 and `byte (LIMIT + 2)` gives 9.
+    try expectBytes(
+        \\macro byte(value) {
+        \\    const n: u64 = operand.eval(value)
+        \\    emit.u8(n)
+        \\}
+        \\const LIMIT: u64 = 7
+        \\byte LIMIT + 1
+        \\byte (LIMIT + 2)
+    , &.{ 8, 9 });
+}
+
+test "a borrowed table argument reads the same as a copied one" {
+    // A builtin borrows `table` when every argument is a bare name and copies it
+    // when any argument is not, so the two spellings below take different paths
+    // through the same builtin and must produce identical results.
+    try expectBytes(
+        \\let table: map = map.new()
+        \\map.set_mut(table, "a", 1)
+        \\map.set_mut(table, "b", 2)
+        \\const key: string = "a"
+        \\if map.has(table, key) {
+        \\    emit.u8(1)
+        \\}
+        \\if map.has(table, "a") {
+        \\    emit.u8(2)
+        \\}
+        \\emit.u8(map.get(table, key))
+        \\emit.u8(map.get(table, "b"))
+        \\emit.u8(len(table))
+    , &.{ 1, 2, 1, 2, 2 });
+}
+
+test "a capture sees a module binding assigned a new value" {
+    // `setValue` replaces a module-level binding, so a capture taken afterwards
+    // has to see the new value. If the snapshot cache missed this path the
+    // second `show` would still print 1.
+    try expectBytes(
+        \\let mode: u64 = 1
+        \\macro show(x) {
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\show mode
+        \\mode = 5
+        \\show mode
+    , &.{ 1, 5 });
+}
+
+test "a capture sees a module binding declared after an earlier capture" {
+    // `defineValue` adds a binding, so it has to invalidate the snapshot too: a
+    // capture taken later must be able to name the new binding at all.
+    try expectBytes(
+        \\macro show(x) {
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\const first: u64 = 3
+        \\show first
+        \\const second: u64 = 9
+        \\show second
+    , &.{ 3, 9 });
+}
+
+test "a capture sees a module binding written back through a let parameter" {
+    // A `let` parameter is written back to the caller's binding, which for a
+    // module-level argument goes through `module.setValue` as well.
+    try expectBytes(
+        \\fn fill(let target: map) {
+        \\    map.set_mut(target, "k", 9)
+        \\}
+        \\let table: map = map.new()
+        \\macro show(x) {
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\show len(table)
+        \\fill(table)
+        \\show len(table)
+    , &.{ 0, 1 });
+}
+
+test "a capture reads the nearest binding of a shadowed name" {
+    // Chapter 6: lookup uses the nearest binding, so the loop body's `value`
+    // wins over the module-level one of the same name. Resolving the capture
+    // against the snapshot before the locals would print 7 instead of 9.
+    try expectBytes(
+        \\const value: u64 = 7
+        \\macro show(x) {
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\for i in range(0, 1) {
+        \\    const value: u64 = 9
+        \\    show value
+        \\}
+    , &.{9});
+}
+
+test "a captured operand sees a module container mutated in place" {
+    // `map.set_mut` changes the container without adding or replacing a binding,
+    // so a cache keyed only on binding changes would keep handing out the
+    // contents from before the mutation and the second `show` would print 10.
+    try expectBytes(
+        \\let table: map = map.new()
+        \\map.set_mut(table, "k", 10)
+        \\macro show(x) {
+        \\    emit.u8(operand.eval(x))
+        \\}
+        \\show map.get(table, "k")
+        \\map.set_mut(table, "k", 20)
+        \\show map.get(table, "k")
+    , &.{ 10, 20 });
 }
 
 test "macro exact arity takes priority over variadic declaration" {
@@ -837,11 +994,16 @@ test "macro total expansion budget and shared call depth stop at the boundary" {
     defer module.deinit();
     var context: Context = .{};
     defer context.deinit(allocator);
-    try context.macros.define(allocator, .{ .definition = .{ .name = @constCast("budget"), .params = &.{}, .body = &.{}, .span = source.unknown_span }, .variadic = false });
+    // A macro name has to be an owned mutable slice. `@constCast` on the literal
+    // would hand the store a pointer into read-only data, which the store would
+    // then be entitled to free.
+    const owned_name = try allocator.dupe(u8, "budget");
+    defer allocator.free(owned_name);
+    try context.macros.define(allocator, .{ .definition = .{ .name = owned_name, .params = &.{}, .body = &.{}, .span = source.unknown_span }, .variadic = false });
     var active: ActiveOutput = .{ .section_id = module.default_section, .offset = 0, .file_offset = 0, .target = .default };
     var stack: std.ArrayList(ActiveOutput) = .empty;
     defer stack.deinit(allocator);
-    const instruction: ast.IsaInstructionStatement = .{ .text = @constCast("budget"), .span = source.unknown_span };
+    const instruction: ast.IsaInstructionStatement = .{ .text = owned_name, .span = source.unknown_span };
     context.macro_expansions = max_expansions - 1;
     try std.testing.expect(try dispatch(allocator, &module, &active, &stack, instruction, &context, .{ .lower_statements = emptyMacroBody }));
     try std.testing.expectError(error.MacroExpansionLimitExceeded, dispatch(allocator, &module, &active, &stack, instruction, &context, .{ .lower_statements = emptyMacroBody }));
@@ -876,7 +1038,13 @@ test "macro operand clones free captured bindings through their owning allocator
     var owner = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     var destination = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     const environment = try owner.allocator().create(value.OperandEnvironment);
-    environment.* = .{ .allocator = owner.allocator(), .bindings = .{ .entries = try owner.allocator().alloc(value.MapEntry, 0) } };
+    const snapshot = try owner.allocator().create(value.BindingSnapshot);
+    snapshot.* = .{ .entries = .{ .entries = try owner.allocator().alloc(value.MapEntry, 0) } };
+    environment.* = .{
+        .allocator = owner.allocator(),
+        .module_snapshot = snapshot,
+        .bindings = .{ .entries = try owner.allocator().alloc(value.MapEntry, 0) },
+    };
     var pieces: std.ArrayList(value.OperandPiece) = .empty;
     try appendPiece(owner.allocator(), &pieces, environment, "42");
     environment.release(owner.allocator());

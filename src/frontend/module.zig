@@ -29,6 +29,13 @@ pub const Module = struct {
     target: target_mod.Target,
     sections: section.SectionStore = .{},
     symbols: symbol.SymbolStore = .{},
+    /// Bumped whenever a module-level value binding is added or replaced.
+    ///
+    /// A macro capture keeps a snapshot of those bindings so evaluating it later
+    /// reads the values it was taken with. Captures taken while this is unchanged
+    /// can share one snapshot instead of each copying every generated table, and
+    /// this counter is what tells them the snapshot is still current.
+    value_generation: u64 = 0,
     fragments: fragment.FragmentStore = .{},
     fixups: fixup.FixupStore = .{},
     types: types.TypeStore = .{},
@@ -389,7 +396,9 @@ pub const Module = struct {
         mutability: value.Mutability,
         span: source.SourceSpan,
     ) !symbol.SymbolId {
-        return self.symbols.defineValue(self.allocator, name, stored_value, mutability, span);
+        const id = try self.symbols.defineValue(self.allocator, name, stored_value, mutability, span);
+        self.value_generation +%= 1;
+        return id;
     }
 
     pub fn setValue(
@@ -397,7 +406,8 @@ pub const Module = struct {
         name: []const u8,
         stored_value: value.Value,
     ) !void {
-        return self.symbols.setValue(self.allocator, name, stored_value);
+        try self.symbols.setValue(self.allocator, name, stored_value);
+        self.value_generation +%= 1;
     }
 
     pub fn addIntType(

@@ -225,6 +225,12 @@ pub const EvalContext = struct {
     source_path: ?[]const u8 = null,
     local_context: ?*anyopaque = null,
     resolve_local: ?*const fn (context: *anyopaque, allocator: Allocator, name: []const u8) ExpressionError!?value_mod.Value = null,
+    /// The borrowing twin of `resolve_local`, wired by the same call sites. It
+    /// lets a read-only builtin read a stored container by name without copying
+    /// it. Leaving it null is always safe: the evaluator then falls back to the
+    /// owning path. Setting it where `resolve_local` is not set is not useful
+    /// either, because the scope chain is not consulted at all in that case.
+    lookup_local: ?*const fn (context: *anyopaque, name: []const u8) ?*const value_mod.Value = null,
     next_unique_symbol: ?*const fn (context: *anyopaque, allocator: Allocator, prefix: []const u8) ExpressionError![]u8 = null,
     call_user_function: ?*const fn (context: *anyopaque, allocator: Allocator, name: []const u8, args: []const BuiltinArgument, eval_ctx: *EvalContext) ExpressionError!value_mod.Value = null,
     evaluate_struct_literal: ?*const fn (context: *anyopaque, allocator: Allocator, text: []const u8, eval_ctx: *EvalContext) ExpressionError!value_mod.Value = null,
@@ -1270,52 +1276,95 @@ fn evalBuiltinCall(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) E
     return error.InvalidOperand;
 }
 
-fn evalMetaStdBuiltin(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) ExpressionError!value_mod.Value {
-    var args = try allocator.alloc(value_mod.Value, call.args.len);
-    errdefer allocator.free(args);
-    var initialized: usize = 0;
-    errdefer {
-        for (args[0..initialized]) |*arg| {
-            arg.deinit(allocator);
+/// Whether every argument is a bare name, which is what makes borrowing safe.
+///
+/// Evaluating an argument can run user code, and a value function pushes a
+/// scope (`meta_function_runtime.zig`). That reallocates the scope list and the
+/// local list inside it, so a pointer borrowed from a local by an earlier
+/// argument would be left dangling before the builtin ever sees it. An
+/// expression or a struct literal is therefore enough to rule borrowing out.
+///
+/// A run of bare names has no such step: resolving one only reads the symbol
+/// store and the scope chain -- the sole side effect is registering a builtin
+/// type, which touches neither -- so a pointer taken for the first argument is
+/// still valid when the last one has been resolved.
+fn allArgsAreBorrowable(args: []const BuiltinArgument) bool {
+    for (args) |arg| switch (arg) {
+        .identifier => {},
+        .expression, .struct_literal => return false,
+    };
+    return true;
+}
+
+/// Argument storage for one builtin call that only reads its arguments.
+///
+/// Such a call can be handed a stored map or list by reference, so each
+/// argument is either borrowed from the lowering state or owned by this call,
+/// and only the owned ones may be released. Borrowing is what keeps a builtin
+/// call from copying a whole generated table just to look one name up in it.
+const BuiltinArgs = struct {
+    values: []value_mod.Value,
+    owned: []bool,
+    count: usize = 0,
+
+    /// Evaluate every argument, in order, into storage sized for exactly them.
+    /// The loop bound is that same length, so both slices are written in range
+    /// and a failure part way through releases only what was filled in.
+    fn init(allocator: Allocator, args: []const BuiltinArgument, ctx: *EvalContext) ExpressionError!BuiltinArgs {
+        const values = try allocator.alloc(value_mod.Value, args.len);
+        // One cleanup path owns both slices from here on, so this one allocation
+        // failure is handled where it happens rather than by a second `errdefer`
+        // that would free `values` a second time.
+        const owned = allocator.alloc(bool, args.len) catch |err| {
+            allocator.free(values);
+            return err;
+        };
+
+        var storage: BuiltinArgs = .{ .values = values, .owned = owned };
+        errdefer storage.deinit(allocator);
+
+        const may_borrow = allArgsAreBorrowable(args);
+        for (args, 0..) |arg, index| {
+            const resolved = try evaluateReadOnlyBuiltinArg(allocator, arg, ctx, may_borrow);
+            storage.values[index] = resolved.value;
+            storage.owned[index] = resolved.owned;
+            storage.count += 1;
         }
+        return storage;
     }
 
-    for (call.args, 0..) |arg, index| {
-        args[index] = try evaluateBuiltinValueArg(allocator, arg, ctx);
-        initialized += 1;
+    fn deinit(self: *BuiltinArgs, allocator: Allocator) void {
+        for (self.values[0..self.count], self.owned[0..self.count]) |*value, is_owned| {
+            if (is_owned) value.deinit(allocator);
+        }
+        allocator.free(self.owned);
+        allocator.free(self.values);
+        self.* = undefined;
     }
 
-    const result = meta_std.evalBuiltin(allocator, call.name, args) catch |err| switch (err) {
+    fn slice(self: *const BuiltinArgs) []const value_mod.Value {
+        return self.values[0..self.count];
+    }
+};
+
+fn evalMetaStdBuiltin(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) ExpressionError!value_mod.Value {
+    var args = try BuiltinArgs.init(allocator, call.args, ctx);
+    defer args.deinit(allocator);
+
+    return meta_std.evalBuiltin(allocator, call.name, args.slice()) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.InvalidArgument => return error.InvalidArgument,
         error.InvalidApiInteger => return error.InvalidApiInteger,
         error.OutputTooLarge => return error.FragmentTooLarge,
         error.TypeMismatch => return error.TypeMismatch,
     };
-
-    for (args[0..initialized]) |*arg| {
-        arg.deinit(allocator);
-    }
-    allocator.free(args);
-    return result;
 }
 
 fn evalMetaDataBuiltin(allocator: Allocator, call: BuiltinCall, ctx: *EvalContext) ExpressionError!value_mod.Value {
-    var args = try allocator.alloc(value_mod.Value, call.args.len);
-    errdefer allocator.free(args);
-    var initialized: usize = 0;
-    errdefer {
-        for (args[0..initialized]) |*arg| {
-            arg.deinit(allocator);
-        }
-    }
+    var args = try BuiltinArgs.init(allocator, call.args, ctx);
+    defer args.deinit(allocator);
 
-    for (call.args, 0..) |arg, index| {
-        args[index] = try evaluateBuiltinValueArg(allocator, arg, ctx);
-        initialized += 1;
-    }
-
-    const result = meta_data.evalBuiltin(allocator, call.name, args, ctx.file_resolver, ctx.source_path) catch |err| switch (err) {
+    return meta_data.evalBuiltin(allocator, call.name, args.slice(), ctx.file_resolver, ctx.source_path) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.InvalidArgument => return error.InvalidArgument,
         error.InvalidApiInteger => return error.InvalidApiInteger,
@@ -1330,12 +1379,6 @@ fn evalMetaDataBuiltin(allocator: Allocator, call: BuiltinCall, ctx: *EvalContex
         // problem, not a malformed call argument, so it keeps its own name.
         error.NestingTooDeep => return error.NestingTooDeep,
     };
-
-    for (args[0..initialized]) |*arg| {
-        arg.deinit(allocator);
-    }
-    allocator.free(args);
-    return result;
 }
 
 pub fn evaluateBuiltinValueArg(allocator: Allocator, arg: BuiltinArgument, ctx: *EvalContext) ExpressionError!value_mod.Value {
@@ -1682,6 +1725,85 @@ fn resolveSymbolValue(allocator: Allocator, ctx: *EvalContext, name: []const u8)
     };
 }
 
+/// The borrowing form of `resolveSymbolValue`: same order, but the two outcomes
+/// that have stable storage -- a local, and a module-level value binding --
+/// yield a pointer to that storage instead of a deep copy. Everything else is
+/// left to the owning path.
+///
+/// Every `null` here is answered by `resolveSymbolValue`, which walks the same
+/// steps again and reports whatever they report -- including the error a failing
+/// `resolveTypeName` raises, which is deliberately not surfaced from this
+/// function. Declining to borrow therefore costs a copy and never swallows a
+/// failure.
+///
+/// Both forms must agree on every name, so no step may be skipped. A type name
+/// outranks a module value binding, so types are asked before the symbol store
+/// is read as data. The scope chain clones, so it needs its own callback; when
+/// only the cloning one is wired there is no way to tell whether a local would
+/// have won, and the answer is to copy rather than to guess.
+///
+/// The returned pointer stays valid for the whole builtin call. A builtin
+/// receives `[]const Value` and can reach neither the module nor the lowering
+/// context, so it cannot declare a symbol, push a scope, or replace a binding,
+/// and the storage both lookups point into therefore survives the call.
+fn resolveSymbolAlias(ctx: *EvalContext, name: []const u8) ?*const value_mod.Value {
+    for (ctx.undefined_symbols) |missing| {
+        if (std.mem.eql(u8, name, missing)) return null;
+    }
+
+    if (ctx.local_context) |local_context| {
+        if (ctx.resolve_local != null) {
+            const lookup_local = ctx.lookup_local orelse return null;
+            if (lookup_local(local_context, name)) |stored| return stored;
+        }
+    }
+
+    const type_id = resolveTypeName(ctx.module, name) catch return null;
+    if (type_id != null) return null;
+
+    const id = ctx.module.symbols.lookup(name) orelse return null;
+    const stored = ctx.module.symbols.get(id) catch return null;
+    return switch (stored.binding) {
+        // `binding.value` is the `Value` held by the `ValueBinding`, and taking
+        // its address points into the symbol store's own storage rather than at
+        // a copy of it.
+        .value => |*binding| &binding.value,
+        .absolute, .label, .unknown => null,
+    };
+}
+
+/// One builtin argument plus who releases it. A borrowed argument names storage
+/// that already has an owner, so the call site must leave it alone.
+const ResolvedBuiltinArg = struct {
+    value: value_mod.Value,
+    owned: bool,
+};
+
+/// `evaluateBuiltinValueArg` for a builtin that only reads its arguments: an
+/// identifier naming stored data is borrowed when `may_borrow` allows it, and
+/// everything else is evaluated as usual and owned.
+fn evaluateReadOnlyBuiltinArg(
+    allocator: Allocator,
+    arg: BuiltinArgument,
+    ctx: *EvalContext,
+    may_borrow: bool,
+) ExpressionError!ResolvedBuiltinArg {
+    return switch (arg) {
+        .identifier => |name| blk: {
+            if (may_borrow) {
+                if (resolveSymbolAlias(ctx, name)) |aliased| {
+                    break :blk .{ .value = aliased.*, .owned = false };
+                }
+            }
+            break :blk .{ .value = try resolveSymbolValue(allocator, ctx, name), .owned = true };
+        },
+        .expression, .struct_literal => .{
+            .value = try evaluateBuiltinValueArg(allocator, arg, ctx),
+            .owned = true,
+        },
+    };
+}
+
 fn resolveTypeName(module: *module_mod.Module, name: []const u8) ExpressionError!?@import("types.zig").TypeId {
     if (module.lookupTypeName(name)) |type_id| return type_id;
     if (std.mem.eql(u8, name, "u8")) return try getOrAddBuiltinType(module, "u8", 8, .unsigned);
@@ -1921,6 +2043,52 @@ test "parenthesized postfix construction handles every allocation failure" {
     for ([_][]const u8{ "((\"abc\")).field.next", "((\"abc\" + \"def\")).field" }) |input| {
         try std.testing.checkAllAllocationFailures(no_resize.allocator(), checkParenthesizedAllocationFailures, .{input});
     }
+}
+
+fn evaluateReadOnlyBuiltinArguments(allocator: Allocator, ctx: *EvalContext, args: []const BuiltinArgument) !void {
+    var storage = try BuiltinArgs.init(allocator, args, ctx);
+    defer storage.deinit(allocator);
+    try std.testing.expectEqual(args.len, storage.slice().len);
+}
+
+test "read-only builtin argument storage handles every allocation failure" {
+    var module = try module_mod.Module.init(std.testing.allocator, target_mod.Target.default);
+    defer module.deinit();
+
+    // Two entries, so copying the name as an argument has several allocations
+    // for the injector to land on. `setCloned` copies what it is handed and
+    // leaves the argument owned here, so the entries are plain integers and the
+    // only thing to release if the map cannot be finished is the map itself.
+    const table: value_mod.Value = blk: {
+        var building: value_mod.Value = .{ .map = .{ .entries = try std.testing.allocator.alloc(value_mod.MapEntry, 0) } };
+        errdefer building.deinit(std.testing.allocator);
+        try building.map.setCloned(std.testing.allocator, "first", value_mod.Value.int(1));
+        try building.map.setCloned(std.testing.allocator, "second", value_mod.Value.int(2));
+        break :blk building;
+    };
+    // The store owns the value from here on, so the test must not release it.
+    _ = try module.defineValue("table", table, .@"const", source.unknown_span);
+
+    var ctx: EvalContext = .{ .module = &module };
+
+    const table_name = try std.testing.allocator.dupe(u8, "table");
+    defer std.testing.allocator.free(table_name);
+
+    // Borrowing form: every argument is a bare name, so the name is read where
+    // it is stored and only this call's two slices can fail to allocate.
+    const borrowed = [_]BuiltinArgument{.{ .identifier = table_name }};
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, evaluateReadOnlyBuiltinArguments, .{ &ctx, &borrowed });
+
+    // Owning form: a literal argument rules borrowing out, so the name is
+    // copied, and a failure while copying the second argument has to release
+    // the first one without releasing the stored map it was borrowed from.
+    var literal = try parseOwned(std.testing.allocator, "7");
+    defer literal.deinit(std.testing.allocator);
+    const copied = [_]BuiltinArgument{
+        .{ .expression = literal },
+        .{ .identifier = table_name },
+    };
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, evaluateReadOnlyBuiltinArguments, .{ &ctx, &copied });
 }
 
 test "expression evaluates finite f32 and f64 values" {

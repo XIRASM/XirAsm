@@ -109,7 +109,18 @@ fn mutableTarget(
         else switch (module.symbols.lookupMutableValue(name)) {
             .missing => fail(module, call, "collection mutation target must resolve to a let binding"),
             .immutable => fail(module, call, "cannot mutate a const collection binding"),
-            .value => |value| value,
+            .value => |value| blk: {
+                // A module-level container is about to change in place. Nothing
+                // was added or replaced, so `value_generation` would not move on
+                // its own -- but a macro capture holds a *copy* of this
+                // container, and a later capture that reused the earlier
+                // snapshot would go on reading the contents from before this
+                // mutation. Bumping the generation makes the next capture take a
+                // fresh copy. Locals do not need this: they are copied per
+                // capture, and this branch is the module-level one.
+                module.value_generation +%= 1;
+                break :blk value;
+            },
         },
         .immutable => fail(module, call, "cannot mutate a const collection binding"),
         .value => |value| value,

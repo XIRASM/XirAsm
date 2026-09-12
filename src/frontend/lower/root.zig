@@ -39,6 +39,7 @@ pub const popMetaScope = context_mod.popMetaScope;
 pub const defineFinalLocalValue = context_mod.defineFinalLocalValue;
 pub const setFinalLocalValue = context_mod.setFinalLocalValue;
 pub const resolveLocalValue = context_mod.resolveLocalValue;
+pub const lookupLocalValueAlias = context_mod.lookupLocalValueAlias;
 
 const discardLastScope = context_mod.discardLastScope;
 

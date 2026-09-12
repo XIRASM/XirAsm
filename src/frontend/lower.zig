@@ -26,3 +26,4 @@ pub const popMetaScope = root.popMetaScope;
 pub const defineFinalLocalValue = root.defineFinalLocalValue;
 pub const setFinalLocalValue = root.setFinalLocalValue;
 pub const resolveLocalValue = root.resolveLocalValue;
+pub const lookupLocalValueAlias = root.lookupLocalValueAlias;

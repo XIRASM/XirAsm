@@ -223,6 +223,7 @@ pub fn evalValueFunctionAt(
         .source_path = context_mod.currentSourcePath(context),
         .local_context = context,
         .resolve_local = context_mod.resolveLocalValue,
+        .lookup_local = context_mod.lookupLocalValueAlias,
         .next_unique_symbol = nextUniqueSymbol,
         .call_user_function = callbacks.call_user_function,
         .evaluate_struct_literal = callbacks.evaluate_struct_literal,

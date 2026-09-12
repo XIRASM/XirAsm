@@ -152,8 +152,11 @@ pub const SymbolStore = struct {
             },
             .span = span,
         });
-        // If the index cannot take the name, the store must not keep an entry that
-        // points at it: drop the entry before the name is freed.
+        // If the index cannot take the name, the store must not keep an entry
+        // that points at it: drop the entry before the name is freed. The value
+        // is deliberately left alone -- on failure it is still the caller's, and
+        // releasing it here would free it twice, because every caller releases
+        // the value it passed in when this returns an error.
         errdefer {
             _ = self.items.pop();
         }
