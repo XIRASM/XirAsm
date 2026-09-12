@@ -1,57 +1,139 @@
 # 3. Linux ELF Executables and Shared Objects
 
-ELF images describe loadable segments. A loadable segment has file offsets,
-virtual addresses, file size, memory size, and permissions. `format.inc`
-derives those fields from named segments.
+To produce a file that runs directly on Linux, or a `.so` that other programs load at run time, use the ELF format. An ELF image is not organized by sections the way a PE image is; it is organized by **load segments**: each segment states where it sits in the file, which virtual address it maps to, how many file bytes it covers, how much memory it reserves, and what permissions it has at run time. The loader reads only the program headers and maps the file into memory according to them.
+
+Section names and segment names serve different readers: section names are for linkers and debuggers, segment names are for the loader. With `format.inc` you declare load segments, the program headers are generated from them, and so is the `p_vaddr == p_offset (mod p_align)` relation the loader depends on.
 
 ## ELF Executable
 
-Use `format_elf_exec` for a normal fixed-address executable:
+A fixed-address executable uses `format_elf_exec`:
 
-```asm
-import("format/format.inc");
+```asm id=elf64-executable target=x86-64
+import("format/format.inc")
 
-// Three load segments: code, initialized data, and BSS.
+// Three segments: code, initialized data, and zero-filled data.
 let image: map = format_elf64(
     format_elf_exec,
     list.of(
+        // Code segment: readable and executable.
         format_segment(".text", format_load | format_readable | format_executable),
+        // Data segment: readable and writable.
         format_segment(".data", format_load | format_readable | format_writeable),
+        // BSS segment: readable and writable, but memory only.
         format_segment(".bss", format_load | format_readable | format_writeable)
     )
 )
-format_begin(image);
+format_begin(image)
 
-format_segment_begin(image, ".text");
+format_segment_begin(image, ".text")
 start:
+    // Syscall 60: exit(0).
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
-format_segment_begin(image, ".data");
+format_segment_begin(image, ".data")
 answer:
-    dd(42);
-format_segment_end(image, ".data");
+    dd(42)
+format_segment_end(image, ".data")
 
-format_segment_begin(image, ".bss");
+format_segment_begin(image, ".bss")
 scratch:
-    rb(128);
-format_segment_end(image, ".bss");
+    rb(128)
+format_segment_end(image, ".bss")
 
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
-For ELF32, use `format_elf32(format_elf_exec, segments)`. `format.inc` does not
-provide an ELF32 PIE entry point.
+This example is 253 bytes and carries three `PT_LOAD` program headers:
+
+| Segment | File offset | Virtual address | File size | Memory size | Permissions |
+| --- | --- | --- | --- | --- | --- |
+| `.text` | `0xF0` | `0x4000F0` | 9 | 9 | `R\|X` |
+| `.data` | `0xF9` | `0x4010F9` | 4 | 4 | `R\|W` |
+| `.bss` | `0xFD` | `0x4020FD` | **0** | **128** | `R\|W` |
+
+That `.bss` row is the whole meaning of BSS: no bytes in the file, 128 bytes of memory. `format.inc` writes those two numbers into the program header's `p_filesz` and `p_memsz`, and the loader zero-fills the range accordingly.
+
+For ELF32, swap `format_elf64` for `format_elf32`; the option is still limited to `format_elf_exec`, because this layer has no ELF32 PIE entry point.
+
+## A Program That Does Something
+
+The example above only clears a register and exits, which says little about writing a real program. The one below prints a line of text and reports a computed value through its exit code — the result a script or CI job checks most easily:
+
+```asm id=linux-write-and-exit target=x86-64
+import("format/format.inc")
+
+// A real Linux x86-64 program: compute a value, print a line, exit with the value.
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        // Code segment: readable and executable.
+        format_segment(".text", format_load | format_readable | format_executable),
+        // Read-only data segment: the message.
+        format_segment(".rodata", format_load | format_readable)
+    )
+)
+
+// The value is computed from these two.
+const INPUT: u64 = 35
+const DELTA: u64 = 7
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // Compute the argument: lea adds without touching the flags.
+    lea r12, [INPUT + DELTA]
+
+    // write(1, message, length)
+    mov eax, 1
+    mov edi, 1
+    lea rsi, [rel message]
+    lea rdx, [rel message_end]
+    sub rdx, rsi
+    syscall
+
+    // exit(result)
+    mov edi, r12d
+    mov eax, 60
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".rodata")
+message:
+    db("xirasm: exit status carries the computed result", 10)
+// The trailing label measures the length, so no byte count is written by hand.
+message_end:
+format_segment_end(image, ".rodata")
+
+format_entry_mut(image, start)
+format_finish(image)
+```
+
+This example is 271 bytes with two `PT_LOAD` segments: `.text` at offset `0xB0`, 47 bytes, permissions `R|X`, and `.rodata` at offset `0xDF`, 48 bytes, permissions `R` — code and data sit apart, and read-only data carries no execute permission.
+
+Run it on x86-64 Linux and the terminal prints:
+
+```text
+xirasm: exit status carries the computed result
+```
+
+The exit status is `42`, the value of `INPUT + DELTA`.
+
+Two habits in that source are worth keeping:
+
+- **Measure a string with a label.** `lea rdx, [rel message_end]` minus `rsi` is the length, computed by the assembler; a hard-coded byte count has to be edited whenever the text changes.
+- **Cross-segment references need `rel`.** Code in `.text` reaching a label in `.rodata` must use the RIP-relative form, which holds wherever the segment lands.
 
 ## ELF64 PIE
 
-Use `format_elf_pie` for a position-independent executable:
+A position-independent executable uses `format_elf_pie`:
 
-```asm
-import("format/format.inc");
+```asm id=elf64-pie target=x86-64
+import("format/format.inc")
 
 let image: map = format_elf64(
     format_elf_pie,
@@ -61,46 +143,43 @@ let image: map = format_elf64(
         format_segment(".rodata", format_load | format_readable)
     )
 )
-format_begin(image);
+format_begin(image)
 
-format_segment_begin(image, ".text");
+format_segment_begin(image, ".text")
 start:
-    // Both label references remain valid when the loader moves the PIE.
+    // The loader may move the whole image, so every label reference is RIP-relative.
     lea rbx, [rel scratch]
     lea rsi, [rel message]
     mov dword [rbx], 0x5a
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
-format_segment_begin(image, ".bss");
+format_segment_begin(image, ".bss")
 scratch:
-    rb(64);
-format_segment_end(image, ".bss");
+    rb(64)
+format_segment_end(image, ".bss")
 
-format_segment_begin(image, ".rodata");
+format_segment_begin(image, ".rodata")
 message:
-    db("XIRASM PIE", 0);
-format_segment_end(image, ".rodata");
+    db("XIRASM PIE", 0)
+format_segment_end(image, ".rodata")
 
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
-The instructions must also be position-independent where the ISA requires it.
-For x86-64, use `rel` references for labels in the same image. They encode a
-relative displacement, so they do not need an absolute dynamic relocation. An
-absolute pointer stored in a PIE or shared object does require a dynamic
-relocation; arbitrary user pointer relocations require direct ELF construction.
+PIE differs from a fixed-address executable in one substantial way: the loader decides the base address. **Every reference into the image must therefore be RIP-relative** (`[rel label]`), which encodes a displacement that holds wherever the image moves and needs no dynamic relocation. Storing an absolute pointer in `.data` instead does require a dynamic relocation, and arbitrary user pointer relocations are not available through `format.inc`; they belong to direct ELF construction.
+
+PIE does not support executable imports. Attaching an import table to a PIE configuration reports `ELF executable imports require fixed-address EXEC mode`.
 
 ## ELF64 Executable Imports
 
-ELF64 fixed-address executables can call external functions through PLT-style
-entries:
+A fixed-address executable can call external functions through PLT entries. Once imports are declared, `format.inc` generates the dynamic segment, the PLT, the GOT, and the matching relocations:
 
-```asm
-import("format/format.inc");
+```asm id=elf64-exe-imports target=x86-64
+import("format/format.inc")
 
 let image: map = format_elf64(
     format_elf_exec,
@@ -109,39 +188,109 @@ let image: map = format_elf64(
     )
 )
 
-// Add several APIs from libc. format.inc derives <name>_gotplt and <name>_plt.
+// One grouped call per library, all sharing one import list.
 let imports: list = format_elfexe_import_new()
 format_elfexe_import_many_mut(imports, "libc.so.6", list.of("getpid", "getppid"))
-// Add another library and give cos a different local prefix.
+// cos is imported under the local prefix cos_fn.
 format_elfexe_import_pairs_mut(imports, "libm.so.6", list.of("cos_fn", "cos"))
 format_elfexe_tables_mut(image, imports)
-format_begin(image);
 
-format_segment_begin(image, ".text");
+format_begin(image)
+
+format_segment_begin(image, ".text")
 start:
+    // Call the generated PLT labels.
     call getpid_plt
     call getppid_plt
     xor edi, edi
     mov eax, 60
     syscall
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
-Call a grouped mutator once per library and keep using the same `imports` list.
-`format.inc` creates the dynamic segment, PLT, GOT, and related relocations. In
-the example, the aliased import is available as `cos_fn_plt` and
-`cos_fn_gotplt`.
+This example is 960 bytes, and its dynamic segment carries two `NEEDED` entries (`libc.so.6` and `libm.so.6`) with three undefined functions in the dynamic symbol table: `getpid`, `getppid`, and `cos`.
+
+Declaring imports adds load segments to the file. The example above declares one load segment, `.text`, and ends up with five program headers:
+
+| Program header | File offset | Virtual address | File size | Permissions | Source |
+| --- | --- | --- | --- | --- | --- |
+| `PT_LOAD` | `0x0` | `0x400000` | 371 | `R\|X` | the declared `.text` |
+| `PT_LOAD` | `0x180` | `0x401180` | 64 | `R\|X` | generated, holding the PLT |
+| `PT_LOAD` | `0x1C0` | `0x4021C0` | 512 | `R\|W` | generated, holding the GOT, dynamic symbols, strings, hash, RELA, and the dynamic segment |
+| `PT_INTERP` | `0x1F0` | `0x4021F0` | 28 | `R` | the dynamic linker path |
+| `PT_DYNAMIC` | `0x300` | `0x402300` | 192 | `R\|W` | the dynamic segment itself |
+
+The two generated load segments follow every declared segment, each page-aligned. File size and address layout therefore cannot be computed from the declared segments alone — the import tables take a writable segment of their own. The linker path is fixed at `/lib64/ld-linux-x86-64.so.2`, written where `PT_INTERP` points.
+
+The writable segment lays its content out in a fixed order: GOTPLT, the interpreter path, the dynamic symbol table, the dynamic string table, the hash, `RELA.PLT`, and the dynamic segment. That order is not an option to adjust; `format.inc` writes each part aligned to the next, so the offsets inside the segment are predictable.
+
+Label names follow a rule: `many` uses the imported name, so `getpid` becomes `getpid_plt` and `getpid_gotplt`; a `pairs` list gives "local prefix, real symbol name", so `cos_fn` becomes `cos_fn_plt` and `cos_fn_gotplt`. A `pairs` list needs an even number of entries, at most 128.
+
+`format_elfexe_tables_mut` must be called **before** `format_begin`: the dynamic segment, the PLT, and the GOT need their space reserved before output starts.
+
+Calling into libc means loading the argument registers and then calling a generated PLT label. The program below prints a line with `write` and then uses the value from `getpid` as its exit status:
+
+```asm id=linux-libc-imports target=x86-64
+import("format/format.inc")
+
+// A real program with libc imports: write to print, getpid for the result.
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable),
+        format_segment(".rodata", format_load | format_readable)
+    )
+)
+
+let imports: list = format_elfexe_import_new()
+format_elfexe_import_many_mut(imports, "libc.so.6", list.of("write", "getpid"))
+format_elfexe_tables_mut(image, imports)
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // write(1, message, length): a libc call through the PLT.
+    mov edi, 1
+    lea rsi, [rel message]
+    lea rdx, [rel message_end]
+    sub rdx, rsi
+    call write_plt
+
+    // getpid(): returns the current process id.
+    call getpid_plt
+
+    // Carry the value out through the exit status so a script can check it.
+    mov edi, eax
+    mov eax, 60
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".rodata")
+message:
+    db("xirasm: write() came from libc through the PLT", 10)
+message_end:
+format_segment_end(image, ".rodata")
+
+format_entry_mut(image, start)
+format_finish(image)
+```
+
+This example is 960 bytes. The program prints `xirasm: write() came from libc through the PLT` on x86-64 Linux, and its exit status is the current process id, which differs on every run.
+
+`readelf -d` shows the parts `format.inc` generated: one `NEEDED` naming `libc.so.6`, `PLTRELSZ` of 48 bytes — two imported functions, each a 24-byte RELA record — and `PLTREL` set to `RELA`. `ldd` lists three dependencies: `linux-vdso.so.1`, `libc.so.6`, and `/lib64/ld-linux-x86-64.so.2`, the last being the interpreter named by `PT_INTERP` and filled in by `format.inc`.
+
+Two habits matter here. Place arguments in System V AMD64 register order (`rdi`, `rsi`, `rdx`, …) before the `call`; a wrong order or count still assembles and links, and produces the wrong answer. After the call, read the result out of `eax` before deciding what to do — the example moves `eax` into `edi` precisely to use it as the exit status.
 
 ## ELF64 Shared Object
 
-Shared objects do not use the normal executable entry workflow. They expose
-dynamic symbols and may also import symbols.
+A shared object has no executable entry. It exposes dynamic symbols and may also import symbols. The SONAME is an argument to the constructor:
 
-```asm
-import("format/format.inc");
+```asm id=elf64-so-exports target=x86-64
+import("format/format.inc")
 
 let image: map = format_elf64_so(
     "libxirasm_demo.so",
@@ -151,14 +300,15 @@ let image: map = format_elf64_so(
 )
 
 let exports: list = format_elfso_export_new()
-// Export two four-byte functions under their label names.
+// Two functions exported under their label names, each four bytes.
 format_elfso_export_many_mut(exports, list.of("x_add7", "x_sub3"), ".text", 4)
-// Export answer_impl under a different public name.
+// answer_impl exported as x_answer, six bytes.
 format_elfso_export_pairs_mut(exports, list.of("answer_impl", "x_answer"), ".text", 6)
 format_elfso_tables_mut(image, exports, list.new())
-format_begin(image);
 
-format_segment_begin(image, ".text");
+format_begin(image)
+
+format_segment_begin(image, ".text")
 x_add7:
     lea eax, [rdi + 7]
     ret
@@ -168,117 +318,85 @@ x_sub3:
 answer_impl:
     mov eax, 42
     ret
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
-format_finish(image);
+format_finish(image)
 ```
+
+An export declaration names the segment it lives in and the symbol size. `.dynsym`, `.dynstr`, the hash, `.dynamic`, and the GOT/PLT come from `format.inc`. A shared object does not call `format_entry_mut` either.
+
+A shared object carries a section header table; an executable does not. Both files below were generated for x86-64 by `format.inc`, and they differ in header and layout like this:
+
+| Item | ELF executable | ELF shared object |
+| --- | --- | --- |
+| File type | `ET_EXEC`, or `ET_DYN` for PIE | `ET_DYN` |
+| Section header table | **absent** (`e_shnum = 0`) | present, seven entries: the null section, `.text`, `.dynsym`, `.dynstr`, `.hash`, `.dynamic`, `.shstrtab` |
+| Segment base | from `0x400000` | from `0` |
+| Segment mapping | one `PT_LOAD` per declared segment | declared segments inside `PT_LOAD`, plus `PT_DYNAMIC` |
+
+A shared object starts at address 0 because the loader decides where it goes; the addresses in its section headers are recorded against a base of 0. Because an executable has no section header table, `readelf -S` prints nothing for it; use `readelf -l` for the program headers, or `llvm-readobj --program-headers`.
 
 ## ELF64 Shared Object Imports
 
-A shared object can collect imports from several libraries in the same way:
+A shared object imports with the same per-library grouping, except that imports and exports share one `tables_mut` call:
 
-```asm
-import("format/format.inc");
-
-let image: map = format_elf64_so(
-    "libxirasm_report.so",
-    list.of(
-        format_segment(".text", format_load | format_readable | format_executable),
-        format_segment(".data", format_load | format_readable | format_writeable)
-    )
-)
-
-let exports: list = format_elfso_export_new()
-format_elfso_export_pairs_mut(exports, list.of("report_impl", "x_report"), ".text", 18)
-
+```text
 let imports: list = format_elfso_import_new()
-// Two APIs from libc use matching local names.
 format_elfso_import_many_mut(imports, "libc.so.6", list.of("puts", "getpid"))
-// A second library maps cos to the local prefix cos_fn.
 format_elfso_import_pairs_mut(imports, "libm.so.6", list.of("cos_fn", "cos"))
 format_elfso_tables_mut(image, exports, imports)
-format_begin(image);
-
-format_segment_begin(image, ".text");
-report_impl:
-    lea rdi, [rel message]
-    call puts_plt
-    call getpid_plt
-    ret
-format_segment_end(image, ".text");
-
-format_segment_begin(image, ".data");
-message:
-    db("XIRASM shared object", 0);
-format_segment_end(image, ".data");
-
-format_finish(image);
 ```
 
-The generated `cos_fn_plt` and `cos_fn_gotplt` labels are available even when
-the example does not call them. Internal data references use `rel`; imported
-calls use the generated PLT labels.
+Import names and export names must not collide, and the generated `*_plt` and `*_gotplt` labels must be unique. References inside the image are written `rel`; calls into an import use a generated PLT label.
 
 ## Choosing the Machine
 
-`format_elf64` and `format_elf64_so` build x86-64 images by default. AArch64 has
-its own entry points, and a machine-parameterized form is available when the
-machine comes from configuration:
+`format_elf64` and `format_elf64_so` build x86-64 images by default. AArch64 has its own entry points, and a machine-parameterized form covers the case where the machine comes from configuration:
 
 | Entry point | Result |
 | --- | --- |
 | `format_elf64(options, segments)` | ELF64 x86-64 executable or PIE |
 | `format_elf64_aarch64(options, segments)` | ELF64 AArch64 executable or PIE |
-| `format_elf64_machine(options, segments, machine)` | either machine, selected by `elf_machine_x86_64` or `elf_machine_aarch64` |
-| `format_elf64_so(soname, segments)` | ELF64 x86-64 shared object, 4 KiB LOAD alignment |
-| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 shared object, 16 KiB LOAD alignment |
+| `format_elf64_machine(options, segments, machine)` | machine named by `elf_machine_x86_64` or `elf_machine_aarch64` |
+| `format_elf64_so(soname, segments)` | ELF64 x86-64 shared object, LOAD segments aligned to 4 KiB |
+| `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 shared object, LOAD segments aligned to 16 KiB |
+| `format_elf64_so_machine(soname, segments, machine)` | shared object for a machine named by argument |
 | `format_elfobj64_aarch64(sections)` | AArch64 ELF64 object file |
 
-Two details differ between the machines. AArch64 aligns LOAD segments to the
-16 KiB page size that Android 15 and later devices require, for executables,
-PIE images, and shared objects alike; x86-64 keeps the 4 KiB Linux default.
-Imports also use different mechanisms: x86-64 calls through PLT entries,
-AArch64 resolves GLOB_DAT slots (`format_elfso_import_slots_mut`), which is why
-the executable import path is x86-64 only - an AArch64 application imports
-through a shared object instead.
+The two machines differ in three places:
 
-A larger page alignment costs file space only when a segment has to move to the
-next page boundary; the virtual addresses advance by whole pages while the file
-layout stays compact. Set `"load_align"` on the plan before `format_begin` to
-choose another page size.
+| Difference | x86-64 | AArch64 |
+| --- | --- | --- |
+| LOAD segment page alignment | 4 KiB, the Linux default | **16 KiB**, required by Android 15 and later |
+| Import mechanism | PLT entries | GLOB_DAT slots, declared with `format_elfso_import_slots_mut` |
+| Executable imports | supported | unsupported, import through a shared object instead |
 
-Each segment also honours the alignment its section declares: 16 bytes for a
-segment marked `format_executable`, 8 bytes otherwise. That alignment is applied
-to the file offset as well as to the address, because a loadable segment has to
-satisfy `p_vaddr == p_offset (mod p_align)` - the low bits of the address are
-fixed by the file offset, so moving only the address would break the relation the
-loader relies on. The result is that `sh_addr % sh_addralign == 0` holds for every
-section, which is the guarantee code doing aligned accesses counts on. The cost is
-a few bytes of file padding when a segment would otherwise start on a carry
-inside the page.
+A larger page alignment costs file bytes only when a segment has to move to the next page boundary: virtual addresses advance by whole pages while the file layout stays compact. To choose another page size, set `"load_align"` on the configuration before `format_begin`.
 
-## ELF Call Summary
+Each load segment also honours the alignment its sections declare: 16 bytes for a segment marked `format_executable`, 8 bytes otherwise. That alignment applies to the **file offset** as well, because the loader requires `p_vaddr == p_offset (mod p_align)` — the low bits of the address follow from the file offset, so moving only the address would break the relation. The result is that every section satisfies `sh_addr % sh_addralign == 0`, which is the guarantee code doing aligned accesses depends on; the cost is a few padding bytes when a segment would otherwise land on a carry inside the page.
 
-| Function | Use |
+## API Summary
+
+| Function | Purpose |
 | --- | --- |
 | `format_elf32(format_elf_exec, segments)` | ELF32 executable |
-| `format_elf64(format_elf_exec, segments)` | ELF64 fixed executable |
-| `format_elf64(format_elf_pie, segments)` | ELF64 PIE |
-| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 fixed executable or PIE |
-| `format_elf64_machine(options, segments, machine)` | ELF64 executable or PIE for an explicit machine |
+| `format_elf64(format_elf_exec, segments)` | ELF64 x86-64 fixed-address executable |
+| `format_elf64(format_elf_pie, segments)` | ELF64 x86-64 PIE |
+| `format_elf64_aarch64(options, segments)` | ELF64 AArch64 executable or PIE |
+| `format_elf64_machine(options, segments, machine)` | ELF64 executable or PIE for a named machine |
 | `format_elf64_so(soname, segments)` | ELF64 x86-64 shared object |
 | `format_elf64_so_aarch64(soname, segments)` | ELF64 AArch64 shared object, Android page alignment |
-| `format_elf64_so_machine(soname, segments, machine)` | ELF64 shared object for an explicit machine |
+| `format_elf64_so_machine(soname, segments, machine)` | ELF64 shared object for a named machine |
 | `format_elfobj64_aarch64(sections)` | AArch64 ELF64 object file |
-| `format_elfexe_import_new()` | empty ELF64 executable import list |
-| `format_elfexe_import_many_mut(imports, library, names)` | grouped ELF64 executable PLT/GOT imports |
-| `format_elfexe_import_pairs_mut(imports, library, pairs)` | ELF64 executable local-name/import-name pairs |
-| `format_elfexe_tables_mut(image, imports)` | attach executable import metadata |
-| `format_elfso_export_new()` | empty shared-object export list |
-| `format_elfso_export_many_mut(exports, names, segment, size)` | grouped shared-object exports |
-| `format_elfso_export_pairs_mut(exports, pairs, segment, size)` | shared-object target/name export pairs |
-| `format_elfso_import_new()` | empty shared-object import list |
-| `format_elfso_import_many_mut(imports, library, names)` | grouped shared-object PLT/GOT imports |
-| `format_elfso_import_pairs_mut(imports, library, pairs)` | shared-object local-name/import-name pairs |
+| `format_elfexe_import_new()` | create an ELF64 executable import list |
+| `format_elfexe_import_many_mut(imports, library, names)` | add a batch of same-named imports from one library |
+| `format_elfexe_import_pairs_mut(imports, library, pairs)` | add "local prefix, real symbol name" pairs |
+| `format_elfexe_tables_mut(plan, imports)` | attach executable import metadata to the configuration |
+| `format_elfso_export_new()` | create a shared-object export list |
+| `format_elfso_export_many_mut(exports, names, segment, size)` | export a batch of same-named symbols |
+| `format_elfso_export_pairs_mut(exports, pairs, segment, size)` | export "internal label, public name" pairs |
+| `format_elfso_import_new()` | create a shared-object import list |
+| `format_elfso_import_many_mut(imports, library, names)` | add a batch of shared-object imports from one library |
+| `format_elfso_import_pairs_mut(imports, library, pairs)` | add "local prefix, real symbol name" pairs |
 | `format_elfso_import_slots_mut(imports, library, names)` | AArch64 shared-object GLOB_DAT import slots |
-| `format_elfso_tables_mut(image, exports, imports)` | attach shared-object dynamic metadata |
+| `format_elfso_tables_mut(plan, exports, imports)` | attach shared-object dynamic metadata to the configuration |

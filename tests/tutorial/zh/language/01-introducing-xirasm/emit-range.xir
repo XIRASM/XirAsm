@@ -1,0 +1,5 @@
+const count: u8 = 4
+
+for value in range(0, count) {   // 0 <= value < count，汇编期间展开
+    db(value)                    // 每轮一个字节
+}

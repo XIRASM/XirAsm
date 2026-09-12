@@ -1,0 +1,15 @@
+struct NaturalHeader {
+    tag: u8
+    size: u32
+}
+
+packed struct PackedHeader {
+    tag: u8
+    size: u32
+}
+
+assert(sizeof(NaturalHeader) == 8)
+assert(sizeof(PackedHeader) == 5)
+assert(offset_of(NaturalHeader, tag) == 0)
+assert(offset_of(NaturalHeader, size) == 4)
+assert(offset_of(PackedHeader, size) == 1)

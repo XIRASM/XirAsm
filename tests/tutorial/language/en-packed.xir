@@ -1,0 +1,4 @@
+packed struct FileHeader {
+    tag: u8
+    size: u32
+}

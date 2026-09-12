@@ -1,0 +1,8 @@
+macro byte(value) {
+    const n: u64 = operand.eval(value)   // 按调用处的绑定求值
+    emit.u8(n)
+}
+
+const LIMIT: u64 = 7
+byte LIMIT + 1          // 这里写出：08
+byte (LIMIT + 2)        // 这里写出：09

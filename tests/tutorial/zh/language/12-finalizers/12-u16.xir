@@ -1,0 +1,11 @@
+size_field:
+emit.u16(0)                   // 占位两字节，值还不知道
+
+payload:
+emit.bytes(b"ABC")
+payload_end:
+
+defer {
+    // payload 的真实长度在这里才算得出来。
+    store.u16(size_field, payload_end - payload)
+}

@@ -1,0 +1,9 @@
+import("arm/a64-macros.inc")
+const OFFSET: u64 = 16
+fadd v0.4s, v1.4s, v2.4s
+movi v3.4s, #255, lsl #8
+ldr x2, [sp, #OFFSET]
+ld2 {v31.s, v0.s}[3], [sp], x4
+ldr x5, data
+data:
+emit.u64(0)

@@ -1,0 +1,15 @@
+fn align_up(value: u64, alignment: u64) -> u64 {
+    return ((value + alignment - 1) / alignment) * alignment
+}
+
+size_field:
+emit.u32(0)
+
+payload:
+emit.bytes(b"ABC")
+payload_end:
+
+defer {
+    store.u32(size_field, align_up(payload_end - payload, 8))
+    assert(load.u32(size_field) == 8)
+}

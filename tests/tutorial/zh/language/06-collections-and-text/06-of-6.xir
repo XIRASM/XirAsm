@@ -1,0 +1,8 @@
+// 三个 _mut 调用改的都是左边的绑定本身。
+let items: list = list.of(1, 2)
+list.push_mut(items, 3)          // 末尾变 1, 2, 3
+list.set_mut(items, 0, 4)        // 下标 0 换成 4 → 4, 2, 3
+
+let options: map = map.new()
+map.set_mut(options, "arch", "x64")
+map.set_mut(options, "items", items)   // 值可以是别的集合

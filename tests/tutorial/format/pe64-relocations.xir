@@ -1,0 +1,52 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    // ASLR is required, so a fixups section must be declared.
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_required,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".data", format_data | format_readable | format_writeable),
+        format_section(".idata", format_imports | format_readable | format_writeable),
+        format_section(".reloc", format_fixups | format_readable | format_discardable)
+    )
+)
+
+let imports: map = format_pe_import_new()
+format_pe_import_many_mut(image, imports, "KERNEL32.DLL", list.of("ExitProcess"))
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    // Reserve the Windows x64 shadow space before the calls.
+    sub rsp, 40
+    // Read the function address out of .data, then call it.
+    mov rax, [rel worker_pointer]
+    call rax
+    mov ecx, eax
+    call [rel ExitProcess]
+worker:
+    mov eax, 42
+    ret
+format_section_end(image, ".text")
+
+format_section_begin(image, ".data")
+// This slot holds an absolute address, so a moved image must correct it.
+worker_pointer:
+    dq(0)
+format_section_end(image, ".data")
+
+format_pe_import_section(image, ".idata", imports)
+
+// The record names the slot itself, not the worker it points at.
+let relocs: list = pe_reloc_new()
+format_pe_reloc_add_mut(image, relocs, worker_pointer)
+format_pe_reloc_section(image, ".reloc", relocs)
+
+format_entry_mut(image, start)
+format_finish(image)
+
+// The absolute value is written only once every label address is stable.
+defer {
+    store.u64(worker_pointer, worker)
+}

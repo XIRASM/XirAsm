@@ -1,0 +1,7 @@
+x86.use64()                 // 编译期调用：选定 64 位 x86 编码
+
+const answer: u32 = 40 + 2  // 汇编时计算
+
+entry:                      // 标号记录当前地址，不写出字节
+    mov eax, answer         // 指令；`answer` 成为立即操作数
+    ret

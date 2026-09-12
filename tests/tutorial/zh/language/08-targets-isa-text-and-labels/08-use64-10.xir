@@ -1,0 +1,9 @@
+// finished 在跳转指令之后定义，仍然可以提前引用。
+x86.use64()
+
+entry:
+    jmp short finished
+    mov eax, 1
+
+finished:
+    ret

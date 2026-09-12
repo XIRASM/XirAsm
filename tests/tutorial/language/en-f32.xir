@@ -1,0 +1,5 @@
+const scale: f64 = 1.5
+const compact: f32 = f32(scale)
+
+emit.f32(compact)
+emit.f64(scale * 2.0)

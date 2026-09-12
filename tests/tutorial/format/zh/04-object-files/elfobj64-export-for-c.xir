@@ -1,0 +1,23 @@
+import("format/format.inc")
+
+// 与 C 混编用的 ELF64 目标文件：导出一个函数给 C 调用。
+let object: map = format_elfobj64(
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
+format_begin(object)
+
+format_section_begin(object, ".text")
+text_start:
+xirasm_double:
+    // long xirasm_double(long v) { return v * 2; }
+    lea rax, [rdi + rdi]
+    ret
+format_section_end(object, ".text")
+
+const symbols: list = list.of(
+    format_elfobj_public("xirasm_double", ".text", text_start, xirasm_double, 4, elfobj_stt_func)
+)
+format_elfobj_tables_mut(object, symbols, list.new())
+format_finish(object)

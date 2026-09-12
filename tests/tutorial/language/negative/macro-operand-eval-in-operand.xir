@@ -1,0 +1,6 @@
+macro bad(value) {
+    mov rax, operand.eval(value)
+}
+
+x86.use64()
+bad 7

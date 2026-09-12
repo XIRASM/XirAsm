@@ -1,0 +1,5 @@
+emit.u8(0xaa)
+
+assert(file_cursor_real() == 1)
+assert(file_cursor_potential() == 1)
+assert(tail_reserve_size() == 0)

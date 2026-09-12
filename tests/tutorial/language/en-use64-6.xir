@@ -1,0 +1,7 @@
+x86.use64()
+
+const initial_value: u32 = 40 + 2
+
+entry:
+    mov eax, initial_value
+    ret

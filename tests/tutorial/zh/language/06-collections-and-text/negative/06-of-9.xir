@@ -1,0 +1,5 @@
+// defer 在布局定下来之后运行，那时不能再长出新内容。
+let items: list = list.of(1)
+defer {
+    list.push_mut(items, 2)
+}

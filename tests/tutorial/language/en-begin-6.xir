@@ -1,0 +1,20 @@
+region.begin("image", 0x5000, 0)
+
+emit.bytes(b"HDR0")
+file_size_field:
+emit.u32(0)
+logical_size_field:
+emit.u32(0)
+
+emit.u8(0xaa)
+reserve(3)
+emit.u8(0xee)
+reserve(8)
+
+defer {
+    store.u32(file_size_field, region_file_size(file_size_field))
+    store.u32(logical_size_field, region_logical_size(logical_size_field))
+
+    assert(load.u32(file_size_field) == 17)
+    assert(load.u32(logical_size_field) == 25)
+}

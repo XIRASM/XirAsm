@@ -1,0 +1,18 @@
+// 自然布局需要为 u32 字段和结构体末尾保留对齐空间。
+struct NaturalHeader {
+    tag: u8
+    size: u32
+}
+
+// 紧凑布局保持字段连续排列。
+packed struct PackedHeader {
+    tag: u8
+    size: u32
+}
+
+// 同时验证两种布局的总大小和关键字段偏移。
+assert(sizeof(NaturalHeader) == 8)
+assert(sizeof(PackedHeader) == 5)
+assert(offset_of(NaturalHeader, tag) == 0)
+assert(offset_of(NaturalHeader, size) == 4)
+assert(offset_of(PackedHeader, size) == 1)

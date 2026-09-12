@@ -1,5 +1,7 @@
 const std = @import("std");
 const manifest = @import("build.zig.zon");
+// Generated from the manual by `tools/doc_examples.py`.
+const tutorial_manifest = @import("tests/tutorial/manifest.zig");
 
 // Although this function looks imperative, it does not perform the build
 // directly and instead it mutates the build graph (`b`) that will be then
@@ -5310,6 +5312,16 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(init_build_step);
     test_step.dependOn(fixture_step);
 
+    // Tutorial examples: `tools/doc_examples.py` turns the annotated examples in
+    // the manual into fixtures under `tests/tutorial/`, and this step assembles
+    // every one of them so the guide cannot drift from the assembler.
+    const tutorial_step = b.step(
+        "test-tutorial",
+        "Assemble the tutorial examples listed in tests/tutorial/manifest.tsv",
+    );
+    addTutorialFixtures(b, tutorial_step, exe, fixture_checker);
+    test_step.dependOn(tutorial_step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means
@@ -5567,6 +5579,75 @@ fn addFailingAsmFixtureWithInputs(
     run_asm.expectExitCode(1);
     run_asm.expectStdErrMatch("error:");
     run_asm.expectStdErrMatch(error_needle);
+    parent.dependOn(&run_asm.step);
+}
+
+/// The tutorial fixture list is generated from the manual by
+/// `tools/doc_examples.py`, which writes both `tests/tutorial/manifest.tsv`
+/// (for review and `doc_examples.py check`) and the imported
+/// `tests/tutorial/manifest.zig` (for this loader).
+///
+/// The loader imports a generated module instead of reading the TSV at
+/// configure time on purpose: the build runner caches the configured graph, and
+/// a data file read that the graph does not declare as a dependency would not
+/// invalidate that cache. An imported module is a real build-script dependency.
+fn addTutorialFixtures(
+    b: *std.Build,
+    parent: *std.Build.Step,
+    exe: *std.Build.Step.Compile,
+    checker: *std.Build.Step.Compile,
+) void {
+    const fixtures = tutorial_manifest.fixtures;
+    if (fixtures.len == 0) {
+        std.debug.print("error: tests/tutorial/manifest.zig declares no fixtures\n", .{});
+        std.process.exit(1);
+    }
+
+    for (fixtures) |fixture| {
+        if (std.mem.startsWith(u8, fixture.expected, "error:")) {
+            addFailingAsmFixtureWithInputs(
+                b,
+                parent,
+                exe,
+                fixture.source,
+                fixture.target,
+                &.{},
+                fixture.expected["error:".len..],
+            );
+        } else if (std.mem.startsWith(u8, fixture.expected, "bytes:")) {
+            addAsmFixtureWithInputs(
+                b,
+                parent,
+                exe,
+                checker,
+                fixture.source,
+                b.fmt("tutorial-{s}.bin", .{fixture.id}),
+                fixture.target,
+                fixture.expected["bytes:".len..],
+                &.{},
+            );
+        } else {
+            addTutorialOkFixture(b, parent, exe, fixture.source, fixture.target, fixture.id);
+        }
+    }
+}
+
+/// An example asserted only to assemble: the manual shows no expected bytes.
+fn addTutorialOkFixture(
+    b: *std.Build,
+    parent: *std.Build.Step,
+    exe: *std.Build.Step.Compile,
+    source_path: []const u8,
+    target_name: []const u8,
+    fixture_id: []const u8,
+) void {
+    const run_asm = b.addRunArtifact(exe);
+    run_asm.addFileArg(b.path(source_path));
+    run_asm.addArg("-o");
+    _ = run_asm.addOutputFileArg(b.fmt("tutorial-{s}.bin", .{fixture_id}));
+    run_asm.addArg("--target");
+    run_asm.addArg(target_name);
+    run_asm.expectExitCode(0);
     parent.dependOn(&run_asm.step);
 }
 

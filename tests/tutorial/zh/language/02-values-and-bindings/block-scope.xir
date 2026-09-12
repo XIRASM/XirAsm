@@ -1,0 +1,8 @@
+const value = 1
+
+{
+    let value = 2   // 在块内遮蔽外层的 `value`
+    db(value)       // 02
+}
+
+db(value)           // 01：外层绑定重新可见

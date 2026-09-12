@@ -1,0 +1,4 @@
+const signature: bytes = bytes.from_hex("7f454c46")
+
+emit.bytes(signature)
+emit.bytes("DATA")

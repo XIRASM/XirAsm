@@ -1,0 +1,8 @@
+const chunks: list = list.concat(
+    list.of(b"XR"),
+    list.of(bytes.le(0x1234, 2))
+)
+
+for chunk in chunks {
+    emit.bytes(chunk)      // 58 52 then 34 12
+}

@@ -1,0 +1,12 @@
+fn combine(value: u64) -> u64 {
+    let result = value
+
+    {
+        const value = 5      // 遮蔽参数
+        result = result + value
+    }
+
+    return result
+}
+
+db(combine(3))          // 3 + 5

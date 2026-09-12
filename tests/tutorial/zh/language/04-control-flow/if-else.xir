@@ -1,0 +1,7 @@
+const debug_build = false
+
+if debug_build {
+    db("DEBUG")
+} else {
+    db("RELEASE")
+}

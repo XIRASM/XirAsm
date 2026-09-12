@@ -1171,6 +1171,13 @@ fn format_section_row(plan: map, name: string) -> u64 {
     if kind == format_kind_macho64_object || kind == format_kind_macho64_execute || kind == format_kind_macho64_dylib {
         return format_macho64_section_row(plan, "", name);
     }
+    // An ELF image plan declares load segments and carries no "sections" key,
+    // so without this guard the lookup below fails on the missing key and the
+    // real mistake never reaches the user.
+    assert(
+        kind != format_kind_elf32 && kind != format_kind_elf64 && kind != format_kind_elfso64,
+        "an ELF image plan declares segments, not sections"
+    );
     const sections: list = map.get(plan, "sections")
     for i in range(0, len(sections)) {
         const section: map = list.get(sections, i)
@@ -1207,6 +1214,13 @@ fn format_section_purpose(plan: map, name: string) -> u64 {
 }
 
 fn format_segment_row(plan: map, name: string) -> u64 {
+    // Mirror of the guard in format_section_row: only the ELF image kinds carry
+    // a "segments" key, and PE, COFF, ELF-object and Mach-O plans do not.
+    const kind: u64 = map.get(plan, "kind")
+    assert(
+        kind == format_kind_elf32 || kind == format_kind_elf64 || kind == format_kind_elfso64,
+        "only an ELF image plan declares segments"
+    );
     const segments: list = map.get(plan, "segments")
     for i in range(0, len(segments)) {
         const segment: map = list.get(segments, i)

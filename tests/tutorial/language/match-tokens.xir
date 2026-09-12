@@ -1,0 +1,11 @@
+const line: string = "load rax, [rbx+(rcx*4)]"
+const result: map = match.tokens(
+    "=load destination:name =, source:tokens",
+    line
+)
+
+assert(map.get(result, "ok"))
+
+const captures: map = map.get(result, "captures")
+assert(map.get(captures, "destination") == "rax")
+assert(tokens.join(map.get(captures, "source")) == "[rbx+(rcx*4)]")

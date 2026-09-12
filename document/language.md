@@ -83,231 +83,182 @@ and ELF tutorials.
 
 ### One Source Language, Two Forms
 
-An XIRASM source file can contain two forms of code:
+An XIRASM source file mixes two kinds of line: **processor instructions**, in the
+selected ISA's assembly syntax, and **compile-time code**, which computes values
+and decides what the output contains while XIRASM is assembling.
 
-- **Processor instructions** use the selected ISA's normal assembly syntax.
-- **Compile-time code** calculates values, generates output, and controls how
-  the source is assembled.
+```asm id=hello target=x86-64 bytes=b82a000000c3
+x86.use64()                 // compile-time call: select 64-bit x86 encoding
 
-They belong to the same source language. Compile-time values can appear in
-instructions, labels can be used by layout APIs, and functions can generate
-both data and instructions.
+const answer: u32 = 40 + 2  // computed while XIRASM assembles
 
-The following program combines both forms:
-
-```asm
-x86.use64();
-
-const answer: u32 = 40 + 2
-
-entry:
-    mov eax, answer
+entry:                      // a label records this address; it emits no bytes
+    mov eax, answer         // instruction; `answer` becomes the immediate operand
     ret
 ```
 
-Read it from top to bottom:
+Which form a line takes is decided by the line, not by the file:
 
-- `x86.use64();` selects 64-bit x86 instruction encoding.
-- `const answer: u32 = 40 + 2` creates a compile-time constant.
-- `entry:` defines a label at the current logical address.
-- `mov eax, answer` is an ordinary x86 instruction. The compile-time value
-  `answer` becomes its immediate operand.
-- `ret` is another ordinary x86 instruction.
+| The line should | Write it as |
+| --- | --- |
+| Encode a processor instruction | An assembly instruction line |
+| Compute a value while assembling | A compile-time expression |
+| Repeat or select what gets generated | Compile-time control flow |
+| Contribute bytes to the output | A data call such as `db`, `dw`, `dd`, or `dq` |
+| Describe a file-format structure | A `format.inc` call |
 
-Calls such as `x86.use64();` use the structured language syntax. Instructions
-such as `mov eax, answer` are written directly as assembly, not as function
-calls.
+### Assembling the First Program
 
-### Assemble the First Program
-
-Save the source as `hello.xir`, then run:
+Save it as `hello.xir` and run:
 
 ```text
-xirasm hello.xir --isa x86-64
+xirasm hello.xir
 ```
 
-The output is six bytes:
+The CLI prints one summary line and writes the bytes to `hello.bin`:
+
+```text
+assembled output (6 bytes, 2 instruction fragments, target x86-64)
+```
 
 ```text
 b8 2a 00 00 00 c3
 ```
 
-The first five bytes encode `mov eax, 42`; the final byte encodes `ret`. The
-label does not add bytes. It records an address that other instructions and
-compile-time APIs can use.
+Five bytes encode `mov eax, 42`; the last byte encodes `ret`. The label emits
+nothing.
 
-Direct assembly writes a flat binary by default. A flat binary is exactly the
-byte sequence produced by the source. It has no operating-system header. Later
-chapters introduce the format API with one small example. Complete PE,
-COFF, and ELF programs belong in the
-[Format Tutorial](format-tutorial.md).
+A source assembled this way produces a flat binary: exactly the bytes it
+emitted, with no operating-system header. Chapter 14 introduces the format API;
+the [Format Tutorial](format-tutorial.md) covers PE, COFF, and ELF in full.
 
 ### Compile-Time Code Generates Output
 
-Compile-time code runs while XIRASM is constructing the output. It is not code
-that executes when the resulting program runs.
+Compile-time code runs while XIRASM builds the output. It is not code in the
+program that runs. This loop emits one byte per iteration:
 
-For example, this loop emits four bytes:
-
-```asm
+```asm id=emit-range target=x86-64
 const count: u8 = 4
 
-for value in range(0, count) {
-    db(value);
+for value in range(0, count) {   // 0 <= value < count, unrolled during assembly
+    db(value)                    // one byte per iteration
 }
 ```
-
-The generated output is:
 
 ```text
 00 01 02 03
 ```
 
-`range(0, count)` creates the values from zero up to, but not including,
-`count`. The `for` loop runs during assembly, and `db(value);` emits one byte
-for each value.
+### Source Rules
 
-This distinction is fundamental:
+A line holds one statement, and a line ends where it ends. Two calls on one line
+are an error; saved as `bad.xir`, this reports:
 
-| Task | Write it as |
-| --- | --- |
-| Handwritten processor instructions | Assembly instruction lines |
-| Constants and calculated values | Compile-time expressions |
-| Repeated or conditional generation | Compile-time control flow |
-| Binary data | Data calls such as `db`, `dw`, `dd`, and `dq` |
-| Reusable generation logic | Compile-time functions |
-| PE, COFF, or ELF output | `format.inc` calls |
+```asm id=two-calls-one-line target=x86-64
+db(1); db(2)
+```
 
-### Basic Source Rules
+```text
+bad.xir:1:1: error: a line holds one statement: this call is followed by more text, so write the rest on its own line (TrailingTextAfterCall)
+```
 
-The following rules are enough to read the examples in the first part of this
-guide:
+A `;` ends a compile-time statement. Nothing may follow it, nothing requires it,
+and this guide omits it:
 
-- `//` starts a line comment. A line comment ends the line whatever the statement
-  is: an instruction line, an API call, a declaration, an assignment, a label, a
-  block header, or a control statement. Quoted operands may contain `//` as
-  ordinary text.
+```asm id=semicolon-forms target=x86-64 bytes=0102
+db(1);   // accepted
+db(2)    // the same statement without it
+```
+
+A `;` does not end an instruction, so an instruction line must not carry one:
+
+```asm id=isa-trailing-semicolon target=x86-64
+nop;
+```
+
+```text
+bad.xir:1:1: error: ISA text does not end with a semicolon
+```
+
+Line comments, labels, and blocks:
+
+- `//` starts a line comment and ends the line whatever the statement is: an
+  instruction, a call, a declaration, an assignment, a label, a block header, or
+  a control statement. A quoted operand may contain `//` as ordinary text.
 - A label ends with `:`.
-- ISA instruction lines do not end with semicolons.
-- Function and API calls, and `return` statements, are written with a trailing
-  `;`. The terminator is not required at the end of a line; the API reference
-  states the exact rule.
-- `const` and `let` declarations do not end with semicolons.
-- Blocks use `{` and `}`.
-- Function and control-flow headers end with `{`; do not put that opening
-  brace on a separate line. An orphan `else` or unmatched `}` is an error.
-- Calls and aggregate values may span multiple lines while their parentheses
-  or braces remain open.
+- Blocks use `{` and `}`. A function, `if`, `while`, or `for` header ends with
+  `{` on the same line; an orphan `else` or an unmatched `}` is an error.
+- A call or an aggregate value may span several lines while its parentheses or
+  braces stay open.
 
-For example:
+Compile-time code and instructions interleave in one file:
 
-```asm
-// A compile-time helper.
-fn emit_marker(value: u8) {
-    db(0x7f, value);
+```asm id=emit-marker target=x86-64 bytes=7f03b803000000c3
+x86.use64()
+
+fn emit_marker(value: u8) {   // compile-time function: writes a two-byte marker
+    db(0x7f, value)
 }
 
 const marker: u8 = 3
-emit_marker(marker);
+emit_marker(marker)           // the call runs during assembly, not at run time
 
-start:
+start:                        // instructions from here to the end
     mov eax, marker
     ret
 ```
 
-The function definition and call are compile-time code. The label and the two
-indented lines are assembly code. Both forms contribute to one final output.
-
-### A Practical Mental Model
-
-When reading or writing XIRASM, ask what each line is meant to do:
-
-1. If it is a processor instruction, write it as an ordinary assembly line.
-2. If it computes or selects something during assembly, use the compile-time
-   language.
-3. If it contributes bytes or reserves storage, use the data and output APIs.
-4. If it describes a complete file format, use the corresponding format
-   format API instead of calculating header rows by hand.
-
-The next chapter develops the compile-time side of the language, beginning
-with constants, mutable bindings, value types, assignment, and scope.
+Both forms contribute to the same 8-byte output.
 
 ## 2. Values and Bindings
 
 ### Values Exist During Assembly
 
-XIRASM values are compile-time values. They help construct the output, but a
-binding does not create bytes or reserve memory by itself.
+XIRASM values are compile-time values. A binding names one, and only an
+instruction, data call, layout operation, or format API puts it into the output.
 
-```asm
-const magic: u16 = 0x5a4d
+```asm id=value-is-not-output target=x86-64 bytes=4d5a
+const magic: u16 = 0x5a4d   // names a value; no byte is written yet
+dw(magic)                   // this is what writes `4d 5a`
 ```
-
-This declaration gives the name `magic` a value. It does not write `4d 5a` to
-the output. To emit the value, pass it to a data API:
-
-```asm
-const magic: u16 = 0x5a4d
-dw(magic);
-```
-
-The same rule applies to mutable values, strings, byte sequences, collections,
-and values returned by functions. They become part of the output only when an
-instruction, data call, layout operation, or format API uses them.
 
 ### Constants
 
-A constant binds a name to a value that cannot be reassigned:
+`const` binds a name to a value that cannot be reassigned:
 
-```asm
-const page_size: u64 = 4096
-const header_size = 64
-const enabled: bool = true
+```asm id=const-decl target=x86-64
+const page_size: u64 = 4096   // the width is part of what the format fixes
+const header_size = 64        // inferred from the initial value
 ```
-
-The general forms are:
 
 ```text
 const name = expression
 const name: type = expression
 ```
 
-The type annotation is optional when XIRASM can infer the type from the
-initial value. Use an explicit type when the width or value category is part of
-the binary contract.
+The annotation is optional when the initial value determines the type; state it
+when the width is part of what the binary format fixes. Reassigning a `const` is an error:
 
-Constants do not use a trailing semicolon. Reassigning one is an error:
-
-```text
+```asm id=const-reassign target=x86-64
 const value = 1
 value = 2
 ```
 
-Prefer `const` unless the source genuinely needs to update the binding while it
-is being assembled.
+```text
+bad.xir:2:1: error: the declaration syntax is not valid (InvalidValueDeclaration)
+```
 
 ### Mutable Bindings
 
-Use `let` when a compile-time calculation needs state:
+`let` binds a name that the source updates while assembling:
 
-```asm
+```asm id=mutable-offset target=x86-64 bytes=14000000
 let offset: u32 = 0
-offset = offset + 16
+offset = offset + 16   // assignments run during assembly
 offset = offset + 4
 
-dd(offset);
+dd(offset)             // 20 = 0x14
 ```
-
-This emits:
-
-```text
-14 00 00 00
-```
-
-Both the declaration and the assignments happen during assembly. They do not
-create a runtime variable named `offset`.
-
-The forms are:
 
 ```text
 let name = expression
@@ -315,85 +266,117 @@ let name: type = expression
 name = expression
 ```
 
-Like declarations, assignments do not end with semicolons. Calls made as
-statements still do:
-
-```asm
-let value = 1
-value = value + 1
-db(value);
-```
+The declaration and the assignments are compile-time work; the output has no
+runtime variable named `offset`. Reach for `let` only when the source updates
+the name.
 
 ### Type Annotations and Inference
 
-Bindings may state their type explicitly:
-
-```asm
-const signature: u16 = 0x5a4d
+```asm id=type-annotations target=x86-64
+const signature: u16 = 0x5a4d   // explicit: it is a file-format field
 const title: string = "XIRASM"
 const marker: bytes = b"OK"
 const enabled: bool = true
+
+const count = 4                 // inferred `integer`
+const name = "payload"          // inferred `string`
+const raw = b"DATA"             // inferred `bytes`
 ```
 
-They may also rely on inference:
-
-```asm
-const count = 4
-const name = "payload"
-const raw = b"DATA"
-```
-
-Common value types used in ordinary source include:
+Common value types:
 
 | Type | Purpose | Example |
 | --- | --- | --- |
 | `integer` | General compile-time integer | `42` |
-| `u8` | Unsigned 8-bit value | `0xff` |
-| `u16` | Unsigned 16-bit value | `0x5a4d` |
-| `u32` | Unsigned 32-bit value | `0x401000` |
-| `u64` | Unsigned 64-bit value | `0x140000000` |
-| `i8` | Signed 8-bit value | `-1` |
-| `i16` | Signed 16-bit value | `-200` |
-| `i32` | Signed 32-bit value | `-4096` |
-| `i64` | Signed 64-bit value | `-0x100000000` |
+| `u8`, `u16`, `u32`, `u64` | Unsigned value of that width | `0xff`, `0x5a4d`, `0x401000`, `0x140000000` |
+| `i8`, `i16`, `i32`, `i64` | Signed value of that width | `-1`, `-200`, `-4096`, `-0x100000000` |
+| `usize` | Unsigned value as wide as a host address | `16` |
 | `f32` | IEEE-754 binary32 value | `f32(1.5)` |
 | `f64` | IEEE-754 binary64 value | `1.5` |
 | `bool` | Compile-time condition | `true` |
 | `string` | Compile-time text | `"kernel"` |
-| `bytes` | Explicit byte sequence | `b"PE"` |
+| `bytes` | Byte sequence taken literally | `b"PE"` |
 
-Lists, maps, structs, unions, and type values are introduced in later
-chapters.
+Lists, maps, structs, unions, and type values are introduced in later chapters.
 
-Width-specific integer types are useful for binary fields and function
-contracts. The general `integer` type is useful when a helper accepts an
-integer without requiring a particular encoded width. The API that eventually
-emits the value still decides how many bytes are written.
+A width-specific integer pins down a binary field or a function parameter;
+`integer` suits a helper that accepts any integer, because the call that emits
+the value decides how many bytes it writes. Signed values use two's complement,
+and the declared range is checked when the binding is created:
 
-Signed fixed-width values use two's-complement representation. Their declared
-range is checked when a binding or aggregate field is created, and packing a
-signed aggregate field writes the low 8, 16, 32, or 64 bits for that field.
+```asm id=signed-range target=x86-64
+const offset: i32 = -1
+const too_big: i8 = 200      // 200 does not fit i8
+```
 
-Decimal literals with a fractional part or exponent have type `f64`. Use
-`f32(value)` for an explicit finite narrowing conversion and `f64(value)` to
-widen an `f32`. Integer and floating values are never mixed implicitly.
+```text
+bad.xir:2:1: error: the declaration syntax is not valid (InvalidValueDeclaration)
+```
+
+Data calls take unsigned values, so a negative number is written as its
+two's-complement pattern:
+
+```asm id=negative-bit-pattern target=x86-64 bytes=ffffffff
+dd(0xffffffff)          // the four bytes of -1
+```
+
+A signed binding is not converted for you:
+
+```asm id=signed-to-data-call target=x86-64
+const offset: i32 = -1
+
+dd(offset)
+```
+
+```text
+bad.xir:3:1: error: lowering failed: InvalidApiInteger
+```
+
+A decimal literal with a fraction or an exponent has type `f64`; `f32(value)`
+narrows explicitly and `f64(value)` widens. Integers and floats never mix
+implicitly:
+
+```asm id=float-conversions target=x86-64 bytes=000000000000f83f0000c03f
+emit.f64(1.5)          // a fractional literal is already f64
+emit.f32(f32(1.5))     // f32(...) narrows explicitly
+```
+
+```asm id=int-float-mismatch target=x86-64
+emit.f64(1)            // 1 is an integer
+```
+
+```text
+bad.xir:1:1: error: a call argument does not match what the call expects (InvalidApiArgument)
+```
 
 ### Strings and Byte Sequences
 
-Strings and byte sequences are different value categories:
+A `string` is text; `bytes` is a byte sequence taken literally:
 
-```asm
+```asm id=string-vs-bytes target=x86-64 bytes=2e746578744d5a
 const section_name: string = ".text"
 const signature: bytes = b"MZ"
+
+db(section_name)       // 2e 74 65 78 74
+db(signature)          // 4d 5a
 ```
 
-Use a string for textual names, paths, generated instruction text, and APIs that expect
-text. Use `bytes` when the exact byte sequence is the value being modeled.
+Use a string for names, paths, generated instruction text, and APIs that expect
+text. Use `bytes` when the exact byte sequence is the value being modeled. Some
+data APIs accept either:
+
+```asm id=db-mixed-categories target=x86-64 bytes=41424344
+db("AB", b"CD")
+```
+
+```text
+41 42 43 44
+```
 
 ### Escape Sequences
 
-A quoted literal decodes the same small escape set whether it uses single or
-double quotes and whether or not it carries the `b` prefix:
+A quoted literal decodes one escape set, whatever quotes it uses and whether or
+not it carries the `b` prefix:
 
 | Escape | Byte |
 | --- | --- |
@@ -405,114 +388,64 @@ double quotes and whether or not it carries the `b` prefix:
 | `\"` inside `"…"`, `\'` inside `'…'` | the quote that opened the literal |
 | `\uXXXX` | the UTF-8 bytes of that code point |
 
-Writing the opening quote twice also yields one quote, so `"a""b"` and `"a\"b"`
-are both `a"b`.
-
-`\uXXXX` takes exactly four hexadecimal digits and names one code point, so
-`"\u0041"` is the single byte `A` and `"\u00e9"` is the two bytes `c3 a9`. It is
-there because generated platform text spells control characters that way: the
-Windows API tables write `"\u0000"` for the NUL byte they mean.
-
-Every other backslash is not an escape: both characters stand as written, so
-`"\u41"`, `"\uzzzz"`, and `"slash \ ok"` all keep their backslash. The trade is
-explicit: because `\t` and `\n` *are* escapes, backslash-and-letter text used as
-data has to double the backslash, so `"a\\tb"` is four bytes (`a`, `\`, `t`, `b`)
-while `"a\tb"` is three (`a`, tab, `b`).
-
-The `quoted` capture of `match.tokens` decodes the same set, so instruction text
-carried as a value and text spelled out in a literal read identically.
-
-Some output APIs accept either category:
-
-```asm
-db("AB", b"CD");
+```asm id=escape-decoded target=x86-64 bytes=41c3a9612262610962410942610962
+db("\u0041")   // 41: exactly four hexadecimal digits name a code point
+db("\u00e9")   // c3 a9: its UTF-8 bytes
+db("a""b")     // 61 22 62: the opening quote written twice is one quote
+db("a\tb")     // 61 09 62
+db(b"A\tB")    // 41 09 42: the `b` prefix decodes the same escapes
+db('a\tb')     // 61 09 62: so do single quotes
 ```
 
-This emits four bytes:
+`\uXXXX` is decoded because generated platform text spells control characters
+that way: the Windows API tables write `"\u0000"` for the NUL byte they mean.
+Everything else keeps its backslash, so `\u41` and `\ud800` are the characters
+written:
 
-```text
-41 42 43 44
+```asm id=escape-unknown target=x86-64 bytes=5c7534315c7564383030
+db("\u41")     // too few digits
+db("\ud800")   // a lone surrogate is not a code point
 ```
 
-Other APIs deliberately require one category. Keeping the distinction in the
-binding makes those contracts visible in the source.
+Doubling a backslash is what turns it into data rather than an escape:
+
+```asm id=escape-doubled-backslash target=x86-64 bytes=615c7462610962
+db("a\\tb")    // 61 5c 74 62: the backslash is data
+db("a\tb")     // 61 09 62: the backslash is an escape
+```
 
 ### Block Scope
 
-Bindings belong to the scope in which they are declared. A block creates a
-nested scope:
+A block creates a nested scope:
 
-```asm
+```asm id=block-scope target=x86-64 bytes=0201
 const value = 1
 
 {
-    let value = 2
-    db(value);
+    let value = 2   // shadows the outer `value` inside this block
+    db(value)       // 02
 }
 
-db(value);
+db(value)           // 01: the outer binding is visible again
 ```
-
-The output is:
-
-```text
-02 01
-```
-
-The inner `value` shadows the outer constant only inside the block. When the
-block ends, the outer `value` is visible again.
-
-Function parameters and local bindings also belong to their function scope.
-Nested blocks can introduce short-lived names without changing an outer
-binding.
-
-Shadowing is useful when a nested operation has a natural local name, but avoid
-it when two meanings would be difficult to distinguish while reading the
-source.
-
-### Choosing Between `const` and `let`
-
-Use the narrowest binding that expresses the calculation:
-
-| Situation | Prefer |
-| --- | --- |
-| A fixed option, size, name, or calculated result | `const` |
-| A loop counter managed by the language | The loop binding |
-| A running offset, checksum, or accumulator | `let` |
-| A value that changes only inside a small block | Block-local `let` |
-| A value whose width is part of a file format | Explicit type annotation |
-| A temporary value whose type is obvious | Type inference |
-
-Most bindings in format descriptions and generated assembly should remain
-constants. Mutable state is clearest when it is local, short-lived, and tied to
-one calculation.
-
-The next chapter explains the expressions that produce these values, including
-arithmetic, comparisons, boolean logic, bitwise operations, field access, and
-function calls.
 
 ## 3. Expressions
 
 ### Expressions Produce Compile-Time Values
 
-An expression calculates a value while XIRASM is assembling the source.
-Expressions appear in declarations, assignments, function arguments, return
-statements, conditions, assertions, instruction operands, and data calls.
+An expression calculates a value while XIRASM assembles the source. Expressions
+appear in declarations, assignments, arguments, return statements, conditions,
+assertions, instruction operands, and data calls.
 
-```asm
+```asm id=table-size target=x86-64 bytes=18000000
 const entry_count = 3
 const bytes_per_entry = 8
 const table_size = entry_count * bytes_per_entry
 
-dd(table_size);
+dd(table_size)          // 24 = 0x18
 ```
 
-This emits the 32-bit value `24`. The multiplication is performed during
-assembly; the output contains only the result.
-
 ### Arithmetic
-
-Integer expressions support:
 
 | Operator | Meaning |
 | --- | --- |
@@ -522,34 +455,46 @@ Integer expressions support:
 | `/` | Integer division |
 | `%` | Remainder |
 
-```asm
-const total = 2 + 3 * 4
-const grouped = (2 + 3) * 4
-const quotient = 17 / 5
-const remainder = 17 % 5
+```asm id=arithmetic target=x86-64 bytes=0e000000140000000300000002000000
+const total = 2 + 3 * 4       // 14
+const grouped = (2 + 3) * 4   // 20
+const quotient = 17 / 5       // 3
+const remainder = 17 % 5      // 2
 
-dd(total, grouped, quotient, remainder);
+dd(total, grouped, quotient, remainder)
 ```
 
-The emitted values are `14`, `20`, `3`, and `2`.
+Addition, subtraction, and multiplication are checked: a result that leaves the
+integer range is rejected instead of silently changing the layout.
 
-Addition, subtraction, and multiplication are checked. A result outside the
-supported integer range is rejected instead of silently changing the layout.
-Division and remainder by zero are errors.
+```asm id=arithmetic-overflow target=x86-64
+dq(0xffffffffffffffff + 1)
+```
 
-Unary `+` keeps an integer value unchanged. Unary `-` produces its 64-bit
-two's-complement value:
+```text
+bad.xir:1:1: error: an expression in this statement is not valid (InvalidExpression)
+```
 
-```asm
+```asm id=division-by-zero target=x86-64
+dd(1 / 0)
+```
+
+```text
+bad.xir:1:1: error: the expression divides by zero (DivisionByZero)
+```
+
+Unary `+` leaves a value unchanged; unary `-` produces its 64-bit
+two's-complement value, which is what makes a negative number writable:
+
+```asm id=unary-minus target=x86-64 bytes=ffffffffffffffff
 const all_bits = -1
-dq(all_bits);
-```
 
-This emits eight `ff` bytes.
+dq(all_bits)            // eight `ff` bytes
+```
 
 ### Bitwise Operations and Shifts
 
-Bitwise expressions are useful for permissions, masks, instruction fields, and
+Bitwise expressions describe permissions, masks, instruction fields, and
 file-format flags:
 
 | Operator | Meaning |
@@ -561,29 +506,26 @@ file-format flags:
 | `<<` | Shift left |
 | `>>` | Shift right |
 
-```asm
+```asm id=bitwise-mask target=x86-64 bytes=05
 const readable = 1 << 0
 const writeable = 1 << 1
 const executable = 1 << 2
 
 const permissions = readable | executable
-const can_execute = (permissions & executable) != 0
-const can_write = (permissions & writeable) != 0
 
-assert(can_execute);
-assert(!can_write);
-db(permissions);
+assert((permissions & executable) != 0)
+assert((permissions & writeable) == 0)
+db(permissions)         // 1 | 4 = 5
 ```
 
-The emitted byte is `05`.
+A shift count at or past the width of the value gives zero; it is not an error:
 
-Use parentheses around mask tests. They make the intended operation clear and
-avoid depending on the relative precedence of bitwise and comparison
-operators.
+```asm id=shift-past-width target=x86-64 bytes=00000000000000800000000000000000
+dq(1 << 63)             // 00 00 00 00 00 00 00 80
+dq(1 << 64)             // nothing is left to shift into place
+```
 
 ### Comparison and Equality
-
-Expressions can compare values:
 
 | Operator | Meaning |
 | --- | --- |
@@ -594,32 +536,33 @@ Expressions can compare values:
 | `>` | Greater than |
 | `>=` | Greater than or equal |
 
-Ordering comparisons operate on integers:
+Ordering comparisons operate on integers. Equality also works between compatible
+non-integer values:
 
-```asm
+```asm id=comparison target=x86-64
 const payload_size = 96
 const maximum_size = 128
-const fits = payload_size > 0 && payload_size <= maximum_size
 
-assert(fits);
-```
+assert(payload_size > 0 && payload_size <= maximum_size)
 
-Equality and inequality also work with compatible non-integer values:
-
-```asm
 const format_name = "raw"
 const signature = b"OK"
 
-assert(format_name == "raw");
-assert(signature == b"OK");
+assert(format_name == "raw")
+assert(signature == b"OK")
 ```
 
-Values of unrelated categories are rejected instead of being converted
-implicitly.
+Values of unrelated categories are rejected instead of being converted:
+
+```asm id=mixed-category-operands target=x86-64
+const total = "x" + 1
+```
+
+```text
+bad.xir:1:1: error: an expression in this statement is not valid (InvalidExpression)
+```
 
 ### Boolean Logic and Short-Circuiting
-
-Boolean expressions use:
 
 | Operator | Meaning |
 | --- | --- |
@@ -627,65 +570,62 @@ Boolean expressions use:
 | `&&` | Logical AND |
 | `\|\|` | Logical OR |
 
-`&&` and `||` short-circuit:
+`&&` and `||` stop as soon as the result is known. `left && right` does not
+evaluate `right` when `left` is false, and `left || right` does not evaluate
+`right` when `left` is true:
 
-- `left && right` does not evaluate `right` when `left` is false.
-- `left || right` does not evaluate `right` when `left` is true.
-
-```asm
+```asm id=short-circuit target=x86-64
 const enabled = true
-const safe = enabled || (1 / 0 == 0)
+const safe = enabled || (1 / 0 == 0)   // the division never runs
 
-assert(safe);
+assert(safe)
 ```
 
-The division is never evaluated because `enabled` is true.
-
-Short-circuiting is useful when a later expression is valid only after an
-earlier condition has been established.
+Short-circuiting is what makes a later operand safe to write when it is only
+valid once an earlier condition holds.
 
 ### Function Calls in Expressions
 
-A value-returning function or builtin call can appear anywhere its result type
-is accepted:
+A value-returning call can appear anywhere its result type is accepted:
 
-```asm
-const name_length = lengthof("XIRASM")
-const aligned_size = ((37 + 15) / 16) * 16
+```asm id=calls-in-expressions target=x86-64 bytes=0630000000
+const name_length = lengthof("XIRASM")        // 6
+const aligned_size = ((37 + 15) / 16) * 16    // 48 = 0x30
 
-db(name_length);
-dd(aligned_size);
+db(name_length)
+dd(aligned_size)
 ```
 
-Calls may be nested:
+Calls nest, and the inner call finishes before the outer one starts:
 
-```asm
+```asm id=nested-calls target=x86-64
 const normalized = upper(trim("  kernel  "))
-assert(normalized == "KERNEL");
+
+assert(normalized == "KERNEL")
 ```
 
-Procedure functions that emit output or perform assembler actions are called
-as statements. They do not produce expression values. Value-returning
-functions are covered in Chapter 5.
+A procedure that emits output or performs an assembler action is called as a
+statement and produces no value. Chapter 5 covers both kinds of function.
 
 ### Field Access
 
-A value with named fields uses `.` to select one field:
+`.` selects a named field. `target.bits` and `target.isa` read the instruction
+set in effect, which conditions use in Chapters 4 and 8; struct fields arrive in
+Chapter 9.
 
-```text
-header.magic
-header.entry_offset
+```asm id=target-bits target=x86-64 bytes=4020
+const before = target.bits   // 64: read now, while this ISA is in effect
+
+x86.use32()
+
+db(before)                   // 40: the binding kept the value it read
+db(target.bits)              // 20: reading again sees the current target
 ```
-
-Struct and union values are introduced in Chapter 9. Target queries such as
-`target.bits` and `target.isa` belong to target conditions and are introduced
-with control flow; they are not ordinary values that should be copied into a
-binding.
 
 ### Operator Precedence
 
-Operators on the same row have the same precedence. Rows nearer the top bind
-more tightly:
+Operators on the same row share a precedence; rows nearer the top bind more
+tightly, and equal precedence associates from left to right.
 
 | Precedence | Operators |
 | --- | --- |
@@ -702,126 +642,88 @@ more tightly:
 | Logical AND | `&&` |
 | Lowest | `\|\|` |
 
-Operators at the same precedence are evaluated from left to right.
+This is not the table from C. Shifts bind more tightly than addition and
+subtraction:
 
-XIRASM deliberately follows this table, which may differ from the precedence
-you remember from another language. In particular, shifts bind more tightly
-than addition and subtraction:
+```asm id=shift-precedence target=x86-64 bytes=1100000018000000
+const shift_first = 1 + 2 << 3        // 1 + (2 << 3) = 17
+const grouped_shift = (1 + 2) << 3    // 24 = 0x18
 
-```asm
-const shift_first = 1 + 2 << 3
-const grouped_shift = (1 + 2) << 3
-
-dd(shift_first, grouped_shift);
+dd(shift_first, grouped_shift)
 ```
 
-The first value is `17` because it is evaluated as `1 + (2 << 3)`. The second
-value is `24`.
-
-Use parentheses whenever an expression mixes shifts, arithmetic, masks, or
-comparisons. Parentheses document the binary layout calculation and make later
-changes safer.
+Parenthesise an expression that mixes shifts, arithmetic, masks, or comparisons:
+the parentheses state the calculation instead of relying on this table.
 
 ### Expression Errors
 
-XIRASM rejects expressions when it cannot produce a well-defined compile-time
-value. Common causes include:
+An expression with no well-defined compile-time value stops assembly rather than
+producing zero, because a silent zero would corrupt an instruction operand or a
+binary layout. The list above shows division by zero, overflow, and a category
+mismatch; an undefined name fails the same way:
 
-- an undefined name;
-- an operand of the wrong value category;
-- division or remainder by zero;
-- arithmetic overflow or subtraction underflow;
-- an unknown field;
-- a function called with invalid arguments.
+```asm id=undefined-name target=x86-64
+dd(missing + 1)
+```
 
-These errors stop assembly. They are not converted to zero or ignored, because
-doing so could silently corrupt instruction operands or binary layout.
-
-The next chapter uses expressions inside `if`, `while`, and `for` to select and
-repeat source during assembly.
+```text
+bad.xir:1:1: error: the name is not defined where it is used (UndefinedSymbol)
+```
 
 ## 4. Control Flow
 
 ### Control Flow Runs During Assembly
 
-XIRASM control flow decides which source operations are performed while the
-output is being constructed. It does not automatically create runtime branches
-or loops.
+XIRASM control flow decides which source operations happen while the output is
+being built. It creates no runtime branches or loops.
 
-```asm
+```asm id=if-else target=x86-64 bytes=52454c45415345
 const debug_build = false
 
 if debug_build {
-    db("DEBUG");
+    db("DEBUG")
 } else {
-    db("RELEASE");
+    db("RELEASE")
 }
 ```
 
-Only one branch contributes bytes. With `debug_build` set to false, the output
-contains `RELEASE`; no runtime condition is present in the generated file.
-
-Use compile-time control flow to:
-
-- select target-specific source;
-- generate repeated data or instructions;
-- walk compile-time collections;
-- calculate tables and offsets;
-- include optional file-format records;
-- validate source-controlled configuration.
-
-Runtime control flow remains ordinary processor instructions such as x86 `jmp`, `call`, and
-conditional branch instructions.
+Only the selected branch contributes bytes. Runtime branching stays ordinary
+assembly: x86 `jmp`, `call`, and conditional jump instructions.
 
 ### `if` and `else`
 
-An `if` condition must produce a boolean value:
+An `if` condition must produce a boolean value. The selected block runs in its
+own scope, and the block that is not selected produces nothing:
 
-```asm
-const payload_size = 32
-
-if payload_size <= 64 {
-    db(0x01);
-} else {
-    db(0xff);
-}
-```
-
-The selected block executes in its own scope. The other block produces no
-output and performs no compile-time actions.
-
-The `else` block is optional:
-
-```asm
-const include_marker = true
-
-if include_marker {
-    db("MARK");
-}
-```
-
-Use `else if` when a calculation needs more than two branches:
-
-```asm
+```asm id=if-else-if target=x86-64 bytes=02
 const payload_size = 32
 
 if payload_size < 16 {
-    db(1);
+    db(1)
 } else if payload_size < 64 {
-    db(2);
+    db(2)          // this branch runs
 } else {
-    db(3);
+    db(3)
 }
 ```
 
-This emits `02`.
+`else` is optional:
+
+```asm id=if-without-else target=x86-64 bytes=4d41524b
+const include_marker = true
+
+if include_marker {
+    db("MARK")
+}
+```
 
 ### Selecting Instructions
 
-An `if` block may contain processor instructions:
+An `if` block may contain processor instructions, so one source can generate
+different instructions for different configurations:
 
-```asm
-x86.use64();
+```asm id=instruction-selection target=x86-64 bytes=31c0c3
+x86.use64()
 
 const return_zero = true
 
@@ -834,326 +736,316 @@ entry:
     ret
 ```
 
-Because `return_zero` is true, the generated instructions are:
-
-```asm
-xor eax, eax
-ret
-```
-
-The unused `mov` instruction is never added to the output. This is compile-time
-instruction selection, not a runtime conditional branch.
+The unused `mov` never reaches the output. This is compile-time instruction
+selection, not a runtime branch.
 
 ### Target Conditions
 
-Target queries are available directly in `if` conditions:
+`target.isa` names the selected ISA family and `target.bits` reports the active
+width. A mode call such as `x86.use32()` changes what later conditions see:
 
-```asm
+```asm id=target-condition target=x86-64 bytes=1000
+x86.use32()
+
 if target.isa == .x86_64 {
-    x86.use64();
+    db(0x10)          // the family is still x86
 }
 
-if target.bits == 64 {
-    db("wide");
-} else {
-    db("narrow");
+if target.bits == 32 {
+    db(0x00)          // but the width is now 32
 }
 ```
 
-`target.isa` identifies the selected ISA family, and `target.bits` reports the
-active width. Mode calls such as `x86.use32();`, `x86.use64();`,
-`riscv.use32();`, and `riscv.use64();` update the width observed by later
-target conditions.
+Target queries have their own condition syntax and are written directly in an
+`if` condition.
 
-Target queries use dedicated condition syntax. Use them directly in an `if`
-condition rather than copying `target.bits` or `target.isa` into an ordinary
-binding.
+### `for` with `range`
 
-### Iterating a Range
+Use `range(start, end)` when the iteration count is known. The start is included
+and the end is excluded:
 
-Use `for` with `range(start, end)` when the iteration count is known:
-
-```asm
+```asm id=range-loop target=x86-64 bytes=00010203
 for index in range(0, 4) {
-    db(index);
+    db(index)
 }
 ```
 
-This emits:
+A range that counts backwards is rejected:
+
+```asm id=descending-range target=x86-64
+for index in range(4, 0) {
+    db(index)
+}
+```
 
 ```text
-00 01 02 03
+bad.xir:1:1: error: lowering failed: InvalidMetaFor
 ```
 
-The start value is included and the end value is excluded. A range must move
-forward or be empty. A descending range such as `range(4, 0)` is rejected.
+The loop binding belongs to the body, and each iteration gets a fresh copy of
+it:
 
-The loop binding belongs to the loop body:
-
-```asm
+```asm id=loop-local-binding target=x86-64 bytes=101112
 for index in range(0, 3) {
     const encoded = index + 0x10
-    db(encoded);
+    db(encoded)
 }
 ```
 
-This emits `10 11 12`. Both `index` and `encoded` are local to each loop
-iteration.
+### `for` over a List
 
-### Iterating a List
+A `for` loop also visits the values of a compile-time list, in list order:
 
-A `for` loop can visit the values in a compile-time list:
-
-```asm
+```asm id=list-loop target=x86-64 bytes=9090c3
 const opcodes: list = list.of(0x90, 0x90, 0xc3)
 
 for opcode in opcodes {
-    db(opcode);
+    db(opcode)
 }
 ```
 
-The values are visited in list order. This form is useful for byte tables,
-import descriptions, generated names, and other data already represented as a
-collection.
-
-Maps are not iterated directly. Use `map.keys(...)` or `map.values(...)` to
-obtain a list, then iterate that list. Collections are covered in Chapter 6.
+Lists and maps are covered in Chapter 6.
 
 ### `while`
 
-Use `while` when termination depends on a value updated by the loop:
+Use `while` when termination depends on a value the loop updates:
 
-```asm
+```asm id=while-loop target=x86-64 bytes=01020304
 let value = 1
 
 while value <= 4 {
-    db(value);
+    db(value)
     value = value + 1
 }
 ```
 
-This emits:
+The condition is tested before each iteration, so a body whose condition is
+false at the start never runs. A compile-time loop that cannot terminate would
+hold the build up, so assembly stops once a loop passes 1,000,000 iterations:
 
-```text
-01 02 03 04
+```asm id=loop-limit target=x86-64
+for index in range(0, 1000001) {
+    db(0)
+}
 ```
 
-The condition is evaluated before each iteration. If it is false initially,
-the body does not execute.
-
-Keep the termination rule visible near the loop. A compile-time loop that
-cannot terminate would otherwise prevent assembly from completing, so XIRASM
-rejects control flow that exceeds 1,000,000 iterations.
+```text
+bad.xir:1:1: error: the loop ran past the supported iteration limit (MetaLoopLimitExceeded)
+```
 
 ### `break` and `continue`
 
-`break` ends the innermost active Meta loop. `continue` skips the rest of the
-current iteration and starts the next one. Both are valid in `for`, `while`,
-and deferred `while` bodies, including inside nested `if` statements.
+`break` ends the innermost loop and `continue` skips the rest of the current
+iteration. Both work in `for`, `while`, and nested `if` bodies:
 
-For example:
-
-```asm
+```asm id=break-continue target=x86-64 bytes=000204
 for value in range(0, 8) {
-    if (value == 6) {
-        break;
+    if value == 6 {
+        break
     }
     if (value & 1) != 0 {
-        continue;
+        continue
     }
-    db(value);
+    db(value)          // even values below 6
 }
 ```
 
-This emits `00 02 04`. A loop-control statement does not cross a function call
-boundary, and using one outside a loop is an error.
+Neither one crosses a function call boundary:
 
-### Choosing a Control-Flow Form
+```asm id=loop-control-in-function target=x86-64
+fn stop() {
+    break
+}
 
-| Need | Use |
-| --- | --- |
-| Include one of two source blocks | `if` / `else` |
-| Include one of several source blocks | `if` / `else if` / `else` |
-| Select source for an ISA or bit width | Target condition |
-| Repeat a known number of times | `for` with `range` |
-| Visit compile-time collection values | `for` with a list |
-| Repeat until mutable state reaches a condition | `while` |
-| Select generated instructions | `if` containing instructions |
-| End the innermost loop early | `break` |
-| Skip the rest of one iteration | `continue` |
+for index in range(0, 3) {
+    stop()
+}
+```
 
-Prefer `for` over `while` when the iteration set is already known. It makes the
-generated output easier to reason about and removes the need for a manually
-updated loop variable.
-
-The next chapter packages repeated calculations and output operations into
-functions with parameters, return values, and local scopes.
+```text
+bad.xir:2:5: error: break used outside of a Meta loop
+```
 
 ## 5. Functions and Scope
 
-### Functions Package Compile-Time Work
+### Two Kinds of Function
 
-A function gives a name to compile-time work that should be reused. It may
-calculate a value, emit output, or combine several lower-level operations into
-one source-level action.
+A function is a named block of compile-time code that later statements call. It
+comes in two kinds:
 
-XIRASM has two function forms:
+- a **procedure** performs actions and produces no value;
+- a **value-returning function** declares its result type with `->`.
 
-- a **procedure** performs actions and does not produce an expression value;
-- a **value-returning function** calculates a value and declares its result
-  type with `->`.
+Both use `fn`, parameters, and a block body. A function emits nothing by itself;
+bytes appear when a procedure is called or a result reaches an output API.
 
-Both forms use `fn`, parameters, and a block body. They execute during
-assembly, not when the generated program runs.
+### Procedures
 
-Function declarations are top-level declarations. Declaring a function does
-not emit bytes. Output is produced only when a procedure is called or when a
-calculated result is passed to an output API.
+A procedure declares no `->`, so a call to it is a statement:
 
-### Procedure Functions
-
-A procedure groups output-producing operations:
-
-```asm
+```asm id=procedure target=x86-64 bytes=02030809
 fn emit_pair(value: u8) {
-    db(value);
-    db(value + 1);
+    db(value)          // the body may contain anything the call site could
+    db(value + 1)
 }
 
-emit_pair(2);
-emit_pair(8);
+emit_pair(2)
+emit_pair(8)
 ```
 
-This emits:
+A procedure is not a value, so binding its call is rejected:
 
-```text
-02 03 08 09
-```
-
-The function has no `->` return type, so it is a procedure. Calls to a
-procedure are statements and end with a semicolon.
-
-A procedure may contain the same compile-time statements that could appear at
-the call site: declarations, assignments, control flow, data emission, and
-other procedure calls. This makes procedures suitable for repeated binary
-records, instruction sequences, table entries, and format-building steps.
-
-The procedure itself is not a value. It cannot be used to initialize a
-binding:
-
-```text
+```asm id=procedure-is-not-a-value target=x86-64
 fn emit_marker() {
-    db(0x90);
+    db(0x90)
 }
 
 const marker = emit_marker()
 ```
 
-This is rejected because `emit_marker()` performs work but does not return a
-value.
+```text
+bad.xir:5:1: error: undefined name in this expression: emit_marker()
+```
 
 ### Parameters and Arguments
 
-Parameters are written inside the declaration parentheses:
+A parameter takes an argument by position, with no default:
 
-```asm
+```asm id=parameters target=x86-64 bytes=cccccccc
 fn emit_run(value: u8, count: u64) {
     for index in range(0, count) {
-        db(value);
+        db(value)      // one byte per iteration
     }
 }
 
-emit_run(0xcc, 4);
+emit_run(0xcc, 4)
 ```
 
-The output is four `cc` bytes. The `index` binding controls the loop even
-though the body does not otherwise use it.
+Each call gets its own parameter bindings, so one call cannot overwrite
+another's values. The annotation is optional:
 
-A parameter type is optional:
-
-```asm
+```asm id=unannotated-parameters target=x86-64 bytes=2a
 fn add(left, right) -> u64 {
-    return left + right;
+    return left + right
 }
 
-db(add(20, 22));
+db(add(20, 22))        // 42 = 0x2a
 ```
 
-This emits `2a`. The argument values determine the parameter values for that
-call. Type annotations are still useful for public helpers because they state
-the expected contract and reject unsuitable arguments near the call site.
+An annotation is still worth writing on a shared helper: it records what each
+argument must be, right where the argument is checked.
 
-Arguments are positional. A call must provide exactly one argument for every
-parameter, in declaration order. Functions do not have default arguments.
+### `let` Parameters
 
-Parameter names must be unique within a function declaration. Each call gets
-its own parameter bindings, so one invocation does not overwrite the values
-of another invocation.
+A parameter is read-only unless it is prefixed with `let`, which passes the
+caller's binding instead of its value:
 
-Procedure parameters are read-only by default. Prefix a parameter with `let`
-when the procedure must update the caller's binding:
-
-```asm
+```asm id=let-parameter target=x86-64
 fn set_entry(let plan: map, address: u64) {
-    map.set_mut(plan, "entry", address);
+    map.set_mut(plan, "entry", address)
 }
 
 let image: map = map.new()
-set_entry(image, 0x401000);
-assert(map.get(image, "entry") == 0x401000);
+set_entry(image, 0x401000)
+
+assert(map.get(image, "entry") == 0x401000)
 ```
 
-The corresponding argument must be a direct `let` binding. A `const`, literal,
-temporary expression, or the same binding passed to two `let` parameters is
-rejected. Value-returning functions do not accept `let` parameters because an
-expression call cannot write back caller state.
+The argument must be a plain `let` binding:
+
+```asm id=let-parameter-requires-let target=x86-64
+fn set_entry(let plan: map, address: u64) {
+    map.set_mut(plan, "entry", address)
+}
+
+const image: map = map.new()
+set_entry(image, 0x401000)
+```
+
+```text
+bad.xir:6:1: error: mutable function argument must resolve to a let binding
+```
+
+A literal or temporary expression is not enough:
+
+```asm id=let-parameter-literal target=x86-64
+fn touch(let a: u64) {
+    db(0)
+}
+
+touch(5)
+```
+
+```text
+bad.xir:5:1: error: mutable function argument must be a direct let binding
+```
+
+One call may not pass the same binding to two `let` parameters:
+
+```asm id=let-parameter-alias target=x86-64
+fn touch(let a: u64, let b: u64) {
+    db(0)
+}
+
+let shared = 1
+touch(shared, shared)
+```
+
+```text
+bad.xir:6:1: error: mutable function arguments cannot alias the same binding
+```
+
+A `let` parameter needs a statement call that can write back, so a
+value-returning function cannot take one:
+
+```asm id=let-parameter-on-value-function target=x86-64
+fn bump(let value: u64) -> u64 {
+    return value + 1
+}
+```
+
+```text
+bad.xir:1:1: error: the function declaration or call is not valid (InvalidMetaFunction)
+```
 
 ### Value-Returning Functions
 
-Add `-> type` when a function should produce an expression value:
+An `->` type makes a function produce an expression value:
 
-```asm
+```asm id=value-function target=x86-64 bytes=8000
 fn align_up(value: u64, alignment: u64) -> u64 {
-    return ((value + alignment - 1) / alignment) * alignment;
+    return ((value + alignment - 1) / alignment) * alignment
 }
 
 const header_size = align_up(0x73, 0x20)
-dw(header_size);
+dw(header_size)        // 0x80
 ```
 
-The function returns `0x80`, so the output is:
+The result is converted to the declared return type, which may be any ordinary
+compile-time value:
 
-```text
-80 00
-```
-
-The return statement ends with a semicolon. Its expression is converted to
-the declared return type. Return types may describe ordinary compile-time
-values such as integers, booleans, strings, and byte sequences:
-
-```asm
+```asm id=value-function-types target=x86-64 bytes=5852
 fn is_page(value: u64) -> bool {
-    return value == 0x1000;
+    return value == 0x1000
 }
 
 fn signature() -> bytes {
-    return b"XR";
+    return b"XR"
 }
 
-assert(is_page(0x1000));
-db(signature());
+assert(is_page(0x1000))
+db(signature())
 ```
 
-A value-returning function can be used anywhere an expression of its result
-type is accepted: in a declaration, an argument, a condition, another
-function call, or a larger expression.
+A value-returning call is usable wherever an expression of its result type is
+accepted: a declaration, an argument, a condition, another call, or a larger
+expression.
 
-### Return Rules and Side Effects
+### Return Rules
 
-A value-returning function must reach a `return` statement when it is called.
-Falling out of the function body without a value is rejected:
+A value-returning function must reach a `return`:
 
-```text
+```asm id=missing-return target=x86-64
 fn incomplete(value: u64) -> u64 {
     const doubled = value * 2
 }
@@ -1161,56 +1053,62 @@ fn incomplete(value: u64) -> u64 {
 const result = incomplete(4)
 ```
 
-The returned value must be compatible with the declared type:
-
 ```text
+bad.xir:1:1: error: function incomplete declares a return value, but its body ended without a return statement
+```
+
+The returned value must satisfy the declared type:
+
+```asm id=return-type-mismatch target=x86-64
 fn enabled() -> bool {
-    return 1;
+    return 1
 }
 
 const result = enabled()
 ```
 
-This is rejected because an integer result does not satisfy a `bool` return
-contract.
-
-Value-returning functions are calculation helpers. They may use local
-bindings, control flow, and other value-returning functions, but they may not
-emit output or perform other assembler side effects:
-
 ```text
+bad.xir:2:5: error: function enabled declares a bool return value, but this return statement produces a integer
+```
+
+A value-returning function is a calculation helper: it may use local bindings,
+control flow, and other value-returning calls, but it may not emit output or
+change layout:
+
+```asm id=side-effect-in-value-function target=x86-64
 fn bad_counter() -> u64 {
-    db(1);
-    return 1;
+    db(1)
+    return 1
 }
 
 const result = bad_counter()
 ```
 
-Use a procedure when output or layout must change. Use a value-returning
-function when the caller needs a calculated value.
-
-A procedure does not declare a return type and cannot return a value:
-
 ```text
-fn emit_one() {
-    return 1;
-}
-
-emit_one();
+bad.xir:2:5: error: a value-returning function cannot emit instructions or change layout; declare it without a return type to run it as a procedure (SideEffectInValueFunction)
 ```
 
-The end of the procedure body completes the call naturally.
+That restriction is what separates the two forms. Use a procedure when output or
+layout must change, and a value-returning function when the caller needs a
+value. A procedure declares no return type and cannot return one:
+
+```asm id=procedure-return-value target=x86-64
+fn emit_one() {
+    return 1
+}
+
+emit_one()
+```
+
+```text
+bad.xir:2:5: error: the function declaration or call is not valid (InvalidMetaFunction)
+```
 
 ### Function-Local Scope
 
-Parameters and bindings declared inside a function belong to that invocation:
+Parameters and bindings declared in a body belong to that call:
 
-All arguments are evaluated in the caller's scope before the new parameter
-bindings are introduced. For example, calling `pair(b, a)` does not let a
-parameter named `a` change the meaning of the second argument.
-
-```asm
+```asm id=function-local-scope target=x86-64 bytes=1018
 fn adjusted_size(size: u64) -> u64 {
     const overhead = 4
     let result = size + overhead
@@ -1219,117 +1117,175 @@ fn adjusted_size(size: u64) -> u64 {
         result = 16
     }
 
-    return result;
+    return result
 }
 
-db(adjusted_size(3));
-db(adjusted_size(20));
+db(adjusted_size(3))    // 16
+db(adjusted_size(20))   // 24
 ```
 
-This emits `10 18`. Each call creates a fresh `size`, `overhead`, and `result`.
-Those names do not remain available after the call.
+Every call creates a fresh `size`, `overhead`, and `result`, and none of them
+survive the call. Arguments are evaluated in the caller's scope before the
+parameter bindings exist, so `pair(b, a)` cannot let a parameter named `a`
+change how the second argument reads.
 
-Blocks inside a function create nested scopes and may shadow an outer name:
+Blocks inside a body nest and may shadow an outer name, while the enclosing
+scope stays writable:
 
-```asm
+```asm id=function-block-shadowing target=x86-64 bytes=08
 fn combine(value: u64) -> u64 {
     let result = value
 
     {
-        const value = 5
+        const value = 5      // shadows the parameter
         result = result + value
     }
 
-    return result;
+    return result
 }
 
-db(combine(3));
+db(combine(3))          // 3 + 5
 ```
-
-This emits `08`. Inside the nested block, `value` means the local constant
-`5`. After that block ends, the parameter named `value` is visible again.
-The mutable `result` belongs to the function scope, so the nested block may
-update it.
-
-Prefer local names for intermediate calculations. They keep temporary state
-from leaking into the rest of the source and make repeated calls independent.
 
 ### Declaration Order
 
-A function must be declared before the first source statement that calls it:
+A function must be declared before the first statement that calls it:
 
-```asm
+```asm id=call-before-declaration target=x86-64
+const answer = add(20, 22)
+
 fn add(left: u64, right: u64) -> u64 {
-    return left + right;
+    return left + right
 }
 
-const answer = add(20, 22)
-db(answer);
+db(answer)
 ```
 
-Moving the call before the declaration is rejected because the function name
-is not known at that point in the source.
+```text
+bad.xir:1:1: error: undefined name in this expression: add(20, 22)
+```
 
-Function declarations themselves must appear at the top level. A function
-cannot be declared inside another function, loop, conditional block, or
-ordinary scoped block. Put related functions next to each other at the top
-level, then call them from later source.
+Declarations are top level. A declaration nested in a body is rejected once that
+body is lowered:
 
-Chapter 10 explains how included files make reusable function declarations
-available to another source file.
+```asm id=nested-function-declaration target=x86-64
+fn outer() {
+    fn inner() {
+        db(1)
+    }
+    inner()
+}
+
+outer()
+```
+
+```text
+bad.xir:2:5: error: the function declaration or call is not valid (InvalidMetaFunction)
+```
+
+Chapter 10 explains how an include makes declarations available to another
+source file.
 
 ### Recursion and Call Depth
 
-A value-returning function may call itself when the calculation has a clear
-base case:
+A value-returning function may call itself when the calculation has a clear base
+case:
 
-```asm
+```asm id=recursion target=x86-64 bytes=0a
 fn triangular(value: u64) -> u64 {
     if value == 0 {
-        return 0;
+        return 0
     }
 
-    return value + triangular(value - 1);
+    return value + triangular(value - 1)
 }
 
-db(triangular(4));
+db(triangular(4))       // 4 + 3 + 2 + 1
 ```
 
-This emits `0a`, the value of `4 + 3 + 2 + 1`.
+Recursion runs during assembly, so it has to stay shallow. A call chain of 128
+frames is rejected:
 
-Recursive functions still execute during assembly. Keep recursion shallow and
-make the terminating condition obvious. XIRASM rejects function call chains
-deeper than 128 calls, preventing uncontrolled recursion from exhausting the
-assembler.
+```asm id=call-depth target=x86-64
+fn down(n: u64) -> u64 {
+    if n == 0 {
+        return 0
+    }
 
-Use a loop when the work is naturally an iteration over a range or
-collection. Use recursion when the calculation itself is recursive and the
-base case remains easy to verify.
+    return down(n - 1) + 1
+}
 
-### Choosing a Function Form
+db(down(128))
+```
 
-| Need | Use |
-| --- | --- |
-| Emit bytes or instructions | Procedure |
-| Perform several output API calls as one action | Procedure |
-| Calculate a value for an expression | Value-returning function |
-| Reuse a pure layout or encoding calculation | Value-returning function |
-| Keep temporary names private to one operation | Either function form |
-| Repeat over a simple range or collection | Usually a loop |
-| Express a naturally recursive calculation | Recursive value function |
-
-Keep each function focused on one job. A small calculation function is easier
-to combine with other expressions, while a small procedure makes output
-effects visible at the call site.
-
-The next chapter introduces lists, maps, strings, and byte sequences for
-functions that need to work with collections and structured text.
+```text
+bad.xir:5:5: error: an expression in this statement is not valid (InvalidExpression)
+```
 
 ### Statement Macros
 
-Use a statement macro to give a Meta procedure natural instruction syntax:
+A macro is a named compile-time procedure whose call is written the way a
+processor instruction is: a mnemonic, then operands. When the mnemonic names a
+macro, the frontend does not hand that line to an encoder; it hands the whole
+line to the macro body.
 
-```asm
+What separates it from a function is the parameter. A function passes values; a
+macro parameter receives **the source text at the call, together with the
+bindings visible where that text stands** -- the `operand` type described in the
+next subsection. A body can therefore do three things at different levels:
+
+- place a parameter into an instruction operand, substituted as text;
+- evaluate that text as a Meta expression with `operand.eval`, producing the
+  value it has to encode;
+- run as an ordinary piece of Meta code: declarations, assignments, control
+  flow, procedure calls, instructions, and finalizer registrations all belong in
+  a body.
+
+The whole AArch64 instruction library is built on macros
+(`arm/a64-macros.inc`): the manifest records 778 macro mnemonics covering 4360
+instruction forms, so AArch64 instructions can be written as assembly text
+because each one is implemented as a macro. The same approach serves anyone who
+wants instruction-shaped syntax over their own encoding rules.
+
+Meta's API is the more expressive tool, which is why macros were not part of the
+original design; but some encoding logic has to read as an instruction line, and
+written with the API directly it is both long and silent about which instruction
+it encodes.
+
+### Macros that only substitute text
+
+The simplest kind of macro holds no values at all; it places its parameters into
+instructions as text:
+
+```asm id=macro-text-substitution target=x86-64 bytes=89d889d8
+macro twice(dst, src) {
+    mov dst, src
+    mov dst, src
+}
+
+x86.use64()
+twice eax, ebx
+```
+
+The call is `twice eax, ebx`, which is instruction syntax rather than the
+parenthesized call form. That follows from where the name is matched: when the
+mnemonic of an instruction line names a macro, the frontend hands the **whole
+line** to the macro body and no encoder sees it. Inside the body, `dst` and
+`src` sit in instruction operand positions and are replaced by the text captured
+at the call.
+
+That substitution happens in instruction operand positions only, and inserted
+text is not rescanned for further parameter names. Quoted text and mnemonics are
+never substituted.
+
+### When a value is needed: `operand`
+
+Computing a value inside the body -- implementing the encoding of an instruction,
+say -- means evaluating the source text the parameter captured. That captured
+text, together with the value bindings visible where it was written, is a value
+type called `operand`:
+
+```asm id=statement-macro target=x86-64 bytes=0809
 macro byte(value) {
     const n: u64 = operand.eval(value)
     emit.u8(n)
@@ -1340,37 +1296,153 @@ byte LIMIT + 1
 byte (LIMIT + 2)
 ```
 
-This emits `08 09`. Macro arguments are immutable `operand` values, not
-implicitly evaluated integers or strings. `operand.eval` evaluates a Meta
-expression with the value bindings captured at the call. A local `LIMIT`
-declared inside the macro cannot change the captured expression. Integer
-overflow, types, variable declarations, and assignments obey ordinary Meta
-rules. Forward labels should be passed as text to a deferred branch helper,
-rather than evaluated before their address is known.
+`emit.u8(n)` writes one byte into the current output. Byte-writing calls come in
+two families:
 
-In an **instruction operand**, write the parameter itself — `mov rax, value` or
-`mov rax, value + 1`. A macro substitutes the parameter with its captured text
-before the encoder ever sees the line, so `operand.eval(value)` written there has
-no operand left to evaluate and the reference does not resolve. Bind it first
-when a real value is needed:
+- `db`, `dw`, `dd`, and `dq` name the width in the mnemonic and take an integer
+  within that width (`db(0x90)` writes `90`). `db` additionally takes a string or
+  a byte sequence -- `db("AB")` writes `41 42` -- while `dw` and wider take only
+  an integer.
+- The `emit` family names the width as a type: `emit.u8`, `emit.u16`,
+  `emit.u32`, and `emit.u64` take an integer and check it against that width
+  (`emit.u8(0x1234)` reports `InvalidApiInteger`); `emit.bytes` takes a byte
+  sequence or a string; `emit.f32` and `emit.f64` take floats. There is no signed
+  `emit.i*`.
 
-```asm
-macro double_byte(value) {
-    const n: u64 = operand.eval(value) * 2
+`operand.eval` evaluates in the scope the text was **captured** in, not in the
+scope of the macro body:
+
+```asm id=operand-eval target=x86-64 bytes=08
+macro emit_one(value) {
+    const n: u64 = operand.eval(value)
     emit.u8(n)
 }
+
+const LIMIT: u64 = 7
+emit_one LIMIT + 1
 ```
 
-`operand.eval` belongs in API arguments and in `const` initializers, where a
-value is what the call wants.
+That call writes `08`. Declaring another `const` with the same name inside the
+body does not change it, because the captured text carries the call site's scope:
 
-`operand.text(value)` returns its spelling. `operand.slice(value, start, end)`
-selects a checked byte range while retaining captured bindings.
-`operand.split(value)` splits at top-level commas, respecting quotes and balanced
-`()`, `[]`, and `{}`, and returns a list of operands. These helpers let a DSL
-strip its own immediate prefix or inspect memory operands without losing scope.
+```asm id=operand-caller-scope target=x86-64 bytes=08
+macro shadowed(value) {
+    const LIMIT: u64 = 100
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
 
-```asm
+const LIMIT: u64 = 7
+shadowed LIMIT + 1
+```
+
+This call also writes `08`.
+
+`operand.text` returns the captured spelling without evaluating anything:
+
+```asm id=operand-text target=x86-64 bytes=31202b2032
+macro spell(value) {
+    emit.bytes(operand.text(value))
+}
+
+spell 1 + 2
+```
+
+It writes the five characters `"1 + 2"`.
+
+### How this differs from a text-substitution macro
+
+A traditional macro performs one token replacement over its body. A XIRASM macro
+body is ordinary Meta code: a parameter is captured as an `operand` when it is
+bound, substitution proceeds parameter by parameter, and each parameter carries
+its own source scope. Declarations, assignments, control flow, and further calls
+therefore behave inside the body exactly as they would at the call site, and the
+parameter itself is bound immutably.
+
+A forward label has to reach a deferred branch helper as text; do not evaluate it
+before its address is known.
+
+### Writing the parameter in an instruction operand
+
+An instruction operand position wants text, so the parameter name is written
+there directly and the macro replaces it with the captured text:
+
+```asm id=macro-instruction-operand target=x86-64 bytes=48b80700000000000000
+macro load(reg, source) {
+    mov reg, source
+}
+
+x86.use64()
+const OFFSET: u64 = 7
+load rax, OFFSET
+```
+
+The encoder receives `mov rax, 7`. `operand.eval` produces a value and belongs
+where a value is wanted, such as an API argument or a `const` initializer. In an
+operand position there is nothing left to evaluate:
+
+```asm id=macro-operand-eval-in-operand target=x86-64
+macro bad(value) {
+    mov rax, operand.eval(value)
+}
+
+x86.use64()
+bad 7
+```
+
+```text
+bad.xir:2:5: error: macro operand text operand.eval(7) cannot be encoded as an operand; bind it to a const first, as in `const value: u64 = operand.eval(text)` (UnresolvedFixup)
+```
+
+### Calls and parameter counts
+
+A call uses instruction syntax, `byte 7`. Writing `byte(7)` reports `macro calls
+use instruction syntax without parentheses`, while `byte (7)` with a space is a
+call whose first operand is a parenthesized expression.
+
+Parameters have no type annotations and no defaults. A trailing `...name`
+collects the remaining operands into a list:
+
+```asm id=macro-variadic target=x86-64 bytes=010203
+macro bytes(...values) {
+    for item in values {
+        emit.u8(operand.eval(item))
+    }
+}
+
+bytes 1, 2, 3
+```
+
+That writes `01 02 03`. A known name called with the wrong operand count reports
+`MacroArityMismatch: macro 'byte' does not accept 2 operands`. One exact-arity
+overload and one variadic overload may share a name, and the exact arity wins.
+
+Two helpers work on an `operand`:
+
+- `operand.slice(value, start, end)` takes a byte range of the captured text and
+  checks the bounds;
+- `operand.split(value)` splits at top-level commas, leaving quotes and balanced
+  `()[]{}` intact, so `(a, b)` and `"a,b"` each stay one piece.
+
+Both keep each piece's captured bindings:
+
+```asm id=macro-slice target=x86-64 bytes=616263
+macro first_three(arg) {
+    const head: operand = operand.slice(arg, 0, 3)
+    emit.bytes(operand.text(head))
+}
+
+first_three abcdef
+```
+
+That writes `61 62 63`. Macros may also call each other:
+
+```asm id=statement-macro-composition target=x86-64 bytes=89d889d8010203
+macro byte(value) {
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+
 macro twice(dst, src) {
     mov dst, src
     mov dst, src
@@ -1382,68 +1454,49 @@ macro bytes(...values) {
     }
 }
 
+x86.use64()
 twice eax, ebx
 bytes 1, 2, 3
 ```
 
-In instruction operands, an identifier bound to an `operand` is forwarded with
-its original capture. This also applies to operand-valued locals in loops and
-helpers. Quoted text and mnemonics are not substituted; inserted text is not
-rescanned for more parameter names. Ordinary string variables are not template
-slots. Mixed expressions retain each piece's captured value bindings. Functions
-called by `operand.eval` use the first piece's captured scope; their own parameter
-and local rules remain the ordinary Meta rules. Location builtins such as `here()`
-use that piece's capture location. Each explicit `operand.eval` executes anew.
+That writes `89 d8 89 d8` and then `01 02 03`.
 
-Macro definitions must be at top level and appear before use, including through
-`import`. Names are case-sensitive and may contain dot-separated identifier
-segments. Parameters have no type annotations or defaults; one trailing
-`...name` collects remaining operands. An exact arity overload takes priority
-over the single variadic overload allowed per name. A known macro name with
-wrong arity is an error. Calls use `name operands`, not `name(operands)`; whitespace
-before a parenthesized first operand distinguishes `name (expression)`.
+An identifier bound to an operand is forwarded with its original capture, as are
+operand-valued locals in loops and helpers, and a mixed expression keeps each
+piece's own bindings. A function called by `operand.eval` uses the first piece's
+captured scope, location builtins such as `here()` use that piece's capture
+location, and every `operand.eval` evaluates again.
 
-Macro bodies use the existing multiline block grammar and can contain Meta
-variables, control flow, procedures, instructions, and valid finalizer
-registrations. They do not return values. `break` and `continue` cannot escape
-into a caller's loop. Macro definitions and invocations are forbidden inside
-stored `defer` and `late_layout` bodies, and macros cannot bypass value-function
-side-effect restrictions.
+### Where a macro is defined, and how many times it runs
 
-Each reached invocation executes once during source lowering. Layout, relaxation,
-encoding and finalization do not rerun its body. Macro and function calls share
-a depth limit of 128; macro calls also have a cumulative limit of 100,000 per
-source-lowering context. A call accepts at most 256 operands and 64 levels of
-operand delimiters. These limits do not replace the existing Meta loop limits.
-Captured environments may reference earlier saved operands up to 128 levels;
-deeper chains report `MacroCaptureDepthExceeded`. Captures copy visible value
-bindings, so retaining operands alongside large collections has a memory cost.
-Evaluate and store ordinary values when the original syntax is no longer needed.
+Macros are defined at top level and before use, including through `import`.
+Names are case-sensitive and may contain dot-separated segments.
 
-Source nesting is bounded too, and each bound is reported with its location
-instead of failing silently. Statements nest up to 128 levels deep inside blocks,
-`if`/`else`, loops, function and macro bodies, `struct` bodies, finalizers and
-`late_layout` bodies; going deeper reports `StatementNestingTooDeep`. An
-expression nests up to 64 levels of parentheses, prefix operators and `list.of`
-elements and reports `ExpressionNestingTooDeep` — a flat operator chain is not
-nesting and stays unlimited. Aggregate literals nest up to 64 levels
-(`StructNestingTooDeep`). A document read at compile time by `toml.parse` or
-`json.parse` (and their file variants) nests up to 64 levels and reports
-`NestingTooDeep`, which also bounds every later walk of the value it describes.
-The reason these bounds exist: the parser, the layout walkers and the value
-walkers each descend one call level per nesting level, so without a bound a few
-kilobytes of nested delimiters could exhaust the stack — and a stack overflow
-reports nothing at all.
+A body uses the ordinary multiline block grammar and may contain Meta variables,
+control flow, procedures, instructions, and finalizer registrations. A body does
+not return a value; `break` and `continue` cannot escape into a caller's loop;
+definitions and calls are forbidden inside stored `defer` and `late_layout`
+bodies; and a macro cannot bypass the value-function side-effect rule.
 
-Static labels inside a macro remain module labels. For a private label, create
-a name with `sym.unique` and define it with `label.define`. Use `isa(text)` to
-explicitly emit a native instruction without macro dispatch.
+A reached call runs once during source lowering -- layout, relaxation, encoding,
+and finalization do not re-run the body. Macro and function calls share the
+128-frame depth limit, and macro calls additionally have a cumulative limit of
+100,000 per source-lowering context. One call accepts at most 256 operands and 64
+levels of operand delimiters, and captured environments chain up to 128 levels
+before reporting `MacroCaptureDepthExceeded`. Captures copy the visible value
+bindings, so holding operands alongside large collections costs memory; evaluate
+and store an ordinary value once the original syntax is no longer needed.
 
-### Natural A64 Instructions
+A static label inside a macro remains a module label. For a private one, create a
+name with `sym.unique` and define it with `label.define`. `isa(text)` emits a
+native instruction without macro dispatch.
 
-Import `arm/a64-macros.inc` to use the generated A64 DSL with natural syntax:
 
-```asm
+### The AArch64 Instruction Macro Library
+
+After `import("arm/a64-macros.inc")`, AArch64 instructions are written as assembly text and the macro library encodes them:
+
+```asm id=a64-macro-dsl target=aarch64 bytes=20d4224ee327074fe20b40f9ff93e44d250000580000000000000000
 import("arm/a64-macros.inc")
 const OFFSET: u64 = 16
 fadd v0.4s, v1.4s, v2.4s
@@ -1473,8 +1526,9 @@ The include owns its mnemonic names throughout the lowering context, independent
 of the native target. Use `arm/a64.inc` for direct API calls in mixed-ISA sources.
 Direct calls take descriptor lists, for example:
 
-```asm
-a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))
+```asm id=a64-direct-api target=x86-64 bytes=e00b40f9
+import("arm/a64.inc")
+a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))   // A64 words, whatever the native target
 ```
 
 Immediate expressions use Meta arithmetic. Captured operands retain caller
@@ -1492,13 +1546,10 @@ The `_word` functions accept resolved descriptors and return the encoding.
 
 ## 6. Collections and Text
 
-### Collections Are Compile-Time Values
+### Four Collection Types
 
-Assembly programs often describe more than individual integers. A source file
-may need an ordered list of fields, a table of named properties, a generated
-symbol name, or an exact sequence of bytes.
-
-XIRASM provides four common value types for this work:
+A single integer is not always enough at compile time. XIRASM has four larger
+containers:
 
 | Type | Represents | Typical use |
 | --- | --- | --- |
@@ -1507,300 +1558,320 @@ XIRASM provides four common value types for this work:
 | `list` | Ordered values | Tables, repeated items, ordered descriptors |
 | `map` | String-keyed values | Named options, records, lookup tables |
 
-These are compile-time values. Creating a string, byte sequence, list, or map
-does not emit output. Pass the value to an output API when its contents should
-become part of the generated file.
+All four are compile-time values: they can live in a binding, be passed as
+arguments, or be handed straight to an output API.
 
-Strings, byte sequences, lists, and maps have value-producing helpers. An
-operation such as `list.push` or `map.set` returns a new value rather than
-modifying the original value in place. Lists and maps also provide explicit
-statement APIs for updating a direct `let` binding when building every
-intermediate collection would obscure the algorithm. Values inserted through
-those APIs are still cloned, so separately bound collections do not alias.
+```asm
+const name: string = "kernel"
+const magic: bytes = b"XR"
+const sizes: list = list.of(1, 2, 3)
+
+let options: map = map.new()
+map.set_mut(options, "arch", "x64")
+
+emit.bytes(name)          // 6b 65 72 6e 65 6c
+emit.bytes(magic)         // 58 52
+emit.u8(len(sizes))       // 03
+```
+
+Before they reach an output API they occupy no position in the file. Those four
+declarations emit nothing by themselves.
+
+Collection helpers come in two forms. A value-returning helper leaves the value
+it was given alone and returns a new one:
+
+```asm
+const base: list = list.of(1, 2)
+const grown: list = list.push(base, 3)
+
+emit.u8(len(base))        // 02
+emit.u8(len(grown))       // 03
+```
+
+A statement helper -- the names ending in `_mut` -- rewrites the `let` binding it
+is given instead. Its first argument must be an identifier bound with `let`;
+`const` and temporaries are both rejected (see "Rewriting a `let` Collection"
+below).
+
+```asm
+let items: list = list.of(1, 2)
+list.push_mut(items, 3)
+
+emit.u8(len(items))       // 03
+```
+
+Handing a collection to another binding copies it, so the two are independent:
+
+```asm
+let items: list = list.of(1)
+const snapshot: list = items
+list.push_mut(items, 2)
+
+emit.u8(len(snapshot))    // 01
+emit.u8(len(items))       // 02
+```
 
 ### Strings for Source-Level Text
 
-A string stores text used by the assembly process:
-
-```asm
+```asm id=string-helpers target=x86-64 bytes=6b65726e656c3634
 const raw_name: string = "  Kernel64  "
 const name: string = lower(trim(raw_name))
 
-assert(name == "kernel64");
-assert(starts_with(name, "kernel"));
-assert(ends_with(name, "64"));
-assert(contains(name, "nel"));
+assert(name == "kernel64")
+assert(starts_with(name, "kernel"))
+assert(ends_with(name, "64"))
+assert(contains(name, "nel"))
 
-emit.bytes(name);
+emit.bytes(name)
 ```
 
-This emits the eight text bytes for `kernel64`.
-
-The most common string helpers are:
+String helpers:
 
 - `trim(text)` removes surrounding whitespace;
 - `lower(text)` and `upper(text)` normalize ASCII letter case;
 - `starts_with`, `ends_with`, and `contains` test text;
 - `replace(text, needle, replacement)` replaces matching text;
-- `to_string(value)` produces a textual representation of a value.
+- `to_string(value)` renders a value as decimal text: `to_string(0x1234)` is
+  `"4660"`.
 
-String case conversion is ASCII-oriented. Use strings for source names,
-configuration text, paths, diagnostics, and other human-readable values. Use
-`bytes` when every binary byte must be preserved exactly.
+Case conversion is ASCII-oriented. Use a string for names, configuration text,
+paths, and diagnostics; use `bytes` when every binary byte must survive.
 
 ### Splitting and Joining Text
 
-`split` turns delimited text into a list of strings. `join` combines a list of
-strings:
-
-```asm
+```asm id=split-join target=x86-64 bytes=746578742f646174612f627373
 const sections: list = split("text,data,bss", ",")
 const path: string = join(sections, "/")
 
-assert(len(sections) == 3);
-assert(list.get(sections, 0) == "text");
-assert(list.get(sections, 2) == "bss");
-assert(path == "text/data/bss");
+assert(len(sections) == 3)
+assert(list.get(sections, 0) == "text")
+assert(list.get(sections, 2) == "bss")
+assert(path == "text/data/bss")
 
-emit.bytes(path);
+emit.bytes(path)
 ```
 
-Indexes are zero-based. `list.get(sections, 0)` returns the first element.
-
-Splitting is useful for small source-level formats, command-style text, and
-generated names. More structured external data belongs in Chapter 10, which
-covers files, JSON, and TOML.
+`split` returns a list of strings and `join` combines one. Indexes are
+zero-based. Chapter 10 covers structured external data in files, JSON, and
+TOML.
 
 ### Bytes for Binary Values
 
-A `bytes` value is an exact sequence of bytes:
-
-```asm
+```asm id=bytes-construct target=x86-64 bytes=584952000300
 const magic: bytes = bytes.from_hex("58495200")
 const version: bytes = bytes.le(3, 2)
 const header: bytes = bytes.concat(magic, version)
 
-assert(bytes.eq(magic, bytes.from_hex("58495200")));
-assert(bytes.hex(version) == "0300");
+assert(bytes.eq(magic, bytes.from_hex("58495200")))
+assert(bytes.hex(version) == "0300")
 
-emit.bytes(header);
+emit.bytes(header)
 ```
 
-The output is:
-
-```text
-58 49 52 00 03 00
-```
-
-`bytes.from_hex` converts hexadecimal text into binary data.
-`bytes.le(value, width)` encodes an integer in little-endian order using the
-requested number of bytes. `bytes.concat` combines two byte sequences.
-
-Use `bytes.eq` for explicit byte-sequence equality and `bytes.hex` when a
-binary value must be displayed as lowercase hexadecimal text.
+`bytes.from_hex` reads hexadecimal text, `bytes.le(value, width)` encodes an
+integer little-endian in the requested number of bytes, and `bytes.concat`
+joins two sequences. `bytes.eq` compares byte sequences and `bytes.hex`
+renders one as lowercase hexadecimal text.
 
 ### Building Byte Sequences
 
-Byte helpers return new values, so a binary record can be developed in clear
-steps:
-
-```asm
+```asm id=bytes-build target=x86-64 bytes=412d5a43ffff
 const base: bytes = bytes.from_hex("414243")
-const marked: bytes = bytes.insert(base, 1, b"-")
+const marked: bytes = bytes.insert(base, 1, b"-")     // 41 2d 42 43
 const patched: bytes = bytes.replace(marked, 2, 1, b"Z")
 const trailer: bytes = bytes.repeat(2, 0xff)
 const result: bytes = bytes.concat(patched, trailer)
 
-emit.bytes(result);
+emit.bytes(result)
 ```
 
-This emits:
-
-```text
-41 2d 5a 43 ff ff
-```
-
-The operations are:
+The byte helpers:
 
 - `bytes.new()` creates an empty sequence;
-- `bytes.push(value, byte)` appends one byte;
-- `bytes.repeat(count, byte)` creates repeated bytes;
-- `bytes.insert(value, index, addition)` inserts bytes at a zero-based index;
+- `bytes.push(value, byte)` appends one byte and returns the result;
+- `bytes.repeat(count, byte)` repeats one byte;
+- `bytes.insert(value, index, addition)` inserts at a zero-based index;
 - `bytes.replace(value, index, count, replacement)` replaces a byte range;
 - `bytes.concat(left, right)` joins two sequences.
 
-The original `base` value remains `41 42 43`. Each operation produces a new
-value that may be kept, reused, or passed into the next operation.
+`base` is still `41 42 43` after all of that, and each step produced a value
+that the next step could take.
 
 ### Lists Preserve Order
 
-A list stores an ordered sequence of compile-time values:
-
-```asm
+```asm id=list-order target=x86-64 bytes=01aa0304
 let items: list = list.of(1, 2, 3)
-list.push_mut(items, 4);
-list.set_mut(items, 1, 0xaa);
+list.push_mut(items, 4)
+list.set_mut(items, 1, 0xaa)
 const middle: list = list.slice(items, 1, 2)
 
-assert(list.eq(items, list.of(1, 0xaa, 3, 4)));
-assert(list.eq(middle, list.of(0xaa, 3)));
+assert(list.eq(items, list.of(1, 0xaa, 3, 4)))
+assert(list.eq(middle, list.of(0xaa, 3)))
 
 for value in items {
-    db(value);
+    db(value)
 }
 ```
 
-This emits:
-
-```text
-01 aa 03 04
-```
-
-`list.push_mut` appends to the `let`-bound list. `list.set_mut` replaces an
-existing zero-based index. `list.slice` returns a new list containing a
-starting index and a count; it does not change the source list.
-
-Other common list operations are:
+The list operations:
 
 - `list.new()` creates an empty list;
 - `list.get(value, index)` reads one element;
+- `list.slice(value, index, count)` copies a run of elements;
 - `list.concat(left, right)` joins two lists;
-- `list.eq(left, right)` compares list contents;
+- `list.eq(left, right)` compares contents;
 - `len(value)` returns the number of elements.
 
-Lists work naturally with `for` because their order is part of the value.
-They are a good choice for section descriptions, table rows, byte chunks, and
-any other data that must be processed in a defined sequence.
+Order is part of the value, which is what makes `for` over a list meaningful:
+section descriptions, table rows, and byte chunks all need a defined sequence.
 
 ### Updating `let`-Bound Collections
 
-Use the mutation statement APIs when one local algorithm incrementally builds
-a list or map:
+A mutation statement updates one direct `let` binding instead of producing a
+new value:
 
-```asm
+```asm id=collection-mutation target=x86-64
 let items: list = list.of(1, 2)
-list.push_mut(items, 3);
-list.set_mut(items, 0, 4);
+list.push_mut(items, 3)
+list.set_mut(items, 0, 4)
 
 let options: map = map.new()
-map.set_mut(options, "arch", "x64");
-map.set_mut(options, "items", items);
+map.set_mut(options, "arch", "x64")
+map.set_mut(options, "items", items)
 ```
 
-The first argument must be a direct identifier bound with `let`. A `const`
-binding, temporary expression, function result, field access, missing name, or
-value of the wrong collection type is rejected. Lexical lookup uses the
-nearest binding, so a block-local `let` shadows an outer binding. Top-level
-`let` values may be updated during ordinary lowering; a value function may
-update only its own local `let` bindings.
+The first argument must be an identifier bound with `let`. A `const` is
+rejected:
 
-`list.push_mut` appends one cloned item. `list.set_mut` replaces the item at an
-existing zero-based index. `map.set_mut` inserts or replaces a string-keyed
-entry while preserving the position of an existing key. Mutation statements
-do not produce expression values and are unavailable in `defer` and
-`late_layout` blocks.
+```asm id=const-collection-mutation target=x86-64
+const items: list = list.of(1)
+list.push_mut(items, 2)
+```
 
-Cloning remains the isolation boundary:
+```text
+bad.xir:2:1: error: cannot mutate a const collection binding
+```
 
-```asm
+A temporary is rejected too:
+
+```asm id=collection-mutation-target target=x86-64
+let items: list = list.of(1)
+list.push_mut(items, 2)
+list.push_mut(list.of(1), 3)
+```
+
+```text
+bad.xir:3:1: error: collection mutation target must be a direct let binding
+```
+
+Lookup uses the nearest binding, so a block-local `let` shadows an outer one;
+a `let` declared inside a block binds that block's own collection, and the outer
+one is untouched when the block ends. A top-level `let` may be updated during
+ordinary lowering; a value-returning function may update only its own locals.
+
+What each mutation does:
+
+| Call | What it does |
+| --- | --- |
+| `list.push_mut(value, item)` | Appends one cloned item. |
+| `list.set_mut(value, index, v)` | Replaces the item at an existing zero-based index. |
+| `map.set_mut(value, key, v)` | Writes a string key; an existing key keeps its position. |
+
+All three are statements. They produce no value, so they cannot appear inside an
+expression, and the block they run in has to allow layout work:
+
+```asm error=FinalizerCannotChangeLayout
+let items: list = list.of(1)
+defer {
+    list.push_mut(items, 2)
+}
+```
+
+A `late_layout` block rejects the same call with `InvalidLateLayout`. Both blocks
+run after the layout is settled, so neither can add content.
+
+Cloning is what keeps two bindings apart:
+
+```asm id=collection-cloning target=x86-64
 let items: list = list.of(1)
 const snapshot: list = items
-list.push_mut(items, 2);
+list.push_mut(items, 2)
 
-assert(list.eq(snapshot, list.of(1)));
-assert(list.eq(items, list.of(1, 2)));
+assert(list.eq(snapshot, list.of(1)))
+assert(list.eq(items, list.of(1, 2)))
 ```
 
 ### Lists Can Hold Larger Values
 
-List elements are not limited to individual integers. A list can organize
-strings, byte sequences, maps, or other compile-time values:
+Elements are not limited to integers:
 
-```asm
+```asm id=list-of-bytes target=x86-64 bytes=58523412
 const chunks: list = list.concat(
     list.of(b"XR"),
     list.of(bytes.le(0x1234, 2))
 )
 
 for chunk in chunks {
-    emit.bytes(chunk);
+    emit.bytes(chunk)      // 58 52 then 34 12
 }
 ```
 
-This emits:
-
-```text
-58 52 34 12
-```
-
-This pattern is useful when a record is easiest to describe as ordered pieces.
-The list controls order; each byte sequence controls its exact binary
-representation.
+The list controls order and each element controls its own binary
+representation, which is the easiest way to describe a record whose pieces
+have different widths.
 
 ### Maps Store Named Values
 
-A map associates string keys with compile-time values:
-
-```asm
+```asm id=map-lookup target=x86-64
 let options: map = map.new()
-map.set_mut(options, "arch", "x64");
-map.set_mut(options, "mode", "release");
-map.set_mut(options, "arch", "rv64");
-map.set_mut(options, "tags", list.of("asm", "dsl"));
+map.set_mut(options, "arch", "x64")
+map.set_mut(options, "mode", "release")
+map.set_mut(options, "arch", "rv64")
+map.set_mut(options, "tags", list.of("asm", "dsl"))
 
-assert(len(options) == 3);
-assert(map.has(options, "arch"));
-assert(!map.has(options, "missing"));
-assert(map.get(options, "arch") == "rv64");
-assert(map.get_or(options, "missing", "default") == "default");
-assert(list.eq(map.get(options, "tags"), list.of("asm", "dsl")));
+assert(len(options) == 3)                                  // "arch" was replaced
+assert(map.has(options, "arch"))
+assert(!map.has(options, "missing"))
+assert(map.get(options, "arch") == "rv64")
+assert(map.get_or(options, "missing", "default") == "default")
+assert(list.eq(map.get(options, "tags"), list.of("asm", "dsl")))
 ```
 
-`map.set_mut` inserts a new string key or replaces an existing one in the
-direct `let` binding passed as its first argument. Replacing `"arch"` above
-does not add another entry; it updates the stored value while preserving the
-key position.
+Map lookups:
 
-Use:
-
-- `map.has(value, key)` to test whether a key exists;
-- `map.get(value, key)` when the key is required;
-- `map.get_or(value, key, fallback)` when the key is optional;
-- `map.eq(left, right)` to compare map contents.
-
-`map.eq` compares key/value contents rather than insertion order.
+- `map.has(value, key)` tests whether a key exists;
+- `map.get(value, key)` reads a key that must exist;
+- `map.get_or(value, key, fallback)` reads a key that may not;
+- `map.eq(left, right)` compares contents, not insertion order.
 
 ### Iterating Map Contents
 
-Maps are lookup-oriented values. Convert their keys or values to a list before
-iteration:
+A map is a lookup structure, so iteration goes through a list of its keys or
+its values:
 
-```asm
+```asm id=map-iteration target=x86-64 bytes=58520300
 let fields: map = map.new()
-map.set_mut(fields, "magic", b"XR");
-map.set_mut(fields, "version", bytes.le(3, 2));
+map.set_mut(fields, "magic", b"XR")
+map.set_mut(fields, "version", bytes.le(3, 2))
 
 const keys: list = map.keys(fields)
 const values: list = map.values(fields)
 
-assert(len(keys) == 2);
-assert(len(values) == 2);
+assert(len(keys) == 2)
+assert(len(values) == 2)
 
 for value in values {
-    emit.bytes(value);
+    emit.bytes(value)      // 58 52 then 03 00
 }
 ```
 
-Use `map.keys` when processing names and `map.values` when processing stored
-values. If a particular processing order is part of the file format, keep that
-order in a list and use a map only for lookup.
+Use `map.keys` for names and `map.values` for the stored values. When the
+processing order is part of the file format, keep that order in a list and use
+the map only for lookup.
 
 ### Composing Collections in Functions
 
-Collections become especially useful when a function transforms a description
-into binary data:
-
-```asm
+```asm id=collection-function target=x86-64 bytes=3412cdab
 fn encode_u16(values: list) -> bytes {
     let result: bytes = bytes.new()
 
@@ -1808,154 +1879,105 @@ fn encode_u16(values: list) -> bytes {
         result = bytes.concat(result, bytes.le(value, 2))
     }
 
-    return result;
+    return result
 }
 
 const words: list = list.of(0x1234, 0xabcd)
-emit.bytes(encode_u16(words));
+emit.bytes(encode_u16(words))
 ```
 
-This emits:
-
-```text
-34 12 cd ab
-```
-
-The function receives an ordered description, builds an immutable byte value
-one step at a time, then returns the completed encoding. The caller decides
-when and where to emit it.
-
-This separation scales well:
-
-- strings describe names and source-level text;
-- maps describe named properties;
-- lists preserve output order;
-- byte sequences hold the final binary representation;
-- procedures decide where that representation is emitted.
-
-### Choosing a Collection Type
-
-| Need | Use |
-| --- | --- |
-| Human-readable source text | `string` |
-| Exact binary representation | `bytes` |
-| Ordered sequence of values | `list` |
-| Lookup by a string key | `map` |
-| Parse small delimited text | `split` into a `list` |
-| Reconstruct delimited text | `join` |
-| Build a binary record in memory | `bytes` helpers |
-| Preserve order and also support lookup | A `list` plus a `map` |
-
-Prefer the type that matches the meaning of the data. Do not use a string as a
-binary buffer, and do not use a map when sequence is part of the format.
-
-The next chapter introduces tokens and pattern matching for source text that
-must be understood as language syntax rather than plain strings.
+The function takes an ordered description and returns the finished encoding;
+the caller decides where to put it. That split is the reason the four types
+exist as separate things: strings and maps describe, lists order, byte
+sequences hold the representation, and procedures place it.
 
 ## 7. Tokens and Pattern Matching
 
+The string API suits names, paths, and simple replacements. When punctuation,
+operators, literals, and bracketed grouping matter, tokenize the text first and
+match against tokens instead.
+
+Do not tokenize ordinary instruction lines in order to assemble them: x86,
+RISC-V, and SPIR-V instructions are written directly in the source. Token
+matching serves small DSLs, generated source fragments, command records, and
+reusable compile-time helpers.
+
 ### Tokens Represent Source Structure
 
-String helpers treat text as characters. That is enough for names, paths,
-delimited fields, and simple replacements. Source-like text often needs a
-different model.
-
-Consider:
+A source-like line carries more structure than that:
 
 ```text
 load rax, [rbx+(rcx*4)]
 ```
 
-The commas, brackets, parentheses, names, operators, and integer literals have
-structural meaning. Splitting on spaces would lose that structure and would
-handle equivalent spacing inconsistently.
+The commas, brackets, parentheses, names, operators, and literals each mean
+something, and splitting on spaces loses that while treating equivalent spacing
+inconsistently. `tokens.of` turns such text into a list of tokens:
 
-XIRASM can convert source-like text into a list of tokens:
-
-```asm
+```asm id=tokens-of target=x86-64 bytes=636f756e742b30783261
 const source: string = "count + 0x2a"
 const source_tokens: list = tokens.of(source)
 
-assert(len(source_tokens) == 3);
-assert(list.get(source_tokens, 0) == "count");
-assert(list.get(source_tokens, 1) == "+");
-assert(list.get(source_tokens, 2) == "0x2a");
+assert(len(source_tokens) == 3)
+assert(list.get(source_tokens, 0) == "count")
+assert(list.get(source_tokens, 1) == "+")
+assert(list.get(source_tokens, 2) == "0x2a")
 
-emit.bytes(tokens.join(source_tokens));
+emit.bytes(tokens.join(source_tokens))   // canonical spacing, not the original
 ```
 
-This emits the canonical text:
-
-```text
-count+0x2a
-```
-
-`tokens.of` discards insignificant whitespace and preserves the token
-sequence. `tokens.join` renders that sequence with canonical spacing. It is not
-a byte-for-byte restoration of the original string.
-
-Use strings when character layout matters. Use tokens when names, punctuation,
-operators, literals, and balanced groups matter.
+`tokens.of` discards insignificant whitespace and keeps the token sequence;
+`tokens.join` renders that sequence with canonical spacing, so it is not a
+byte-for-byte restoration of the original string.
 
 ### Matching a Token Shape
 
-`match.tokens(pattern, input)` compares source-like input with a token pattern:
-
-```asm
+```asm id=match-tokens target=x86-64
 const line: string = "load rax, [rbx+(rcx*4)]"
 const result: map = match.tokens(
     "=load destination:name =, source:tokens",
     line
 )
 
-assert(map.get(result, "ok"));
+assert(map.get(result, "ok"))
 
 const captures: map = map.get(result, "captures")
-assert(map.get(captures, "destination") == "rax");
-assert(tokens.join(map.get(captures, "source")) == "[rbx+(rcx*4)]");
+assert(map.get(captures, "destination") == "rax")
+assert(tokens.join(map.get(captures, "source")) == "[rbx+(rcx*4)]")
 ```
 
-The result is a map with two fields:
-
-- `"ok"` is a boolean that reports whether the complete input matched;
-- `"captures"` is a map containing values extracted by named captures.
-
-Read captures only after checking `"ok"`.
+The result is a map with two fields: `"ok"`, a boolean reporting whether the
+complete input matched, and `"captures"`, a map of the values the named captures
+extracted. Read captures only after checking `"ok"`.
 
 ### Literal Pattern Tokens
 
 A pattern piece beginning with `=` matches one exact token:
 
-```asm
+```asm id=pattern-literal target=x86-64
 const result: map = match.tokens(
     "left:name =&& right:name",
     "ready && enabled"
 )
 
-assert(map.get(result, "ok"));
+assert(map.get(result, "ok"))
 ```
 
-`=&&` requires the logical-and token. The same rule applies to names and
-punctuation:
+| Piece | Matches |
+| --- | --- |
+| `=load` | the name token `load` |
+| `=,` | the comma token |
+| `=[` | the opening bracket token |
+| `===` | the `==` token |
 
-```text
-=load      exact name token
-=,         exact comma token
-=[         exact opening bracket token
-===        exact equality token
-```
-
-The first `=` is the pattern marker. Therefore `===` means “match the `==`
-token,” not a three-character equality operator.
-
-Pattern pieces are separated by whitespace. Whitespace in the pattern makes
-the pattern readable; matching is based on tokens rather than the original
-spacing between them.
+The first `=` is the pattern marker, so `===` means "match the `==` token"
+rather than a three-character operator. Pattern pieces are separated by
+whitespace, and matching compares tokens rather than the spacing the input used.
 
 ### Capture Kinds
 
-A capture has the form `name:kind`. The capture name becomes a key in the
-result's `"captures"` map.
+A capture is written `name:kind`; the name becomes a key in `"captures"`, and
+capture names must be unique within a pattern.
 
 | Kind | Matches | Captured value |
 | --- | --- | --- |
@@ -1965,43 +1987,29 @@ result's `"captures"` map.
 | `quoted` | One quoted token | Unquoted `string` |
 | `tokens` | A balanced token range | `list` of token strings |
 
-Capture names must be unique within a pattern.
-
-The single-token capture kinds make small command grammars precise:
-
-```asm
-const assignment: map = match.tokens(
-    "=set target:name =, value:int",
-    "set count, 0x2a"
-)
-const assignment_captures: map = map.get(assignment, "captures")
-
-const operation: map = match.tokens(
-    "left:name operator:token right:name",
-    "count + step"
-)
-const operation_captures: map = map.get(operation, "captures")
-
+```asm id=capture-kinds target=x86-64
+const assignment: map = match.tokens("=set target:name =, value:int", "set count, 0x2a")
+const operation: map = match.tokens("left:name operator:token right:name", "count + step")
 const message: map = match.tokens("=db text:quoted", "db 'READY'")
+
+assert(map.get(assignment, "ok"))
+
+const assignment_captures: map = map.get(assignment, "captures")
+const operation_captures: map = map.get(operation, "captures")
 const message_captures: map = map.get(message, "captures")
 
-assert(map.get(assignment, "ok"));
-assert(map.get(assignment_captures, "target") == "count");
-assert(map.get(assignment_captures, "value") == 42);
-assert(map.get(operation_captures, "operator") == "+");
-assert(map.get(message_captures, "text") == "READY");
+assert(map.get(assignment_captures, "target") == "count")
+assert(map.get(assignment_captures, "value") == 42)        // `int` became a number
+assert(map.get(operation_captures, "operator") == "+")     // `token` stays text
+assert(map.get(message_captures, "text") == "READY")       // `quoted` dropped the quotes
 ```
-
-An `int` capture converts the literal to an integer value. A `quoted` capture
-removes its surrounding quotes and decodes supported escapes. A `token`
-capture returns the token text without imposing a more specific type.
 
 ### Balanced Token Ranges
 
-A `tokens` capture can consume multiple tokens while keeping parentheses,
-brackets, and braces balanced:
+A `tokens` capture consumes several tokens while keeping parentheses, brackets,
+and braces balanced:
 
-```asm
+```asm id=balanced-tokens target=x86-64
 const result: map = match.tokens(
     "=load destination:name =, address:tokens",
     "load rax, [rbx+(rcx*4)]"
@@ -2009,76 +2017,73 @@ const result: map = match.tokens(
 const captures: map = map.get(result, "captures")
 const address: list = map.get(captures, "address")
 
-assert(map.get(result, "ok"));
-assert(tokens.join(address) == "[rbx+(rcx*4)]");
+assert(map.get(result, "ok"))
+assert(tokens.join(address) == "[rbx+(rcx*4)]")
 ```
 
-The captured value is a token list, not a string. Keeping it as tokens allows
-another matcher to inspect it without tokenizing the text again.
+The captured value is a token list, not a string, which lets another matcher
+inspect it without tokenizing the text again.
 
-Balanced capture applies to `()`, `[]`, and `{}`. Comparison operators such as
-`<` and `>` remain ordinary operator tokens:
+Balance applies to `()`, `[]`, and `{}`. Comparison operators such as `<` and
+`>` stay ordinary operator tokens:
 
-```asm
+```asm id=tokens-vs-operators target=x86-64
 const result: map = match.tokens("expression:tokens", "left < right")
 const captures: map = map.get(result, "captures")
 
-assert(map.get(result, "ok"));
-assert(tokens.join(map.get(captures, "expression")) == "left<right");
+assert(map.get(result, "ok"))
+assert(tokens.join(map.get(captures, "expression")) == "left<right")
 ```
 
 ### Minimal Matching and Backtracking
 
-When a `tokens` capture is followed by more pattern pieces, it initially
-consumes as little as possible. If the remaining pattern does not match, the
-capture expands and matching tries again:
+When a `tokens` capture is followed by more pattern pieces, it first consumes as
+little as possible and expands only when the rest of the pattern fails:
 
-```asm
+```asm id=minimal-match target=x86-64
 const result: map = match.tokens(
     "prefix:tokens value:int",
     "name 42"
 )
 const captures: map = map.get(result, "captures")
 
-assert(map.get(result, "ok"));
-assert(tokens.join(map.get(captures, "prefix")) == "name");
-assert(map.get(captures, "value") == 42);
+assert(map.get(result, "ok"))
+assert(tokens.join(map.get(captures, "prefix")) == "name")
+assert(map.get(captures, "value") == 42)
 ```
 
-The first attempt gives `prefix` an empty range, but `value:int` cannot match
-`name`. The matcher then expands `prefix` to contain `name`, allowing the
-integer capture to match `42`.
+A typed capture that meets the wrong token is an ordinary non-match, not an error
+in the pattern:
 
-A typed capture that encounters the wrong token is an ordinary non-match. It
-does not make a valid pattern an assembly error:
-
-```asm
+```asm id=typed-mismatch target=x86-64
 const result: map = match.tokens("value:int", "name")
-assert(!map.get(result, "ok"));
+
+assert(!map.get(result, "ok"))
 ```
 
-This behavior makes it practical to try several valid patterns in sequence.
+That is what makes it practical to try several valid patterns in sequence.
 
 ### Empty Token Ranges
 
 A `tokens` capture may be empty:
 
-```asm
+```asm id=empty-range target=x86-64
 const result: map = match.tokens("=call arguments:tokens", "call")
 const captures: map = map.get(result, "captures")
 
-assert(map.get(result, "ok"));
-assert(len(map.get(captures, "arguments")) == 0);
+assert(map.get(result, "ok"))
+assert(len(map.get(captures, "arguments")) == 0)
 ```
 
-When a token range is required to be non-empty, check its length after a
-successful match or include another required capture in the pattern.
+When a range has to be non-empty, check its length after a successful match, or
+put another required capture in the pattern.
 
 ### Matching Existing Token Lists
 
-The input to `match.tokens` may already be a list of token strings:
+The input to `match.tokens` may already be a token list rather than a string.
+Passing one between helpers avoids tokenizing the same source fragment again:
 
-```asm
+```asm id=token-list-input target=x86-64
 const input: list = tokens.of("load r1, 42")
 const result: map = match.tokens(
     "=load destination:name =, value:int",
@@ -2086,21 +2091,20 @@ const result: map = match.tokens(
 )
 const captures: map = map.get(result, "captures")
 
-assert(map.get(result, "ok"));
-assert(map.get(captures, "destination") == "r1");
-assert(map.get(captures, "value") == 42);
+assert(map.get(result, "ok"))
+assert(map.get(captures, "destination") == "r1")
+assert(map.get(captures, "value") == 42)
 ```
 
-Pass token lists between helpers when several processing steps inspect the
-same source fragment. Convert back to text with `tokens.join` only when a text
-value is required.
+Pass token lists between helpers when several steps inspect the same source
+fragment, and convert back with `tokens.join` only where text is required.
 
 ### Trying Alternative Shapes
 
-Patterns do not contain an alternative operator. Try each complete shape in
+Patterns have no alternative operator, so each complete shape is tried in
 compile-time control flow:
 
-```asm
+```asm id=alternative-shapes target=x86-64 bytes=72317232
 const line: string = "store r1, r2"
 const load: map = match.tokens(
     "=load destination:name =, source:name",
@@ -2109,101 +2113,104 @@ const load: map = match.tokens(
 
 if map.get(load, "ok") {
     const captures: map = map.get(load, "captures")
-    emit.bytes(map.get(captures, "destination"));
+    emit.bytes(map.get(captures, "destination"))
 } else {
     const store: map = match.tokens(
         "=store destination:name =, source:name",
         line
     )
 
-    assert(map.get(store, "ok"));
+    assert(map.get(store, "ok"))
+
     const captures: map = map.get(store, "captures")
-    emit.bytes(map.get(captures, "destination"));
-    emit.bytes(map.get(captures, "source"));
+    emit.bytes(map.get(captures, "destination"))
+    emit.bytes(map.get(captures, "source"))
 }
 ```
 
-This emits `r1r2`. Each pattern describes one valid form, while normal
-`if`/`else` logic decides which form was present.
+Piling up `if` branches stops scaling after two or three shapes. Give each shape
+its own function that returns the match result, then try them in order and stop
+at the first success:
 
-For a larger grammar, put each shape in a small value-returning function and
-keep the dispatch order visible at the call site.
+```asm
+// One function per shape; the function name says which shape it is.
+fn try_load(line: string) -> map {
+    return match.tokens("=load destination:name =, source:name", line)
+}
+
+fn try_store(line: string) -> map {
+    return match.tokens("=store destination:name =, source:name", line)
+}
+
+const line: string = "store r1, r2"
+
+// Try from the top; the first match returns, and the rest are not tried.
+if map.get(try_load(line), "ok") {
+    emit.bytes("load")
+} else if map.get(try_store(line), "ok") {
+    const captures: map = map.get(try_store(line), "captures")
+    emit.bytes(map.get(captures, "destination"))   // 72 31 72 32
+    emit.bytes(map.get(captures, "source"))
+} else {
+    err("unknown instruction shape", line)
+}
+```
+
+Functions help twice here: each pattern stays inside its own function body, and
+the call chain shows which shape is tried before which. A new shape means one
+more function and one more branch at the end of the chain.
 
 ### Misses and Invalid Patterns
 
-An ordinary shape or type mismatch returns a result with `"ok" == false`.
-Examples include:
+An ordinary shape or type mismatch returns a result with `"ok" == false`. That
+covers an exact literal that differs, a `name` capture meeting punctuation, an
+`int` capture meeting a name, an unbalanced bracket inside a `tokens` capture,
+and input left over after the pattern is complete:
 
-- an exact literal differs;
-- a `name` capture receives punctuation;
-- an `int` capture receives a name;
-- brackets inside a `tokens` capture are not balanced;
-- input remains after the pattern is complete.
+```asm id=unbalanced-tokens-miss target=x86-64
+const result: map = match.tokens("=load dest:name =, rest:tokens", "load rax, [rbx")
 
-A malformed pattern is different. It is rejected as an assembly error rather
-than reported as a miss. Pattern errors include an unknown capture kind,
-an empty literal, or duplicate capture names:
+assert(!map.get(result, "ok"))
+```
 
-```text
-const invalid = match.tokens(
+A malformed pattern is a different thing: it is rejected as a source error
+rather than reported as a miss. An unknown capture kind, an empty literal, and a
+repeated capture name all stop assembly:
+
+```asm id=invalid-pattern target=x86-64
+const invalid: map = match.tokens(
     "value:name value:int",
     "left 42"
 )
 ```
 
-Both captures use the key `"value"`, so the pattern is invalid.
+```text
+bad.xir:1:1: error: an expression in this statement is not valid (InvalidExpression)
+```
 
-Keep this distinction in mind:
+Both captures above use the key `"value"`, so this line is rejected as an invalid
+pattern rather than reported as a miss.
 
-- **valid pattern, unsuitable input** means `"ok" == false`;
-- **invalid pattern definition** is a source error that should be fixed.
+A capture name has to be an identifier: a letter or underscore first, then
+letters, digits, or underscores. An empty kind such as `v:`, an empty literal
+`=`, and an unknown kind name are all rejected as invalid patterns.
 
-### Choosing Between Strings and Tokens
-
-| Need | Use |
-| --- | --- |
-| Search for a substring | `contains` |
-| Check a text prefix or suffix | `starts_with` / `ends_with` |
-| Parse simple delimiter-separated text | `split` |
-| Preserve names, punctuation, and grouping | `tokens.of` |
-| Match one exact source shape | `match.tokens` |
-| Extract typed fields | `name`, `int`, or `quoted` captures |
-| Capture a nested expression or operand | `tokens` capture |
-| Try several command forms | Multiple patterns with `if` / `else` |
-
-Do not tokenize ordinary instruction lines merely to assemble them. Processor
-instructions already belong directly in the source language. Token matching is most useful
-for compact user-defined DSLs, generated source fragments, command-style
-records, and reusable compile-time helpers.
-
-This completes the language-fundamentals part of the guide. The next chapter
-begins the assembler model with targets, instructions, labels, and
-references.
-
-## Part II: The Assembler Model
+Matching is bounded as well: at most 256 input tokens, at most 64 pattern
+pieces, and at most 4096 backtracking attempts. Exceeding any of them reports
+`InvalidArgument`.
 
 ## 8. Targets, Instructions, and Labels
 
-The compile-time language decides what to generate. The assembler model
-decides where generated instructions and data belong, which instruction set
-encodes them, and how symbolic references become concrete values.
-
-This chapter begins that model with three closely related ideas:
-
-- the active target selects an instruction set and width;
-- ordinary instruction lines are encoded for that target;
-- labels give address positions stable symbolic names.
-
-For handwritten assembly, select a target, write instructions, and use labels
-normally. Use `isa(...)` and `label.define(...)` only when compile-time
-generation really needs to compute the instruction text or label name.
+The compile-time language decides what to generate. The assembler model decides
+where those instructions and data go, which instruction set encodes them, and how
+a symbolic reference turns into a concrete value.
 
 ### The Active Target
 
 Every instruction is assembled for an active target. A target contains the ISA
-family and the width information required by that ISA.
+family and the width information that ISA needs.
 
-The command line selects the initial target:
+The command line supplies the starting target:
 
 ```text
 xirasm program.xir --isa x86-64
@@ -2215,25 +2222,24 @@ xirasm module.spvasm --isa spv
 
 No option is needed to assemble one file: `xirasm program.xir` writes
 `program.bin` beside it, and `-o` only overrides that path. `--isa` (older
-spelling `--target`) supplies a starting target for a source that does not select
-one itself; a source that says `x86.use32()` or imports the A64 macro library
-decides for itself.
+spelling `--target`) is a **default**: it applies to a source that does not
+select an instruction set itself. A source that says `x86.use32()`, or imports
+the A64 macro library, decides for itself.
 
-XIRASM defaults to 64-bit x86 when no other target is selected. Source code may
-still select an explicit instruction mode. Doing so makes the source
-self-describing and is recommended for examples, reusable includes, and code
-that depends on a particular width:
+XIRASM defaults to 64-bit x86 when nothing else is selected. Examples, reusable
+includes, and code that depends on a particular width are better off stating it
+in the source:
 
-```asm
-x86.use64();
+```asm id=en-use64
+x86.use64()
 
 entry:
     xor eax, eax
     ret
 ```
 
-The mode call affects instructions that appear after it. Each instruction
-remembers the target that was active when the instruction was created.
+A mode call affects the instructions that come after it. It does not rewrite
+instructions that were already written.
 
 ### Selecting x86, RISC-V, and SPIR-V
 
@@ -2250,19 +2256,26 @@ The source-level mode APIs are:
 
 A source file may switch modes:
 
-```asm
-x86.use16();
+```asm id=en-use16
+x86.use16()
 mov ax, 1
 
-x86.use32();
+x86.use32()
 mov eax, 2
 
-x86.use64();
+x86.use64()
 mov rax, 3
 ```
 
 The three instructions retain 16-bit, 32-bit, and 64-bit encoding contexts
 respectively. A mode call does not rewrite earlier instructions.
+
+The table lists native targets only. AArch64 is not among them: x86, RISC-V, and
+SPIR-V have backend encoders, while AArch64 instructions are implemented as
+macros in the `arm/a64-macros.inc` library. That library belongs to the
+executable-format extension layer rather than to the native API. To write A64
+instructions, import the library and write AArch64 assembly text (see
+"AArch64 Instruction Macro Library" in chapter 5).
 
 Selecting an encoding mode does not make the generated program switch the
 processor's runtime mode. A boot image, kernel, firmware component, or mixed
@@ -2270,8 +2283,8 @@ mode program must still arrange any required runtime transition itself.
 
 RISC-V width selection follows the same source-order rule:
 
-```asm
-riscv.use64();
+```asm id=en-use64-2
+riscv.use64()
 
 addi x1, x0, 1
 addi x0, x0, 0
@@ -2285,8 +2298,8 @@ SPIR-V is encoded as one complete logical module rather than as independent
 machine instructions. Select it with `spv.use()` and write standard `Op*`
 instruction spelling with numeric result IDs:
 
-```asm
-spv.use();
+```asm id=en-use
+spv.use()
 
 OpCapability Shader
 OpMemoryModel Logical GLSL450
@@ -2303,11 +2316,11 @@ such as `%1`; symbolic SPIR-V IDs are not currently accepted.
 
 Compile-time control flow can inspect the active target:
 
-```asm
-x86.use64();
+```asm id=en-use64-3
+x86.use64()
 
 if target.isa == .x86_64 {
-    assert(target.bits == 64);
+    assert(target.bits == 64)
     mov eax, 1
 }
 ```
@@ -2327,11 +2340,11 @@ current instruction width. After `x86.use32()`, for example,
 Use `target.bits` when width matters. `target.xlen` is also accepted for
 RISC-V width conditions:
 
-```asm
-riscv.use32();
+```asm id=en-use32
+riscv.use32()
 
 if target.isa == .riscv64 {
-    assert(target.xlen == 32);
+    assert(target.xlen == 32)
     addi x1, x0, 1
 }
 ```
@@ -2343,8 +2356,8 @@ they do not emit a runtime branch.
 
 Instructions use the normal textual syntax of the selected ISA:
 
-```asm
-x86.use64();
+```asm id=en-use64-4
+x86.use64()
 
 entry:
     mov rax, 1
@@ -2352,36 +2365,35 @@ entry:
     ret
 ```
 
-An ISA line consists of a mnemonic followed by its operands. Whitespace may be
-used for readability, and commas inside brackets, parentheses, or braces
-remain part of the nested operand rather than splitting the instruction at the
-wrong place.
+An instruction line is a mnemonic followed by its operands. Spaces are there for
+readability. A comma inside brackets, parentheses, or braces belongs to the
+nested operand, so it does not split the instruction in the wrong place.
 
-ISA lines do not end with semicolons. Structured compile-time calls do:
+Write compile-time calls with compile-time syntax and processor instructions with
+assembly syntax. A trailing semicolon on a compile-time call is accepted but
+changes nothing, so the examples here leave it out. On a processor instruction
+line a semicolon is an error:
 
-```asm
-x86.use64();
-emit.u8(0x90);
-nop
+```asm id=en-use64-5
+x86.use64()      // a compile-time call
+emit.u8(0x90)    // another compile-time call
+nop              // a processor instruction
 ```
 
-Here `x86.use64();` and `emit.u8(0x90);` are compile-time API calls. `nop` is
-an ordinary instruction line.
+XIRASM hands the instruction text and the current target to the matching ISA
+backend, and that backend encodes it. Labels, layout, output regions, and fixups
+stay with the frontend.
 
-XIRASM stores the instruction text together with the active target, then asks
-the corresponding ISA backend to encode it. The frontend continues to own
-labels, layout, output regions, and fixups.
-
-SPIR-V is the exception to per-instruction encoding: its ISA lines are gathered
-in source order and encoded together so the module header, ID bound, type
-context, and extended-instruction sets are resolved consistently.
+SPIR-V is the exception to per-instruction encoding: its instruction lines are
+gathered in source order and encoded together, so the module header, ID bound,
+type context, and extended instruction sets stay consistent.
 
 ### Compile-Time Values in Instructions
 
-Compile-time constants may appear directly in instruction operands:
+A compile-time constant can stand directly in an instruction operand:
 
-```asm
-x86.use64();
+```asm id=en-use64-6
+x86.use64()
 
 const initial_value: u32 = 40 + 2
 
@@ -2390,14 +2402,14 @@ entry:
     ret
 ```
 
-There is no need to convert the instruction into a function call. The operand
-expression is evaluated as part of assembling the instruction.
+The instruction does not need a function call around it. The operand expression
+is evaluated while the instruction is assembled.
 
-Label arithmetic may also stay in ordinary instruction operands:
+Label arithmetic can also stay in an ordinary instruction operand:
 
-```asm
-x86.use64();
-origin(0x1000);
+```asm id=en-use64-7
+x86.use64()
+origin(0x1000)
 
 target:
     mov rax, target + 4
@@ -2407,31 +2419,31 @@ target:
 The expression resolves to the address of `target` plus four. The reference is
 kept symbolic until the instruction and label layout are known.
 
-A branch whose distance is not yet known is encoded in its near form, which is
-why `jmp target` is five bytes even when the two instructions are adjacent. Say
-which form you want when the distance is known:
+A branch whose distance is not yet known is encoded in its near form. That is why
+`jmp target` is five bytes even when the two instructions sit next to each other.
+Once the distance is known, say which form you want:
 
-```asm
-x86.use64();
+```asm id=en-use64-8
+x86.use64()
 
 loop:
     nop
     jmp short loop
 ```
 
-`short` selects the two-byte form and `near` the wide one, as they do in ordinary
-x86 assembly.
+`short` selects the two-byte form and `near` the wide one, exactly as they do in
+ordinary x86 assembly.
 
-Prefer readable constants and labels over constructing instruction strings.
-Use generated instruction text only when the mnemonic, operand shape, or symbol name is
-itself computed.
+Reachable constants and labels are the better choice over building instruction
+text. Build the text only when the mnemonic, the operand shape, or the symbol
+name is itself computed.
 
 ### Static Labels
 
 A label definition is a name followed by a colon:
 
-```asm
-x86.use64();
+```asm id=en-use64-9
+x86.use64()
 
 entry:
     mov eax, 1
@@ -2441,13 +2453,12 @@ done:
     ret
 ```
 
-Defining a label does not emit bytes. It attaches the name to the current
-logical output address.
+A label emits no bytes. It puts the name on the current logical output address.
 
-Labels can be referenced before or after their definitions:
+A label can be used before the line that defines it:
 
-```asm
-x86.use64();
+```asm id=en-use64-10
+x86.use64()
 
 entry:
     jmp short finished
@@ -2457,32 +2468,31 @@ finished:
     ret
 ```
 
-No separate forward declaration is required. The explicit `short` keyword is
-part of the x86 instruction text and is preserved as an encoding constraint.
+No forward declaration is needed. `short` is part of the x86 instruction text,
+and the assembler keeps it as an encoding constraint.
 
-Use ordinary static labels for handwritten control flow, data names, entry
-points, and other names known when the source is written. They are the clearest
-form and produce the best diagnostics.
+Handwritten control flow, data names, and entry points are all ordinary static
+labels. A name written in the source is a name the reader can search for, and it
+produces the clearest diagnostics.
 
 ### References and Fixups
 
-A symbolic instruction operand cannot always be encoded immediately. The
-instruction size, the target address, or both may depend on layout that is
-still being constructed.
+A symbolic operand cannot always be encoded on the spot. The instruction size,
+the target address, or both may depend on layout that is still being built.
 
 XIRASM handles this in stages:
 
-1. The source defines labels and creates ISA instruction fragments.
-2. The selected backend encodes each instruction and reports symbolic fields
-   that still need values.
+1. The source defines labels and creates instruction fragments.
+2. The backend encodes each instruction and leaves the fields that need a
+   symbol unresolved.
 3. Layout assigns final addresses to labels and fragments.
 4. Fixup resolution evaluates each symbolic expression and patches the encoded
    field.
 
-This is why a forward branch works without a manual address calculation:
+A forward branch therefore works without a manual address calculation:
 
-```asm
-x86.use64();
+```asm id=en-use64-11
+x86.use64()
 
 entry:
     jmp target
@@ -2492,97 +2502,75 @@ target:
     ret
 ```
 
-The source expresses intent with a label. The assembler owns the displacement
-calculation.
+The source states the intent with a label, and the assembler works out the
+displacement.
 
-Keep symbolic expressions in instruction operands when possible. Manually
-subtracting instruction addresses or hardcoding a displacement makes source
-fragile when an earlier instruction changes size.
+Keep symbolic expressions in instruction operands wherever possible. Subtracting
+instruction addresses by hand, or writing a displacement as a number, makes the
+source break as soon as an earlier instruction changes size.
 
-### Dynamic ISA Text and Labels
+### Dynamic Instruction Text and Labels
 
-Compile-time code sometimes creates names or entire instruction lines. Use
-`isa(text)` to assemble a computed instruction and `label.define(name)` to
-define a computed label:
+A compile-time calculation sometimes produces a name, or a whole instruction
+line. `isa(text)` assembles a computed instruction, and `label.define(name)`
+defines a computed label:
 
-```asm
+```asm id=en-join
 const done: string = sym.join("generated_", "done")
 
-isa(sym.join("jmp ", done));
-label.define(done);
-isa("ret");
+isa(sym.join("jmp ", done))
+label.define(done)
+isa("ret")
 ```
 
-This creates the same logical structure as:
+That produces the same structure as writing it out:
 
-```asm
+```asm id=en-jmp
 jmp generated_done
 generated_done:
 ret
 ```
 
-The generated instruction still uses the active target and participates in the
-normal label and fixup pipeline.
+A generated instruction still uses the current target and goes through the usual
+label and fixup stages.
 
-`label.define` accepts a string and defines that name at the current logical
-address. `sym.join` is useful when a stable generated name is composed from
-known parts. `sym.unique` is useful inside reusable generators that need a
-fresh private name for every expansion.
+`label.define` takes a string and defines that name at the current logical
+address. `sym.join` builds a stable name out of known parts. `sym.unique` gives
+each expansion of a reusable generator a private name of its own.
 
-Use dynamic labels only when the name must be computed. Do not replace clear
-static source such as `loop:` or `done:` with generated strings.
+Compute a name only when the name has to be computed. A readable `loop:` or
+`done:` beats a generated string.
 
 ### Reading a Label Address
 
-`label_addr(label_or_name)` returns the logical address associated with a
-label. It accepts either a normal label reference or a string containing a
-dynamic label name:
+`label_addr(label_or_name)` returns the logical address of a label. It takes a
+normal label reference or a string holding a dynamic label name:
 
-```asm
-x86.use64();
+```asm id=en-use64-12
+x86.use64()
 
 entry:
     ret
 
-dq(label_addr(entry));
+dq(label_addr(entry))
 ```
 
-The example emits a `ret` instruction followed by the logical address of
-`entry`.
+The example writes a `ret` instruction, then the logical address of `entry` as
+data.
 
-There is an important difference between an instruction reference and an
-ordinary compile-time address query:
+A reference in an instruction and a compile-time address query are two different
+things:
 
-- an ISA operand can remain symbolic and be resolved through a fixup;
-- `label_addr(...)` produces a compile-time integer at the point where the
-  expression is evaluated.
+- an operand can stay symbolic and be resolved by a fixup;
+- `label_addr(...)` produces a compile-time integer where the expression stands.
 
-If earlier instruction sizes, alignment, regions, or reserved ranges may still
-change the final address, perform the binary backfill in a finalizer rather
-than freezing an early value. Chapter 12 explains stable-layout queries and
-`defer`.
+If instruction sizes, alignment, regions, or reserved ranges can still move the
+address, do the backfill in a finalizer instead of freezing an early value.
+Chapter 12 covers the stable-layout queries and `defer`.
 
-Executable and object formats may also require a relocation record rather than
-a raw absolute integer. Use `format.inc` relocation and import/export
-APIs for those cases. The Format Tutorial covers that distinction.
-
-### Practical Rules
-
-Use these defaults when writing ordinary XIRASM source:
-
-- select the intended target mode explicitly near the start of the source;
-- write handwritten instructions directly as assembly;
-- omit semicolons from ISA lines and retain them on compile-time calls;
-- use static labels for names known in the source;
-- keep forward references symbolic and let fixup resolution calculate them;
-- use `isa` and `label.define` only for genuinely computed source;
-- use `target.bits` for width and `target.isa` for the backend family;
-- defer final binary address backfills when layout is not yet stable;
-- use format relocation APIs when a loader or linker must adjust an address.
-
-The next chapter moves from instruction references to explicit data and binary
-layout: integer emission, byte sequences, reserved storage, alignment, structs,
-and unions.
+An executable or object format may need a relocation record rather than a plain
+absolute number. Use the `format.inc` relocation and import/export APIs there. The
+Format Tutorial covers that distinction.
 
 ## 9. Data and Binary Layout
 
@@ -2590,24 +2578,33 @@ Instructions are only one source of output bytes. File headers, lookup tables,
 messages, constants, reserved memory, and application-specific records all
 require explicit data layout.
 
-XIRASM provides two complementary levels:
+Why lay the bytes out yourself instead of handing the binary to an external
+linker?
 
-- data emission APIs write exact integer, string, and byte values;
-- binary aggregate types describe reusable structs and unions.
+Because XIRASM was designed from the start as both a compiler and an
+interpreter, and that is what lets it act as a linker too: one tool doing all of
+it. It is part of why an Android APK can be packaged without external tools, and
+why any executable format can be produced at all. Every one of those abilities
+comes from control over binary content, which is layout.
 
-Use direct emission for short layouts and isolated fields. Use aggregates when
-several fields form a named record that is created, inspected, or emitted as a
-unit.
+Layout is normally the job of a high-level static compiler and its linker. An
+assembler like NASM produces only an intermediate object file, has no mature
+executable-format layer, and still needs the GNU toolchain. XIRASM needs none of
+that. Windows, Linux, and macOS are all open to it, on x86, RISC-V, or AArch64.
+
+XIRASM offers two ways to write at this layer: calls that emit data directly,
+and a type system for defining structs and unions. A few lines of data are fine
+with the emission calls; a record format that gets reused belongs in a struct.
 
 ### Output Is an Ordered Byte Sequence
 
 Data calls append bytes at the current output position:
 
-```asm
-emit.u8(0x11);
-emit.u16(0x2233);
-emit.u32(0x44556677);
-emit.u64(0x0102030405060708);
+```asm id=en-u8 bytes=113322776655440807060504030201
+emit.u8(0x11)
+emit.u16(0x2233)
+emit.u32(0x44556677)
+emit.u64(0x0102030405060708)
 ```
 
 The integer APIs emit little-endian values. The generated bytes are:
@@ -2638,45 +2635,45 @@ The compact aliases are:
 
 For example:
 
-```asm
-db(0x41);
-dw(0x1122);
-dd(0x33445566);
-dq(0x0102030405060708);
+```asm id=en-db
+db(0x41)
+dw(0x1122)
+dd(0x33445566)
+dq(0x0102030405060708)
 ```
 
-The aliases accept multiple arguments. Every alias except `db` requires
-integers; `db` additionally accepts strings and byte sequences. Values for
-1/2/4/6/8-byte elements must fit exactly. The current Meta integer is `u64`, so
-10/16/32/64-byte elements zero-extend it. Use `emit.bytes` for wider exact bit
-patterns. `dt` is raw 10-byte data and does not introduce an `f80` type.
+The aliases take several arguments. Every alias except `db` takes integers; `db`
+also takes strings and byte sequences. Values written with 1, 2, 4, 6, or 8 bytes
+must fit that width. Values written with 10, 16, 32, or 64 bytes zero-extend from
+a `u64`. When you need an exact bit pattern wider than that, use `emit.bytes`.
+`dt` is raw 10-byte data, not an `f80` type.
 
 ### Floating-Point Values
 
-Floating output is explicit and separate from integer data aliases:
+Floats are written with their own calls, not with the integer aliases:
 
-```asm
+```asm id=en-f32
 const scale: f64 = 1.5
 const compact: f32 = f32(scale)
 
-emit.f32(compact);
-emit.f64(scale * 2.0);
+emit.f32(compact)
+emit.f64(scale * 2.0)
 ```
 
 `emit.f32` and `emit.f64` write the exact little-endian IEEE-754 binary32 and
-binary64 encodings. Their arguments must already have the matching type.
-Floating arithmetic and comparisons require matching types. Literals,
-conversions, and arithmetic results must remain finite; overflow, NaN, and
-Infinity are rejected. Finite underflow and signed zero are preserved.
+binary64 encodings. An argument must already have the matching type: `emit.f32`
+takes an `f32` and `emit.f64` takes an `f64`. Float arithmetic and comparisons
+require matching types too. Overflow, NaN, and Infinity are rejected. Finite
+underflow and signed zero keep their IEEE-754 bit patterns.
 
 ### Strings and Byte Sequences
 
 `db` can combine byte values, strings, and `bytes` values in one call:
 
-```asm
+```asm id=en-db-2 bytes=4142434400
 const suffix: bytes = b"CD"
 
-db(0x41, "B", suffix, 0);
+db(0x41, "B", suffix, 0)
 ```
 
 This emits:
@@ -2691,11 +2688,11 @@ runtime interface requires one.
 
 `emit.bytes(value)` writes one string or `bytes` value:
 
-```asm
+```asm id=en-from-hex
 const signature: bytes = bytes.from_hex("7f454c46")
 
-emit.bytes(signature);
-emit.bytes("DATA");
+emit.bytes(signature)
+emit.bytes("DATA")
 ```
 
 Use `bytes` when the value represents exact binary content. Use a string when
@@ -2705,10 +2702,10 @@ the value represents source-level text that happens to be emitted directly.
 
 `reserve(count)` advances the output by a number of bytes:
 
-```asm
-db(0xeb);
-reserve(2);
-db(0xfe);
+```asm id=en-db-3 bytes=eb0000fe
+db(0xeb)
+reserve(2)
+db(0xfe)
 ```
 
 In an ordinary flat binary, this emits:
@@ -2731,29 +2728,29 @@ The reserve aliases multiply a count by an element width:
 | `rqq(count)` | `count * 32` |
 | `rdqq(count)` | `count * 64` |
 
-```asm
-rb(2);
-db(0xaa);
-rw(1);
-db(0xbb);
+```asm id=en-rb
+rb(2)
+db(0xaa)
+rw(1)
+db(0xbb)
 ```
 
 This emits two zero bytes, `aa`, two more zero bytes, then `bb`.
 
-Reserve expresses unused storage rather than meaningful initialized content.
-When initialized output follows it, the reserved range becomes a real zero
-filled gap in the flat file. A continuous reserved tail may instead advance
-logical size without occupying file bytes. Chapter 11 explains this distinction
-through output regions and their real and potential file cursors.
+Reserved space is storage with nothing in it yet. If initialized bytes follow it,
+that space turns into a real run of zeros in the flat file. A reserve that stays
+at the end of a region instead adds to the logical size without taking file
+bytes. Chapter 11 explains the difference through output regions and their real
+and potential file cursors.
 
 ### Padding and Alignment
 
-`pad(count, fill)` writes an exact number of repeated bytes:
+`pad(count, fill)` writes `count` copies of one byte:
 
-```asm
-db(1);
-pad(3, 0xaa);
-db(2);
+```asm id=en-db-4 bytes=01aaaaaa02
+db(1)
+pad(3, 0xaa)
+db(2)
 ```
 
 The result is:
@@ -2764,17 +2761,17 @@ The result is:
 
 The fill argument is optional and defaults to zero:
 
-```asm
-pad(4);
+```asm id=en-pad
+pad(4)
 ```
 
 `pad_to(position, fill)` writes until the current output byte position reaches
 the requested position:
 
-```asm
-db(0x11, 0x22);
-pad_to(6, 0x90);
-db(0x33);
+```asm id=en-db-5 bytes=11229090909033
+db(0x11, 0x22)
+pad_to(6, 0x90)
+db(0x33)
 ```
 
 This emits:
@@ -2787,10 +2784,10 @@ The requested position cannot be behind the current output position.
 
 `align(boundary, fill)` advances to the next multiple of a boundary:
 
-```asm
-db(0x11, 0x22, 0x33);
-align(8, 0xcc);
-db(0x44);
+```asm id=en-db-6
+db(0x11, 0x22, 0x33)
+align(8, 0xcc)
+db(0x44)
 ```
 
 This emits five `cc` bytes before `44`. The fill argument defaults to zero.
@@ -2811,7 +2808,7 @@ Choose the operation that expresses the intent:
 
 A struct gives names and types to a sequence of fields:
 
-```asm
+```asm id=en-struct
 struct NaturalHeader {
     tag: u8
     size: u32
@@ -2839,7 +2836,7 @@ declared field alignments.
 
 For an exact file layout, declare a packed struct:
 
-```asm
+```asm id=en-packed
 packed struct FileHeader {
     tag: u8
     size: u32
@@ -2849,19 +2846,42 @@ packed struct FileHeader {
 `FileHeader` occupies five bytes. Its `size` field begins immediately at offset
 1, and there is no trailing padding.
 
-Packing removes internal and trailing padding, but the type retains the largest
-field alignment. When a packed aggregate is nested inside a naturally aligned
-aggregate, the outer aggregate aligns that field to the retained alignment.
+Packing removes internal and trailing padding, but it does not change the type's
+own alignment requirement: a packed struct still aligns to its widest field.
 
-Packed layout is usually the correct choice for file headers, protocol
+That shows up when the outer type is naturally aligned:
+
+```asm id=en-packed-2
+packed struct Inner {
+    a: u8
+    b: u64
+}
+
+struct Outer {
+    tag: u8
+    inner: Inner
+    tail: u8
+}
+
+assert(sizeof(Inner) == 9)            // packed: no padding inside or after
+assert(sizeof(Outer) == 24)
+assert(offset_of(Outer, inner) == 8)  // Inner aligns to 8, so seven bytes are skipped
+assert(offset_of(Outer, tail) == 17)
+```
+
+`Inner` holds no padding of its own, but it contains a `u64`, so `Inner` itself
+aligns to 8 bytes. `Outer` uses natural layout, so it places `inner` at offset 8
+and pads the end out to 24.
+
+Packed layout is the right choice for file headers, protocol
 records, instruction metadata, and other externally specified byte layouts.
-Natural layout is usually the correct choice for native in-memory records.
+Natural layout is the right choice for native in-memory records.
 
 ### Field Defaults and Struct Literals
 
 Integer fields in structs may provide compile-time defaults:
 
-```asm
+```asm id=en-packed-3
 packed struct Header {
     magic: u16 = 0x5a4d
     flags: u16 = 1
@@ -2872,8 +2892,8 @@ const header: Header = Header {
     size: 0x40
 }
 
-emit.u16(header.magic);
-emit.u32(header.size);
+emit.u16(header.magic)
+emit.u32(header.size)
 ```
 
 The literal supplies `size` and uses the defaults for `magic` and `flags`.
@@ -2885,13 +2905,10 @@ values of the wrong type are source errors.
 Union fields cannot declare defaults. A union value must always select exactly
 one active field explicitly.
 
-Fields can be read with normal field access, as shown by the two emission calls
-in the example.
+Field access reads a field of a value, so the value has to exist first. Bind the
+literal, then read the field:
 
-Field access reads a field of a value, so it needs a value to read from: write the
-literal into a binding first, then read the field.
-
-```asm
+```asm id=en-struct-2
 struct Pair {
     left: u32
     right: u32
@@ -2899,20 +2916,20 @@ struct Pair {
 
 const pair: Pair = Pair { left: 1, right: 2 }
 
-emit.u8(pair.left);
+emit.u8(pair.left)
 ```
 
-`Pair { left: 1, right: 2 }.left` is not accepted. Write the literal into a
-binding, and read the field from that binding.
+`Pair { left: 1, right: 2 }.left` is not accepted, because there is no value to
+read from until the literal is bound.
 
-Aggregate values exist during assembly. They are not automatically written to
-the output merely because they were declared.
+Declaring an aggregate value does not put it in the output. It exists during
+assembly, and it reaches the file when the source hands it to an output call.
 
 ### Measuring Layout
 
 `sizeof(Type)` returns the complete size of a binary type:
 
-```asm
+```asm id=en-struct-3
 struct NaturalHeader {
     tag: u8
     size: u32
@@ -2923,19 +2940,19 @@ packed struct PackedHeader {
     size: u32
 }
 
-assert(sizeof(NaturalHeader) == 8);
-assert(sizeof(PackedHeader) == 5);
-assert(offset_of(NaturalHeader, tag) == 0);
-assert(offset_of(NaturalHeader, size) == 4);
-assert(offset_of(PackedHeader, size) == 1);
+assert(sizeof(NaturalHeader) == 8)
+assert(sizeof(PackedHeader) == 5)
+assert(offset_of(NaturalHeader, tag) == 0)
+assert(offset_of(NaturalHeader, size) == 4)
+assert(offset_of(PackedHeader, size) == 1)
 ```
 
 `offset_of(Type, field)` returns a field offset. Both operations are
 compile-time expressions. They may be used in
 instructions, emitted fields, assertions, and other layout calculations:
 
-```asm
-x86.use64();
+```asm id=en-use64-13
+x86.use64()
 
 packed struct SaveArea {
     rax: u64
@@ -2954,8 +2971,8 @@ An aggregate type is an assembly-time layout description. x86 does not provide
 an instruction that pushes a complete struct value. Allocate the record on the
 stack, then use `offset_of` in ordinary memory operands:
 
-```asm
-x86.use64();
+```asm id=en-use64-14
+x86.use64()
 
 struct StackFrame {
     tag: u8,
@@ -2963,9 +2980,9 @@ struct StackFrame {
     tail: u16,
 }
 
-assert(sizeof(StackFrame) == 12);
-assert(offset_of(StackFrame, value) == 4);
-assert(offset_of(StackFrame, tail) == 8);
+assert(sizeof(StackFrame) == 12)
+assert(offset_of(StackFrame, value) == 4)
+assert(offset_of(StackFrame, tail) == 8)
 
 sub rsp, sizeof(StackFrame)
 mov dword [rsp + offset_of(StackFrame, value)], 0x44332211
@@ -2974,20 +2991,18 @@ mov word [rsp + offset_of(StackFrame, tail)], 0x6655
 add rsp, sizeof(StackFrame)
 ```
 
-The same form works with packed and nested layouts. A nested field can be used
-directly, for example `[rsp + offset_of(NestedFrame, point.y)]`. When this code
-calls a Windows x64 function, satisfy the ABI's stack-alignment and shadow-space
-requirements separately; `sizeof(StackFrame)` describes only the record.
+The same form works with packed and nested layouts, and a nested field goes in
+directly: `[rsp + offset_of(NestedFrame, point.y)]`.
 
-When this pattern is used in a PE64 program, the source must still satisfy the
-Windows x64 calling convention. The structure size describes the local record
-layout only; it does not automatically provide call-boundary stack space.
+If this code calls a Windows x64 function, the call still has to satisfy that
+ABI's stack alignment and shadow space. `sizeof(StackFrame)` describes the record
+and nothing else, so it does not cover the stack space a call needs.
 
 ### Packing and Emitting Struct Values
 
 `pack(value)` converts an aggregate value to a `bytes` value:
 
-```asm
+```asm id=en-packed-4
 packed struct Header {
     magic: u16 = 0x4241
     tail: u16
@@ -2998,20 +3013,20 @@ const header: Header = Header {
 }
 
 const encoded: bytes = pack(header)
-assert(encoded == b"ABCD");
-emit.bytes(encoded);
+assert(encoded == b"ABCD")
+emit.bytes(encoded)
 ```
 
 `emit.struct(value)` performs the packing and emission directly:
 
-```asm
+```asm id=en-struct-4 bytes=4100000044332211
 struct NaturalHeader {
     tag: u8 = 0x41
     size: u32 = 0x11223344
 }
 
 const header: NaturalHeader = NaturalHeader { }
-emit.struct(header);
+emit.struct(header)
 ```
 
 This emits eight bytes. The three natural-layout padding bytes are zero:
@@ -3028,7 +3043,7 @@ should be written immediately.
 
 A union overlays several field types at offset zero:
 
-```asm
+```asm id=en-packed-5
 packed struct Point {
     x: u16
     y: u16
@@ -3058,7 +3073,7 @@ explicitly selected active field.
 
 Unions may be nested inside structs:
 
-```asm
+```asm id=en-packed-6
 packed struct Point {
     x: u16
     y: u16
@@ -3081,50 +3096,40 @@ const record: Record = Record {
     }
 }
 
-assert(offset_of(Record, value) == 1);
-assert(offset_of(Record, value.point.y) == 3);
-emit.struct(record);
+assert(offset_of(Record, value) == 1)
+assert(offset_of(Record, value.point.y) == 3)
+emit.struct(record)
 ```
 
-Nested field paths work with `offset_of`, as shown by the two assertions in the
-example.
+`offset_of` follows a nested path: the second assertion adds the offset of
+`value` inside `Record` to the offset of `y` inside `Point`, which gives 3.
 
-The second result combines the offset of `value` inside `Record` with the
-offset of `y` inside `Point`.
+### When to Use Structs
 
-### Choosing a Layout Technique
+| Situation | Use |
+| --- | --- |
+| The layout has only a few fields | Direct integer and byte emission |
+| Fields are written once and do not need names afterward | Direct integer and byte emission |
+| The source follows an external table closely enough that explicit calls are clearer than a type declaration | Direct integer and byte emission |
+| An exact binary record is reused | Packed structs and unions |
+| Field names improve readability | Packed structs and unions |
+| `sizeof` and `offset_of` should drive other calculations | Packed structs and unions |
+| Values need defaults, nesting, comparison, or conversion to `bytes` | Packed structs and unions |
+| The record represents aligned memory rather than a serialized file layout | Natural structs |
+| Padding is intentional and should follow field alignment | Natural structs |
 
-Use direct integer and byte emission when:
-
-- the layout has only a few fields;
-- fields are written once and do not need names afterward;
-- the source follows an external table closely enough that explicit calls are
-  clearer than a type declaration.
-
-Use packed structs and unions when:
-
-- an exact binary record is reused;
-- field names improve readability;
-- `sizeof` and `offset_of` should drive other calculations;
-- values need defaults, nesting, comparison, or conversion to `bytes`.
-
-Use natural structs when:
-
-- the record represents aligned memory rather than a serialized file layout;
-- padding is intentional and should follow field alignment.
+File headers, protocol records, and other byte layouts fixed by an external
+specification take packed layout. Native in-memory records take natural layout.
 
 Always verify externally defined layouts with `sizeof` and `offset_of`
 assertions. These assertions turn format assumptions into executable checks
 and make later edits safer.
 
-The next chapter introduces modules and files: reusing source with `include`
-and `import`, and reading external text, bytes, JSON, and TOML during assembly.
-
 ## 10. Modules and Files
 
 Assembly projects quickly grow beyond one source file. Instruction helpers,
 binary record definitions, generated tables, configuration, and embedded data
-often have different owners and different reasons to change.
+have different owners and different reasons to change.
 
 XIRASM provides two separate file-loading models:
 
@@ -3135,26 +3140,26 @@ Keeping these roles separate makes a project easier to reason about. Source
 files contribute declarations or output operations. Data files produce values
 that the source can inspect, transform, and emit.
 
-This chapter covers compile-time file access: `fs.*`, `json.*`, and `toml.*`
-read data while XIRASM is assembling the source. Runtime I/O belongs to the
-target OS ABI, system calls, or a runtime library, and is outside this chapter.
+`fs.*`, `json.*`, and `toml.*` read data while XIRASM is assembling the source.
+Reading and writing files at runtime belongs to the target OS ABI, system calls,
+or a runtime library, and is outside this guide.
 
 ### Importing a Source Module
 
 `import(path)` evaluates a source file at most once:
 
-```asm
-import("support.inc");
-import("support.inc");
+```asm id=en-import
+import("support.inc")
+import("support.inc")
 
-emit_word(0x1234);
+emit_word(0x1234)
 ```
 
 Suppose `support.inc` contains:
 
 ```text
 fn emit_word(value: u64) {
-    emit.u16(value);
+    emit.u16(value)
 }
 ```
 
@@ -3174,7 +3179,7 @@ a block whose local execution would make module loading conditional:
 
 ```text
 if target.bits == 64 {
-    import("x64-support.inc");
+    import("x64-support.inc")
 }
 ```
 
@@ -3185,15 +3190,15 @@ module instead.
 
 `include(path)` evaluates the requested source every time it is reached:
 
-```asm
-include("inline.inc");
-include("inline.inc");
+```asm id=en-include
+include("inline.inc")
+include("inline.inc")
 ```
 
 If `inline.inc` contains:
 
 ```text
-emit.u8(0xaa);
+emit.u8(0xaa)
 ```
 
 the output is:
@@ -3232,7 +3237,7 @@ project/
 `tables/records.inc` may load its neighboring file with:
 
 ```text
-import("shared/constants.inc");
+import("shared/constants.inc")
 ```
 
 The path is relative to `records.inc`, not necessarily to the process working
@@ -3249,17 +3254,17 @@ source-relative paths or configured include roots.
 Source-loading cycles are rejected. A file cannot directly or indirectly
 include or import itself while it is already being evaluated.
 
-### Choosing Between `import` and `include`
+### Import and Include
 
-Choose based on execution semantics, not the filename extension:
+How the source is executed, not the filename extension, decides which one to use:
 
 | Need | Use |
 |---|---|
 | Define reusable names once | `import` |
 | Share a library of Meta functions or types | `import` |
+| Avoid duplicate declarations through dependency chains | `import` |
 | Emit a source fragment at the current position | `include` |
 | Evaluate the same source more than once | `include` |
-| Avoid duplicate declarations through dependency chains | `import` |
 
 A useful project convention is:
 
@@ -3271,9 +3276,9 @@ A useful project convention is:
 
 `fs.exists(path)` checks whether a data file can be resolved:
 
-```asm
-assert(fs.exists("payload.bin"));
-emit.bytes(fs.read_bytes("payload.bin"));
+```asm id=en-assert
+assert(fs.exists("payload.bin"))
+emit.bytes(fs.read_bytes("payload.bin"))
 ```
 
 Data paths use the same source-relative resolution model as source loading.
@@ -3282,10 +3287,10 @@ that module.
 
 `fs.read_text(path)` reads an entire file as a `string`:
 
-```asm
-const banner: string = fs.read_text("banner.txt");
-assert(contains(banner, "XIRASM"));
-emit.bytes(banner);
+```asm id=en-read-text
+const banner: string = fs.read_text("banner.txt")
+assert(contains(banner, "XIRASM"))
+emit.bytes(banner)
 ```
 
 If `banner.txt` contains:
@@ -3310,12 +3315,12 @@ Both forms use the same source-relative resolver and bounds checks as
 `fs.list_dir(path)` returns the entry names of a directory, and
 `fs.is_dir(path)` reports whether a path is a directory:
 
-```asm
+```asm id=en-list-dir
 for entry in fs.list_dir("assets") {
     if fs.is_dir(sym.join("assets/", entry)) {
-        continue;
+        continue
     }
-    emit.file(sym.join("assets/", entry));
+    emit.file(sym.join("assets/", entry))
 }
 ```
 
@@ -3328,24 +3333,17 @@ directory.
 
 ### Reading a Byte Range
 
-The three-argument form of `fs.read_bytes` reads a bounded range:
+The three-argument form of `fs.read_bytes` reads a bounded range. The second
+argument is a zero-based file offset, and the third is the number of bytes to
+return:
 
-```asm
-const middle: bytes = fs.read_bytes("payload.bin", 1, 2);
-assert(len(middle) == 2);
-emit.bytes(middle);
+```asm id=en-read-bytes bytes=2030
+const middle: bytes = fs.read_bytes("payload.bin", 1, 2)
+assert(len(middle) == 2)
+emit.bytes(middle)
 ```
 
-The second argument is a zero-based file offset. The third is the number of
-bytes to return.
-
-If `payload.bin` contains:
-
-```text
-10 20 30 40
-```
-
-the example emits:
+`payload.bin` holds `10 20 30 40`, so this emits:
 
 ```text
 20 30
@@ -3358,15 +3356,15 @@ silently shortening an out-of-bounds read.
 
 `json.file(path)` reads and parses a JSON file in one operation:
 
-```asm
-const config: map = json.file("config.json");
-const values: list = map.get(config, "values");
+```asm id=en-file
+const config: map = json.file("config.json")
+const values: list = map.get(config, "values")
 
-assert(map.get(config, "enabled"));
-emit.bytes(map.get(config, "name"));
-emit.u8(map.get(config, "bits"));
-emit.u8(list.get(values, 0));
-emit.u8(list.get(values, 1));
+assert(map.get(config, "enabled"))
+emit.bytes(map.get(config, "name"))
+emit.u8(map.get(config, "bits"))
+emit.u8(list.get(values, 0))
+emit.u8(list.get(values, 1))
 ```
 
 For this input:
@@ -3388,10 +3386,10 @@ the output is:
 
 `json.parse(value)` parses JSON already held in a `string` or `bytes` value:
 
-```asm
-const raw: string = fs.read_text("config.json");
-const config: map = json.parse(raw);
-emit.u8(map.get(config, "bits"));
+```asm id=en-read-text-2
+const raw: string = fs.read_text("config.json")
+const config: map = json.parse(raw)
+emit.u8(map.get(config, "bits"))
 ```
 
 JSON objects become maps, arrays become lists, strings and booleans keep their
@@ -3405,12 +3403,12 @@ data model. Duplicate object keys and malformed JSON are rejected.
 
 `toml.file(path)` provides the same direct workflow for TOML:
 
-```asm
-const config: map = toml.file("project.toml");
-const target: map = map.get(config, "target");
+```asm id=en-file-2
+const config: map = toml.file("project.toml")
+const target: map = map.get(config, "target")
 
-emit.bytes(map.get(config, "name"));
-emit.u8(map.get(target, "bits"));
+emit.bytes(map.get(config, "name"))
+emit.u8(map.get(target, "bits"))
 ```
 
 For this input:
@@ -3430,13 +3428,13 @@ the output is:
 
 `toml.parse(value)` parses TOML from a `string` or `bytes` value:
 
-```asm
-const raw: string = fs.read_text("project.toml");
-const config: map = toml.parse(raw);
-const target: map = map.get(config, "target");
+```asm id=en-read-text-3
+const raw: string = fs.read_text("project.toml")
+const config: map = toml.parse(raw)
+const target: map = map.get(config, "target")
 
-assert(map.get(target, "bits") == 64);
-emit.u8(0x40);
+assert(map.get(target, "bits") == 64)
+emit.u8(0x40)
 ```
 
 TOML tables become maps, arrays become lists, and strings, booleans, and
@@ -3482,8 +3480,8 @@ project/
 `main.asm` imports reusable definitions:
 
 ```text
-import("records.inc");
-import("encoding.inc");
+import("records.inc")
+import("encoding.inc")
 ```
 
 Those modules may read data relative to themselves or through explicit paths
@@ -3498,10 +3496,6 @@ Keep module behavior visible:
 - parse structured files once and reuse the resulting map or list;
 - use bounded binary reads when only part of a large file is needed.
 
-The next chapter explains output regions and virtual data: how XIRASM separates
-logical addresses / RVA, raw file offsets / FOA, reserved space, and temporary
-layout areas.
-
 ## 11. Output Regions and Virtual Data
 
 The simplest flat binary can treat an address and a file offset as the same
@@ -3515,12 +3509,12 @@ format:
   the file;
 - BSS needs an address range in memory but should not write a large block of
   zeros to the file;
-- headers often need RVA, raw pointer, raw size, and virtual size fields that
+- headers need RVA, raw pointer, raw size, and virtual size fields that
   are only known after the sections are complete;
 - some tables are easier to generate in temporary output, inspect or patch,
   and then copy into the real output.
 
-This chapter explains how XIRASM keeps four ideas separate: **logical address /
+XIRASM keeps four ideas separate here: **logical address /
 RVA**, **raw file offset / FOA**, **bytes that really enter the file**, and
 **temporary virtual output**.
 
@@ -3540,19 +3534,67 @@ padding. Changing FOA does not change label addresses. PE section fields such
 as `VirtualAddress`, `PointerToRawData`, `VirtualSize`, and `SizeOfRawData`
 come from different parts of this model.
 
-The common live queries are:
+Two of the common live queries answer questions in the
+logical address system (the one labels live in) and the rest answer questions in
+the file offset system:
 
-| Query | Meaning |
+| Query | The question it answers |
 |---|---|
-| `region_base()` | The active region's `origin`, used as the label address basis. |
-| `here()` | The current logical address. |
-| `file_offset()` | The current committed raw file offset; with only a tail `reserve`, it still points at the real file tail. |
-| `file_cursor_real()` | The next FOA already known to be part of the raw file. |
-| `file_cursor_potential()` | The FOA you would get if the current tail `reserve` were kept as zero bytes in the file. |
-| `tail_reserve_size()` | The number of bytes in the current tail `reserve` that have not entered the raw file. |
+| `region_base()` | What is this region's logical address basis, the one label addresses count from. |
+| `here()` | What is the current logical address. The equivalent of `$` in a traditional assembler. |
+| `file_offset()` | How many bytes have been written to the raw file. **That is the file position the next real byte lands at.** |
+| `file_cursor_real()` | The same thing; `file_offset()` and `file_cursor_real()` return the same value. |
+| `file_cursor_potential()` | What the next file position would be if the pending tail `reserve` counted too. |
+| `tail_reserve_size()` | How many reserved bytes at the end of this region have not entered the raw file. |
 
-`file_cursor_potential()` is an API name, not a separate mental model. In
-practice it means: real FOA plus the active tail reserve.
+`file_offset()` and `file_cursor_real()` are one thing under two names. The real
+contrast is with `file_cursor_potential()`, which counts the pending tail reserve
+while `file_offset()` does not.
+
+### Reading Intermediate Values with `print`
+
+Those queries take different values at different stages, and it is easy to mix
+them up from prose alone. `print` is the tool for that:
+
+- It **does not write the output file**; it adds a `note` diagnostic.
+- Values print by content: an integer prints as its decimal value (not as a
+  byte), a string prints as text, `bytes` prints as `b"..."`, and lists and maps
+  expand with their length.
+
+`print` takes several arguments and joins them in one note. After
+`origin(0x4000)`, one byte, and `reserve(3)`:
+
+```asm id=en-origin
+origin(0x4000)
+
+emit.u8(0xaa)
+reserve(3)                 // three logical bytes the file does not hold yet
+
+print("here", here())
+print("file_offset", file_offset())
+print("cursor_real", file_cursor_real())
+print("cursor_potential", file_cursor_potential())
+print("tail_reserve", tail_reserve_size())
+```
+
+Assembling prints:
+
+```text
+note: here 16388
+note: file_offset 1
+note: cursor_real 1
+note: cursor_potential 4
+note: tail_reserve 3
+```
+
+Read it as: `here` is the logical address `0x4004`, while `file_offset` is the
+file offset `1`. Both are "the current position" in their own system, so they are
+supposed to differ and their numbers cannot be compared directly.
+`file_cursor_potential()` returning `4` means "if those three reserved bytes were
+written to the file, the next file position would be 4".
+
+`warn` reports a warning and `err` reports an error that fails the assembly;
+`print` is only a note and never changes the result.
 
 These APIs are mostly for custom formats and format-library internals. Ordinary
 PE/COFF/ELF code should prefer the `format.inc` layer, which maintains most RVA
@@ -3563,16 +3605,16 @@ and FOA relationships for you.
 `origin(address)` changes the logical address basis of the active region. It
 does not move the raw file offset.
 
-```asm
-origin(0x4000);
+```asm id=en-origin-2 bytes=aa
+origin(0x4000)
 
 start:
-emit.u8(0xaa);
+emit.u8(0xaa)
 
-assert(region_base() == 0x4000);
-assert(label_addr("start") == 0x4000);
-assert(here() == 0x4001);
-assert(file_offset() == 1);
+assert(region_base() == 0x4000)
+assert(label_addr("start") == 0x4000)
+assert(here() == 0x4001)
+assert(file_offset() == 1)
 ```
 
 The file contains one byte:
@@ -3594,19 +3636,19 @@ sets both:
 - `origin`, the logical address basis for the region;
 - `file_offset`, the region's starting FOA in the raw file.
 
-```asm
-region.begin("header", 0x1000, 0);
+```asm id=en-begin bytes=4844000000000000000000000000000044415441
+region.begin("header", 0x1000, 0)
 
 header:
-emit.bytes(b"HD");
+emit.bytes(b"HD")
 
-region.begin("payload", 0x2000, 0x10);
+region.begin("payload", 0x2000, 0x10)
 
 payload:
-emit.bytes(b"DATA");
+emit.bytes(b"DATA")
 
-assert(label_addr("header") == 0x1000);
-assert(label_addr("payload") == 0x2000);
+assert(label_addr("header") == 0x1000)
+assert(label_addr("payload") == 0x2000)
 ```
 
 `header` occupies FOA `0` and `1`. `payload` starts at FOA `0x10`. In a flat
@@ -3625,29 +3667,29 @@ The caller is responsible for ordering, overlap, holes, and later header
 backfills. For standard formats, prefer `format.inc`; use direct regions when
 writing a custom binary format or implementing a format helper.
 
-### `reserve` Advances Logical Size, But a Tail Reserve May Stay Out of the File
+### `reserve` and the Tail Reserve
 
 Initialized bytes advance both logical address and raw file tail:
 
-```asm
-emit.u8(0xaa);
+```asm id=en-u8-2
+emit.u8(0xaa)
 
-assert(file_cursor_real() == 1);
-assert(file_cursor_potential() == 1);
-assert(tail_reserve_size() == 0);
+assert(file_cursor_real() == 1)
+assert(file_cursor_potential() == 1)
+assert(tail_reserve_size() == 0)
 ```
 
 `reserve(n)` is different. It advances the logical address. If it is still at
 the end of the region, XIRASM does not immediately write it as zeros:
 
-```asm
-emit.u8(0xaa);
-reserve(3);
+```asm id=en-u8-3
+emit.u8(0xaa)
+reserve(3)
 
-assert(here() == 4);
-assert(file_cursor_real() == 1);
-assert(file_cursor_potential() == 4);
-assert(tail_reserve_size() == 3);
+assert(here() == 4)
+assert(file_cursor_real() == 1)
+assert(file_cursor_potential() == 4)
+assert(tail_reserve_size() == 3)
 ```
 
 At this point the region occupies four logical bytes, but the raw file contains
@@ -3656,14 +3698,14 @@ only `aa`.
 If initialized output follows the reserve, the reserved range is no longer a
 tail. It becomes a middle gap and must enter the raw file as zeros:
 
-```asm
-emit.u8(0xaa);
-reserve(3);
-emit.u8(0xbb);
+```asm id=en-u8-4 bytes=aa000000bb
+emit.u8(0xaa)
+reserve(3)
+emit.u8(0xbb)
 
-assert(file_cursor_real() == 5);
-assert(file_cursor_potential() == 5);
-assert(tail_reserve_size() == 0);
+assert(file_cursor_real() == 5)
+assert(file_cursor_potential() == 5)
+assert(tail_reserve_size() == 0)
 ```
 
 The file contains:
@@ -3676,17 +3718,39 @@ This is the core rule behind BSS, section-tail padding, raw size, and virtual
 size: a tail reserve increases logical size; it becomes raw file bytes only if
 later initialized bytes make it a middle gap, or if you explicitly preserve it.
 
+### `output.org` Preserves the Tail Reserve
+
+`output.org(name, origin)` starts the next region at the current **logical
+offset**. That counts the tail reserve the previous region never wrote, so the
+reserve becomes real zero bytes in the raw file.
+
+```asm id=en-u8-5 bytes=4100000042
+emit.u8(0x41)
+reserve(3)
+
+output.org("next", 0x2000)
+emit.u8(0x42)
+```
+
+The logical offset is `4`, so the next region starts at FOA `4` and the three
+reserved bytes are written. The output is:
+
+```text
+41 00 00 00 42
+```
+
 ### `output.section` Trims the Tail Reserve
 
-`output.section(name, origin)` starts the next region at the current real FOA.
-The previous region's tail reserve is not written to the raw file.
+`output.section(name, origin)` starts the next region at the current **file
+offset**. It does not look at the logical offset, so the tail reserve the
+previous region never wrote is dropped:
 
-```asm
-emit.u8(0x41);
-reserve(3);
+```asm id=en-u8-6 bytes=4142
+emit.u8(0x41)
+reserve(3)
 
-output.section("next", 0x2000);
-emit.u8(0x42);
+output.section("next", 0x2000)
+emit.u8(0x42)
 ```
 
 The first region still has logical size `4`, but file size `1`. The next region
@@ -3703,35 +3767,15 @@ should not carry trailing zero bytes for it.
 previous region. Middle gaps that already became file content remain in the
 file.
 
-### `output.org` Preserves the Tail Reserve
+The choice is strictly about where the next region attaches:
 
-`output.org(name, origin)` starts the next region at the FOA after the current
-tail reserve. The previous region's tail reserve becomes zero bytes in the raw
-file.
-
-```asm
-emit.u8(0x41);
-reserve(3);
-
-output.org("next", 0x2000);
-emit.u8(0x42);
-```
-
-The output is:
-
-```text
-41 00 00 00 42
-```
-
-The choice is strictly about the next FOA:
-
-| Operation | Where the next region starts |
-|---|---|
-| `output.section` | At the real raw file tail; the previous tail reserve stays out of the file. |
-| `output.org` | After the reserve; the previous tail reserve becomes file zeros. |
+| Operation | Attaches at | Tail reserve |
+|---|---|---|
+| `output.org` | the current **logical offset** | becomes zero bytes in the file |
+| `output.section` | the current **file offset** | dropped, never written |
 
 Both operations also set a new `origin` for the new region. That origin affects
-labels, not the FOA choice above.
+labels, not the choice above.
 
 ### `region.file_align` Aligns Raw Size Only
 
@@ -3739,20 +3783,20 @@ labels, not the FOA choice above.
 It does not advance logical addresses and it does not turn the tail reserve
 into logical content.
 
-```asm
-region.begin("first", 0x1000, 0);
+```asm id=en-begin-2 bytes=41424300000000005a
+region.begin("first", 0x1000, 0)
 
-emit.bytes(b"ABC");
-reserve(13);
+emit.bytes(b"ABC")
+reserve(13)
 
-assert(here() == 0x1010);
-assert(file_cursor_real() == 3);
-assert(file_cursor_potential() == 16);
+assert(here() == 0x1010)
+assert(file_cursor_real() == 3)
+assert(file_cursor_potential() == 16)
 
-region.file_align(8);
+region.file_align(8)
 
-region.begin("second", 0x2000, 8);
-emit.u8(0x5a);
+region.begin("second", 0x2000, 8)
+emit.u8(0x5a)
 ```
 
 Only the three real bytes `ABC` participate in raw-size alignment. XIRASM adds
@@ -3785,23 +3829,17 @@ Use `align` when the RVA should advance. Use `region.file_align` when only
 A virtual region is scratch output used during assembly. It has its own logical
 addresses and bytes, but it is not copied into the final file automatically.
 
-```asm
-virtual.begin(0x3000);
+```asm id=en-begin-3 bytes=45322310
+virtual.begin(0x3000)              // scratch area at logical address 0x3000
 
 table:
-emit.u32(0x11223344);
-store.u32(table, load.u32(table) ^ 0x01010101);
-const encoded: bytes = load.bytes(table, 4)
+emit.u32(0x11223344)               // the table starts as 44 33 22 11
+store.u32(table, load.u32(table) ^ 0x01010101)   // XOR it in place: 45 32 23 10
+const encoded: bytes = load.bytes(table, 4)      // snapshot the four bytes
 
-virtual.end();
+virtual.end()
 
-emit.bytes(encoded);
-```
-
-The virtual region initially contains:
-
-```text
-44 33 22 11
+emit.bytes(encoded)                // only this copy reaches the final file
 ```
 
 The transformed bytes copied into the main output are:
@@ -3809,6 +3847,10 @@ The transformed bytes copied into the main output are:
 ```text
 45 32 23 10
 ```
+
+For contrast: the scratch area held `44 33 22 11` when it was created, and those
+bytes became the four above only after the XOR. The main output holds just those
+four; `44 33 22 11` never reached the file.
 
 Virtual regions are useful for temporary resource tables, export tables,
 string pools, checksums, and other data that must be generated and inspected
@@ -3840,20 +3882,20 @@ keeps the region's instructions, labels, and references, so a branch or a call
 written inside the scratch is resolved against the placed address by the ordinary
 fixup pass:
 
-```asm
-x86.use64();
+```asm id=en-use64-15
+x86.use64()
 
 main_target:
 emit.u8(0x90)
 
-virtual.begin(0x9000);
+virtual.begin(0x9000)
 gen_start:
 call main_target
 jmp gen_start
-virtual.end();
+virtual.end()
 
 late_layout {
-    region.place("gen_start", 0x8000, 0x10);
+    region.place("gen_start", 0x8000, 0x10)
 }
 ```
 
@@ -3871,24 +3913,28 @@ read out of the scratch during ordinary emission, through `load.*` or
 ### `load.*` and `store.*` Reach the Active Region Only
 
 During emission, `load.*` and `store.*` address the active region's own byte
-range. Inside a virtual region they read and patch the scratch bytes:
+range:
 
-```asm
-virtual.begin(0x3000);
+```asm id=en-u8-7 bytes=42
+emit.u8(0x5a)
 
-emit.bytes(b"AB");
-store.u8(0x3000, 0x5a);
-const patched: bytes = load.bytes(0x3000, 2)
+// Read the old value first, then patch in place: `first` keeps the 0x5a.
+const first: u64 = load.u8(0)
+store.u8(0, 0x42)
 
-virtual.end();
-
-emit.bytes(patched);
+assert(load.u8(0) == 0x42)
+assert(first == 0x5a)
 ```
 
-After `virtual.end()` the active region is the surrounding one again, so the same
-call addresses real output bytes. A value read out of scratch is a copy: it stays
-valid after the block ends, and it is the way a virtual region hands its result to
-the main output.
+```text
+42
+```
+
+`load.u8(0)` returns the value as it was before the patch, while
+`store.u8(0, 0x42)` replaces the first byte. Only `42` reaches the file. Inside a
+virtual region the same calls read and patch the scratch bytes; a value read out
+of scratch is a copy, so it stays valid after `virtual.end()` and is the way a
+virtual region hands its result to the main output.
 
 A virtual region does not read or write another region's bytes, and the
 surrounding output does not read scratch bytes by address. The two sides meet
@@ -3900,19 +3946,19 @@ through values, and, when the scratch holds code with references, through
 `virtual.begin()` may omit the origin. In that case the virtual region starts
 at the surrounding region's current logical address.
 
-```asm
-origin(0x4000);
-emit.u8(0xaa);
+```asm id=en-origin-3 bytes=aa3412
+origin(0x4000)
+emit.u8(0xaa)
 
-virtual.begin();
+virtual.begin()
 
 scratch:
-emit.u16(0x1234);
+emit.u16(0x1234)
 const copied: bytes = load.bytes(scratch, 2)
 
-virtual.end();
+virtual.end()
 
-emit.bytes(copied);
+emit.bytes(copied)
 ```
 
 `scratch` has logical address `0x4001`, but the virtual bytes do not replace or
@@ -3949,49 +3995,26 @@ image does not exist yet. Chapter 12 explains finalization: it can read stable
 layout, patch existing bytes, and validate the image, but it cannot change
 layout.
 
-### Choosing the Right Tool
+### Placing and Measuring Regions
 
-Use `origin` when:
+Each placement call answers a different question:
 
-- one flat stream needs a nonzero load address;
-- file offset and logical address otherwise advance together.
+| Call | Result |
+|---|---|
+| `origin` | Starts one flat stream at a nonzero load address, leaving file offset and logical address advancing together. |
+| `region.begin` | Starts a region whose logical address and FOA are both already known. |
+| `output.section` | Starts the next region at the real raw file tail, so the previous tail reserve counts for logical size but not file size. |
+| `output.org` | Starts the next region after the reserve, so the previous tail reserve becomes zero bytes in the file. |
+| `region.file_align` | Aligns a region's raw size for a file format without changing its logical address range. |
+| a virtual region | Generates, measures, reads, or patches data temporarily; temporary bytes reach the final file only when explicitly copied. |
 
-Use `region.begin` when:
-
-- both logical address and FOA are already known;
-- you are writing a custom binary format or implementing a format helper.
-
-Use `output.section` when:
-
-- the next region should follow the real raw file tail;
-- the previous tail reserve should count for logical size but not file size.
-
-Use `output.org` when:
-
-- the next region should start after the reserve;
-- the previous tail reserve must become zero bytes in the file.
-
-Use `region.file_align` when:
-
-- a region's raw size must satisfy file-format alignment;
-- the logical address range should not change.
-
-Use a virtual region when:
-
-- data must be generated, measured, read, or patched temporarily;
-- temporary bytes should enter the final file only if explicitly copied.
-
-The short version:
+The four quantities have distinct accessors:
 
 - labels, `here()`, and `origin` describe logical addresses / RVA;
 - `file_offset()` and `file_cursor_real()` describe committed FOA;
 - `file_cursor_potential()` asks where FOA would land if the active tail
   reserve were kept in the file;
 - `region_file_*` and `region_logical_size` are for final backfills and checks.
-
-The next chapter explains finalizers: how to read stable layout facts, patch
-existing bytes, compute checksums, and validate the completed image without
-changing its layout.
 
 ## 12. Finalizers
 
@@ -4023,16 +4046,16 @@ The usual pattern is:
 2. write the payload normally;
 3. patch the placeholder in `defer`.
 
-```asm
+```asm id=en-u16 bytes=0300414243
 size_field:
-emit.u16(0);
+emit.u16(0)
 
 payload:
-emit.bytes(b"ABC");
+emit.bytes(b"ABC")
 payload_end:
 
 defer {
-    store.u16(size_field, payload_end - payload);
+    store.u16(size_field, payload_end - payload)
 }
 ```
 
@@ -4047,16 +4070,16 @@ their value. It does not insert bytes or move the payload.
 
 Top-level finalizers may be declared before the labels they reference:
 
-```asm
+```asm id=en-u16-2
 defer {
-    store.u16(size_field, payload_end - payload);
+    store.u16(size_field, payload_end - payload)
 }
 
 size_field:
-emit.u16(0);
+emit.u16(0)
 
 payload:
-emit.bytes(b"ABC");
+emit.bytes(b"ABC")
 payload_end:
 ```
 
@@ -4070,27 +4093,27 @@ returns a byte range.
 
 They can be combined with stores and assertions:
 
-```asm
-origin(0x4000);
+```asm id=en-origin-4 bytes=0800000008000000414243444f4b2121
+origin(0x4000)
 
 header:
-emit.u32(0);
-emit.u32(0);
+emit.u32(0)
+emit.u32(0)
 
 body:
-emit.bytes(b"ABCD");
+emit.bytes(b"ABCD")
 tail:
-emit.bytes(b"????");
+emit.bytes(b"????")
 image_end:
 
 defer {
-    store.u32(header, image_end - body);
-    store.u32(header + 4, body - region_base());
-    store.bytes(tail, b"OK!!");
+    store.u32(header, image_end - body)
+    store.u32(header + 4, body - region_base())
+    store.bytes(tail, b"OK!!")
 
-    assert(load.u32(header) == 8);
-    assert(load.u32(header + 4) == 8);
-    assert(load.bytes(tail, 4) == b"OK!!");
+    assert(load.u32(header) == 8)
+    assert(load.u32(header + 4) == 8)
+    assert(load.bytes(tail, 4) == b"OK!!")
 }
 ```
 
@@ -4104,21 +4127,36 @@ The completed bytes are:
 values that do not fit their destination width.
 
 All loads and stores are range checked. A finalizer may access only bytes that
-exist in the physical image. A logical address inside a trimmed reserved tail
-is not a writable placeholder and is rejected.
+exist in the physical image. A logical address inside a trimmed reserved tail is
+not a writable placeholder:
+
+```asm id=en-u8-8 error=this store writes 1 byte at 0x2, but the finished output image holds 1 byte; a reserved tail is not in the file (InvalidApiArgument)
+emit.u8(0xaa)
+reserve(3)                  // three logical bytes the file does not hold
+
+defer {
+    store.u8(2, 0x55)       // address 2 falls inside that reserve
+}
+```
+
+The diagnostic names the address and the file length:
+
+```text
+error: this store writes 1 byte at 0x2, but the finished output image holds 1 byte; a reserved tail is not in the file (InvalidApiArgument)
+```
 
 ### Computing a Checksum
 
 A finalizer may declare local values, update mutable values, and use `while`:
 
-```asm
-origin(0x5000);
+```asm id=en-origin-5 bytes=0a0141424344
+origin(0x5000)
 
 checksum:
-emit.u16(0);
+emit.u16(0)
 
 payload:
-emit.bytes(b"ABCD");
+emit.bytes(b"ABCD")
 payload_end:
 
 defer {
@@ -4130,8 +4168,8 @@ defer {
         cursor = cursor + 1
     }
 
-    store.u16(checksum, sum);
-    assert(load.u16(checksum) == 266);
+    store.u16(checksum, sum)
+    assert(load.u16(checksum) == 266)
 }
 ```
 
@@ -4150,25 +4188,25 @@ loops. `for` is not currently accepted inside a finalizer; use a bounded
 The final region queries introduced in Chapter 11 are available inside
 `defer`:
 
-```asm
-region.begin("payload", 0x5000, 0);
+```asm id=en-begin-4 bytes=090000000c000000aa
+region.begin("payload", 0x5000, 0)
 
 file_size_field:
-emit.u32(0);
+emit.u32(0)
 logical_size_field:
-emit.u32(0);
+emit.u32(0)
 
 body:
-emit.u8(0xaa);
-reserve(3);
+emit.u8(0xaa)
+reserve(3)
 
 defer {
-    store.u32(file_size_field, region_file_size(body));
-    store.u32(logical_size_field, region_logical_size(body));
+    store.u32(file_size_field, region_file_size(body))
+    store.u32(logical_size_field, region_logical_size(body))
 
-    assert(region_file_offset(body) == 0);
-    assert(region_file_size(body) == 9);
-    assert(region_logical_size(body) == 12);
+    assert(region_file_offset(body) == 0)
+    assert(region_file_size(body) == 9)
+    assert(region_logical_size(body) == 12)
 }
 ```
 
@@ -4192,21 +4230,21 @@ queries during initial emission.
 
 Value-returning Meta functions remain useful for pure final calculations:
 
-```asm
+```asm id=en-align-up bytes=08000000414243
 fn align_up(value: u64, alignment: u64) -> u64 {
-    return ((value + alignment - 1) / alignment) * alignment;
+    return ((value + alignment - 1) / alignment) * alignment
 }
 
 size_field:
-emit.u32(0);
+emit.u32(0)
 
 payload:
-emit.bytes(b"ABC");
+emit.bytes(b"ABC")
 payload_end:
 
 defer {
-    store.u32(size_field, align_up(payload_end - payload, 8));
-    assert(load.u32(size_field) == 8);
+    store.u32(size_field, align_up(payload_end - payload, 8))
+    assert(load.u32(size_field) == 8)
 }
 ```
 
@@ -4223,17 +4261,17 @@ itself.
 
 A procedure may register a finalizer and capture its arguments:
 
-```asm
+```asm id=en-patch-u16 bytes=3412
 fn patch_u16(address: u64, value: u64) {
     defer {
-        store.u16(address, value);
+        store.u16(address, value)
     }
 }
 
 field:
-emit.u16(0);
+emit.u16(0)
 
-patch_u16(field, 0x1234);
+patch_u16(field, 0x1234)
 ```
 
 The call runs during normal source processing. Its argument values are frozen
@@ -4273,9 +4311,11 @@ not visible in another.
 
 The following operations are rejected because they would change layout:
 
-```text
+```asm id=en-u8-9 error=FinalizerCannotChangeLayout
+emit.u8(0)
+
 defer {
-    emit.u8(0x22);
+    emit.u8(0x22)          // a finalizer cannot create bytes
 }
 ```
 
@@ -4283,19 +4323,22 @@ The same restriction applies to ISA instructions, labels, region changes,
 alignment, reserve, nested finalizers, function declarations, and source
 loading.
 
+`load.*` stays available: a finalizer may read the finished bytes to compute the
+value it stores. The restriction is on the statement API, not on expressions.
+
 ### Finalizer Execution Order
 
 Deferred blocks execute in the order they were registered:
 
-```asm
-emit.u8(0);
+```asm id=en-u8-10 bytes=02
+emit.u8(0)
 
 defer {
-    store.u8(0, 1);
+    store.u8(0, 1)
 }
 
 defer {
-    store.u8(0, load.u8(0) + 1);
+    store.u8(0, load.u8(0) + 1)
 }
 ```
 
@@ -4326,15 +4369,15 @@ Sometimes the source must create real bytes or place real regions only after
 the main source has finished registering its content. That is the role of
 `late_layout`:
 
-```asm
-emit.u8(0x10);
+```asm id=en-u8-11 bytes=102030
+emit.u8(0x10)
 
 late_layout {
-    emit.u8(0x20);
+    emit.u8(0x20)
 }
 
 late_layout {
-    emit.u8(0x30);
+    emit.u8(0x30)
 }
 ```
 
@@ -4361,30 +4404,30 @@ logical address, size fields, and later backfills consistent.
 
 A typical direct-construction workflow is:
 
-```asm
+```asm id=en-u32
 table_offset_field:
-emit.u32(0);
-emit.bytes(b"HDR");
+emit.u32(0)
+emit.bytes(b"HDR")
 
 const table_origin: u64 = 0x8000
-virtual.begin(table_origin);
+virtual.begin(table_origin)
 table:
-emit.bytes(b"TAB");
+emit.bytes(b"TAB")
 const table_bytes: bytes = load.bytes(table, 3)
 const table_size: u64 = here() - table
-virtual.end();
+virtual.end()
 
 const table_foa: u64 = file_cursor_real()
 
 late_layout {
-    region.begin("late-table", table_origin, table_foa);
-    emit.bytes(table_bytes);
+    region.begin("late-table", table_origin, table_foa)
+    emit.bytes(table_bytes)
 }
 
 defer {
-    store.u32(table_offset_field, table_foa);
-    assert(load.u32(table_offset_field) == table_foa);
-    assert(table_size == 3);
+    store.u32(table_offset_field, table_foa)
+    assert(load.u32(table_offset_field) == table_foa)
+    assert(table_size == 3)
 }
 ```
 
@@ -4399,12 +4442,12 @@ backfill fields.
 Because `late_layout` still changes layout, appended initialized bytes can turn
 an earlier reserved tail into a middle gap:
 
-```asm
-emit.u8(0xaa);
-reserve(3);
+```asm id=en-u8-12 bytes=aa000000bb
+emit.u8(0xaa)
+reserve(3)
 
 late_layout {
-    emit.u8(0xbb);
+    emit.u8(0xbb)
 }
 ```
 
@@ -4423,19 +4466,19 @@ later initialized output.
 
 A deferred finalizer sees bytes appended during late layout:
 
-```asm
+```asm id=en-u32-2 bytes=0800000041424344
 size_field:
-emit.u32(0);
+emit.u32(0)
 
-emit.bytes(b"AB");
+emit.bytes(b"AB")
 
 late_layout {
-    emit.bytes(b"CD");
+    emit.bytes(b"CD")
 }
 
 defer {
-    store.u32(size_field, region_logical_size(size_field));
-    assert(region_file_size(size_field) == 8);
+    store.u32(size_field, region_logical_size(size_field))
+    assert(region_file_size(size_field) == 8)
 }
 ```
 
@@ -4445,7 +4488,7 @@ The stable region contains the four-byte field followed by four data bytes:
 08 00 00 00 41 42 43 44
 ```
 
-This is the intended division of responsibility:
+The division is deliberate:
 
 - `late_layout` creates bytes that must participate in layout;
 - `defer` observes the resulting layout and patches existing fields.
@@ -4467,35 +4510,32 @@ bytes, reserve space, alignment, or a region switch is required.
 
 It cannot declare labels, emit ISA instruction text, declare local values,
 loop, define functions, load source modules, or register nested late/final
-blocks.
+blocks. Anything outside the allowed set is rejected with `InvalidLateLayout`:
 
-Late layout runs once. It is not an implicit multi-pass mechanism and should
+```asm id=en-late-layout error=InvalidLateLayout
+late_layout {
+    let x = 1              // a late block has no local scope
+}
+```
+
+`while` and `for` are rejected the same way. Compute what the late block needs
+during ordinary source, then pass it in as an argument.
+
+Late layout runs once. It is not an implicit multi-pass scheme and should
 not be used to make unstable values repeatedly converge.
 
-### Choosing the Correct Phase
+### Emitting, Late Layout, and Finalization
 
-Use ordinary source when the bytes can be emitted in normal source order.
+Three phases differ in what they may change:
 
-Use `late_layout` when:
-
-- real bytes or regions must be created after the main source;
-- a late table must be placed at a caller-chosen file offset;
-- those bytes must affect final offsets and sizes;
-- a restricted, one-time late layout step is sufficient.
-
-Use `defer` when:
-
-- a fixed-width placeholder needs a final value;
-- a checksum or validation needs the completed byte image;
-- final region sizes or offsets are required;
-- existing bytes must be patched without changing layout.
+| Phase | What it does |
+|---|---|
+| ordinary source | Emits bytes in normal source order. |
+| `late_layout` | Creates real bytes or regions after the main source, including a late table placed at a caller-chosen file offset, and those bytes affect final offsets and sizes. It runs once and is restricted. |
+| `defer` | Patches a fixed-width placeholder with its final value, a checksum over the completed image, or final region sizes and offsets, without changing layout. |
 
 Never use `defer` to create missing space. Reserve or emit the required storage
 before finalization, then patch only that existing range.
-
-The next chapter begins Part III with flat and custom binaries: combining
-labels, structs, regions, late layout, and finalizers into complete file
-formats.
 
 ## Part III: Building Programs
 
@@ -4505,6 +4545,13 @@ XIRASM writes a flat binary by default. The output file contains exactly the
 bytes produced by instructions, data declarations, padding, output regions, and
 late layout. It does not receive an operating-system header unless the source
 explicitly creates one.
+
+Flat output is the base layer XIRASM holds, and it is where it separates from a
+traditional assembler. An assembler such as NASM produces an intermediate object
+file and leaves the executable format to a linker and the GNU toolchain; XIRASM
+carries the packaging itself, so one source can go from raw machine code to a
+complete executable. That base layer is what follows: how bytes are ordered,
+how regions divide them, and how late tables and final backfills reach the file.
 
 This direct model is useful for:
 
@@ -4524,8 +4571,8 @@ the completed image.
 
 Plain instruction lines can be the complete contents of a flat file:
 
-```asm
-x86.use64();
+```asm id=en-use64-16 bytes=b82a000000c3
+x86.use64()
 
 entry:
     mov eax, 42
@@ -4547,13 +4594,13 @@ address, and calling convention.
 
 Data APIs can build a small file directly:
 
-```asm
-emit.bytes(b"RAW1");
-emit.u16(1);
-emit.u16(0);
+```asm id=en-bytes bytes=5241573101000000414243
+emit.bytes(b"RAW1")
+emit.u16(1)
+emit.u16(0)
 
 payload:
-emit.bytes(b"ABC");
+emit.bytes(b"ABC")
 ```
 
 The output is:
@@ -4574,7 +4621,7 @@ order.
 Use a packed struct when a binary record has named fields but no implicit
 alignment gaps:
 
-```asm
+```asm id=en-packed-7 bytes=01000300414243
 packed struct ChunkHeader {
     kind: u16
     size: u16
@@ -4583,8 +4630,8 @@ packed struct ChunkHeader {
 emit.struct(ChunkHeader {
     kind: 1,
     size: 3,
-});
-emit.bytes(b"ABC");
+})
+emit.bytes(b"ABC")
 ```
 
 The output is:
@@ -4599,14 +4646,14 @@ requires the same alignment and trailing padding.
 
 For repeated records, place the emission logic in a procedure:
 
-```asm
+```asm id=en-emit-record bytes=014433221102ddccbbaa
 fn emit_record(tag: u8, value: u32) {
-    emit.u8(tag);
-    emit.u32(value);
+    emit.u8(tag)
+    emit.u32(value)
 }
 
-emit_record(1, 0x11223344);
-emit_record(2, 0xaabbccdd);
+emit_record(1, 0x11223344)
+emit_record(2, 0xaabbccdd)
 ```
 
 The records are emitted consecutively:
@@ -4623,31 +4670,31 @@ still determined by ordinary source order.
 Avoid manually calculating offsets, sizes, and checksums. Emit fixed-width
 fields, label the relevant data, and derive the final values in `defer`:
 
-```asm
-origin(0);
+```asm id=en-origin-6 bytes=5849463114000000100000009a0000004f4b2121
+origin(0)
 
 magic:
-emit.bytes(b"XIF1");
+emit.bytes(b"XIF1")
 size_field:
-emit.u32(0);
+emit.u32(0)
 payload_offset_field:
-emit.u32(0);
+emit.u32(0)
 checksum_field:
-emit.u32(0);
+emit.u32(0)
 
 payload:
-emit.bytes(b"OK!!");
+emit.bytes(b"OK!!")
 payload_end:
 
 defer {
-    store.u32(size_field, payload_end - magic);
-    store.u32(payload_offset_field, payload - magic);
-    store.u32(checksum_field, load.u8(payload) + load.u8(payload + 1));
+    store.u32(size_field, payload_end - magic)
+    store.u32(payload_offset_field, payload - magic)
+    store.u32(checksum_field, load.u8(payload) + load.u8(payload + 1))
 
-    assert(load.bytes(magic, 4) == b"XIF1");
-    assert(load.u32(size_field) == 20);
-    assert(load.u32(payload_offset_field) == 16);
-    assert(load.u32(checksum_field) == 0x9a);
+    assert(load.bytes(magic, 4) == b"XIF1")
+    assert(load.u32(size_field) == 20)
+    assert(load.u32(payload_offset_field) == 16)
+    assert(load.u32(checksum_field) == 0x9a)
 }
 ```
 
@@ -4677,17 +4724,17 @@ Keep the coordinate being stored explicit:
 A file may store bytes consecutively while assigning them unrelated logical
 addresses:
 
-```asm
-region.begin("header", 0x1000, 0);
-emit.bytes(b"HDR0");
+```asm id=en-begin-5 bytes=4844523044415441
+region.begin("header", 0x1000, 0)
+emit.bytes(b"HDR0")
 
-output.section("payload", 0x2000);
+output.section("payload", 0x2000)
 payload:
-emit.bytes(b"DATA");
+emit.bytes(b"DATA")
 
 defer {
-    assert(payload == 0x2000);
-    assert(region_file_offset(payload) == 4);
+    assert(payload == 0x2000)
+    assert(region_file_offset(payload) == 4)
 }
 ```
 
@@ -4710,26 +4757,26 @@ Reserve behaves differently depending on whether initialized data follows it.
 An internal gap becomes raw file zero bytes, while a continuous reserved tail can
 remain absent from the file:
 
-```asm
-region.begin("image", 0x5000, 0);
+```asm id=en-begin-6 bytes=484452301100000019000000aa000000ee
+region.begin("image", 0x5000, 0)
 
-emit.bytes(b"HDR0");
+emit.bytes(b"HDR0")
 file_size_field:
-emit.u32(0);
+emit.u32(0)
 logical_size_field:
-emit.u32(0);
+emit.u32(0)
 
-emit.u8(0xaa);
-reserve(3);
-emit.u8(0xee);
-reserve(8);
+emit.u8(0xaa)
+reserve(3)
+emit.u8(0xee)
+reserve(8)
 
 defer {
-    store.u32(file_size_field, region_file_size(file_size_field));
-    store.u32(logical_size_field, region_logical_size(logical_size_field));
+    store.u32(file_size_field, region_file_size(file_size_field))
+    store.u32(logical_size_field, region_logical_size(logical_size_field))
 
-    assert(load.u32(file_size_field) == 17);
-    assert(load.u32(logical_size_field) == 25);
+    assert(load.u32(file_size_field) == 17)
+    assert(load.u32(logical_size_field) == 25)
 }
 ```
 
@@ -4753,18 +4800,18 @@ Use `late_layout` when a real trailer must be appended, or a table, string
 pool, or relocation record must be created or placed after ordinary source
 processing:
 
-```asm
+```asm id=en-u32-3 bytes=0c00000044415441454e4421
 total_size:
-emit.u32(0);
-emit.bytes(b"DATA");
+emit.u32(0)
+emit.bytes(b"DATA")
 
 late_layout {
-    emit.bytes(b"END!");
+    emit.bytes(b"END!")
 }
 
 defer {
-    store.u32(total_size, region_file_size(total_size));
-    assert(load.u32(total_size) == 12);
+    store.u32(total_size, region_file_size(total_size))
+    assert(load.u32(total_size) == 12)
 }
 ```
 
@@ -4815,15 +4862,15 @@ A custom writer should assert the invariants that make its output readable:
 - raw size and logical size follow the format's rules.
 
 Assertions inside `defer` validate the exact bytes that will be written,
-including encoded instructions and resolved fixups. A failed invariant stops
+including encoded instructions and resolved fixups. A failed assertion stops
 assembly instead of producing a file that only appears valid.
 
 Keep validation close to the field it protects. A size backfill and its
-corresponding assertion usually belong in the same finalizer.
+corresponding assertion belong in the same finalizer.
 
 ### Organizing a Custom Writer
 
-For a small format, a clear source order is usually:
+For a small format, write the source in this order:
 
 1. declare record types and constants;
 2. emit the fixed header and placeholders;
@@ -4853,9 +4900,6 @@ the separate [Format Tutorial](format-tutorial.md) gives complete examples.
 Direct construction belongs in the
 [Advanced Format Construction Guide](advanced-formats.md).
 
-The next chapter gives a short language-level introduction to selecting and
-using `format.inc` without duplicating the complete executable-format guide.
-
 ## 14. Executable and Object Formats
 
 Standard executable and object formats contain more than a sequence of
@@ -4865,17 +4909,17 @@ to rules expected by linkers and operating-system loaders.
 
 XIRASM provides `format.inc` for these files:
 
-```asm
-import("format/format.inc");
+```asm id=en-import-2
+import("format/format.inc")
 ```
 
 With `format.inc`, source describes the intended image instead of manually
 writing table counts, row positions, file offsets, virtual addresses, and
 header fields.
 
-This chapter explains the common language pattern. Complete format options,
-imports, exports, relocations, shared libraries, object files, and advanced
-helpers belong in the [Format Tutorial](format-tutorial.md).
+Complete format options, imports, exports, relocations, shared libraries, object
+files, and advanced helpers belong in the
+[Format Tutorial](format-tutorial.md).
 
 ### Declaring the Image Before Writing It
 
@@ -4898,9 +4942,9 @@ descriptor updates the generated format structure automatically.
 The following program creates an x86-64 ELF executable with one loadable,
 readable, executable segment:
 
-```asm
-import("format/format.inc");
-x86.use64();
+```asm id=en-import-3
+import("format/format.inc")
+x86.use64()
 
 let image: map = format_elf64(
     format_elf_exec,
@@ -4911,17 +4955,17 @@ let image: map = format_elf64(
         )
     )
 )
-format_begin(image);
+format_begin(image)
 
-format_segment_begin(image, ".text");
+format_segment_begin(image, ".text")
 start:
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
 On x86-64 Linux, the generated program exits with status zero.
@@ -4989,7 +5033,7 @@ starting code:
 
 ```text
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
 `format_entry_mut` updates the direct `let` binding passed as its first
@@ -5103,11 +5147,11 @@ app.asm:9:1: error: unknown call: no_such_function
 
 `print` emits an informational note. `warn` emits a non-fatal warning:
 
-```asm
-print("image origin", here());
-warn("using default alignment", 16);
-assert(true, "configuration must be valid");
-emit.u8(0x7d);
+```asm id=en-print bytes=7d
+print("image origin", here())
+warn("using default alignment", 16)
+assert(true, "configuration must be valid")
+emit.u8(0x7d)
 ```
 
 The source assembles successfully and emits one byte:
@@ -5136,7 +5180,7 @@ produce an invalid file or unsupported program, report an error instead.
 
 ```text
 if target.bits != 64 {
-    err("this source requires a 64-bit target", target.bits);
+    err("this source requires a 64-bit target", target.bits)
 }
 ```
 
@@ -5146,7 +5190,7 @@ made the configuration invalid when it helps the user correct the source.
 An error message should explain the violated requirement:
 
 ```text
-err("section alignment must be a nonzero power of two", alignment);
+err("section alignment must be a nonzero power of two", alignment)
 ```
 
 Avoid messages such as `invalid value` when the source can name the expected
@@ -5154,21 +5198,21 @@ property.
 
 ### Assertions
 
-`assert` is the shortest way to encode an invariant:
+`assert` is the shortest way to state a rule that must hold:
 
-```asm
+```asm id=en-packed-8 bytes=01000300414243
 packed struct Header {
     kind: u16
     size: u16
 }
 
-assert(sizeof(Header) == 4, "Header must remain four bytes");
+assert(sizeof(Header) == 4, "Header must remain four bytes")
 
 emit.struct(Header {
     kind: 1,
     size: 3,
-});
-emit.bytes(b"ABC");
+})
+emit.bytes(b"ABC")
 ```
 
 The assertion produces no output when it succeeds. The completed bytes are:
@@ -5205,11 +5249,11 @@ accidental dependence on temporary layout values.
 
 Make target requirements visible near the code that depends on them:
 
-```asm
-x86.use64();
+```asm id=en-use64-17 bytes=31c0c3
+x86.use64()
 
 if target.bits != 64 {
-    err("this routine requires x86-64");
+    err("this routine requires x86-64")
 }
 
 entry:
@@ -5241,8 +5285,8 @@ const record_kind_code: u16 = 3
 ```
 
 Numeric instruction operands that are part of an algorithm may remain local.
-Offsets, flags, structure sizes, format values, and alignment policies usually
-deserve names.
+Offsets, flags, structure sizes, format values, and alignment policies deserve
+names.
 
 Use named constants when a value represents one choice from a closed set. Use
 structs when several fields form one record. Use maps or lists when the source
@@ -5298,7 +5342,7 @@ Keep each finalizer focused on related fields. A block that patches one header
 and verifies its values is easier to review than one block that mutates
 unrelated regions throughout the file.
 
-### Organize Modules by Responsibility
+### Organize Modules by Role
 
 A practical project layout separates:
 
@@ -5320,8 +5364,8 @@ passed directly.
 
 For standardized executable and object formats, begin with:
 
-```asm
-import("format/format.inc");
+```asm id=en-import-4
+import("format/format.inc")
 ```
 
 `format.inc` owns descriptor counts, table order, generated indexes, offsets,
@@ -5346,7 +5390,7 @@ Validate facts where XIRASM hands output to another system:
 - keep entry points and exported symbols named;
 - retain a small runnable example for every reusable public include.
 
-Validation should describe the contract, not duplicate implementation details.
+Validation should state what must hold, not redo the implementation.
 An assertion that a table count matches a declaration list is useful. An
 assertion that repeats every internal arithmetic step is harder to maintain.
 

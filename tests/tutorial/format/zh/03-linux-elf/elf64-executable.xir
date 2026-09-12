@@ -1,0 +1,31 @@
+import("format/format.inc")
+
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable),
+        format_segment(".data", format_load | format_readable | format_writeable),
+        format_segment(".bss", format_load | format_readable | format_writeable)
+    )
+)
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    mov eax, 60
+    xor edi, edi
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".data")
+answer:
+    dd(42)
+format_segment_end(image, ".data")
+
+format_segment_begin(image, ".bss")
+scratch:
+    rb(128)
+format_segment_end(image, ".bss")
+
+format_entry_mut(image, start)
+format_finish(image)

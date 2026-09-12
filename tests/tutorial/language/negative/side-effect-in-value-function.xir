@@ -1,0 +1,6 @@
+fn bad_counter() -> u64 {
+    db(1)
+    return 1
+}
+
+const result = bad_counter()

@@ -1,0 +1,6 @@
+x86.use64()
+
+entry:
+    ret
+
+dq(label_addr(entry))

@@ -1,0 +1,7 @@
+// 操作数位置要的是文本，operand.eval 产出的是值 —— 位置不对。
+macro bad(value) {
+    mov rax, operand.eval(value)
+}
+
+x86.use64()
+bad 7

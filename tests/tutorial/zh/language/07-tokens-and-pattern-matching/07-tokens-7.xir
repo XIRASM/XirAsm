@@ -1,0 +1,4 @@
+// int 捕获碰上名字，只是一次没匹配上：ok 为假，不报错。
+const result: map = match.tokens("value:int", "name")
+
+assert(!map.get(result, "ok"))

@@ -1,0 +1,5 @@
+emit.u8(0)
+
+defer {
+    emit.u8(0x22)          // a finalizer cannot create bytes
+}

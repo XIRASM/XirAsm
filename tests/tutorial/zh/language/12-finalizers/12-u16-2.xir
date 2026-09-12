@@ -1,0 +1,11 @@
+defer {
+    // defer 写在标号之前也可以：执行时这些标号已经解析完了。
+    store.u16(size_field, payload_end - payload)
+}
+
+size_field:
+emit.u16(0)
+
+payload:
+emit.bytes(b"ABC")
+payload_end:

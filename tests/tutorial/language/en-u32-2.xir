@@ -1,0 +1,13 @@
+size_field:
+emit.u32(0)
+
+emit.bytes(b"AB")
+
+late_layout {
+    emit.bytes(b"CD")
+}
+
+defer {
+    store.u32(size_field, region_logical_size(size_field))
+    assert(region_file_size(size_field) == 8)
+}

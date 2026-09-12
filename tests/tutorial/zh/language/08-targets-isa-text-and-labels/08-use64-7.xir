@@ -1,0 +1,8 @@
+// 把逻辑起始地址设置为 0x1000。
+x86.use64()
+origin(0x1000)
+
+target:
+    // 操作数表示标号地址再加四。
+    mov rax, target + 4
+    ret

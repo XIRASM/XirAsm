@@ -1,0 +1,6 @@
+const before = target.bits   // 64: read now, while this ISA is in effect
+
+x86.use32()
+
+db(before)                   // 40: the binding kept the value it read
+db(target.bits)              // 20: reading again sees the current target

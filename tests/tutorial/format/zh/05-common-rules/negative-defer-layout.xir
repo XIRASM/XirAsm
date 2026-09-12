@@ -1,0 +1,23 @@
+# expect-error: FinalizerCannotChangeLayout
+import("format/format.inc")
+
+// 在 defer 里往节里写内容：布局已经定型，不允许再改变大小。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
+format_begin(image)
+format_section_begin(image, ".text")
+start:
+    ret
+format_section_end(image, ".text")
+format_entry_mut(image, start)
+format_finish(image)
+
+defer {
+    format_section_begin(image, ".text")
+    dd(0x11223344)
+    format_section_end(image, ".text")
+}

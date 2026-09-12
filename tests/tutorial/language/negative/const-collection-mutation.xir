@@ -1,0 +1,2 @@
+const items: list = list.of(1)
+list.push_mut(items, 2)

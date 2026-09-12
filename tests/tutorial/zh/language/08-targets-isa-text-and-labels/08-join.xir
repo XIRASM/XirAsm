@@ -1,0 +1,7 @@
+// 根据多个固定部分组成动态标号名称。
+const done: string = sym.join("generated_", "done")
+
+// 动态指令和动态标号仍然进入正常的汇编流程。
+isa(sym.join("jmp ", done))
+label.define(done)
+isa("ret")

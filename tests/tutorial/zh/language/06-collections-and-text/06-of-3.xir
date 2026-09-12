@@ -1,0 +1,4 @@
+let items: list = list.of(1, 2)
+list.push_mut(items, 3)
+
+emit.u8(len(items))       // 这里写出：03

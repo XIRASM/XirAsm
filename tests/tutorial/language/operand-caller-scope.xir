@@ -1,0 +1,8 @@
+macro shadowed(value) {
+    const LIMIT: u64 = 100
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+
+const LIMIT: u64 = 7
+shadowed LIMIT + 1

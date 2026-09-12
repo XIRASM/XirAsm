@@ -1,0 +1,7 @@
+// 声明了 -> 却写出输出：这条限制把两种形式分开了。
+fn bad_counter() -> u64 {
+    db(1)
+    return 1
+}
+
+const result = bad_counter()

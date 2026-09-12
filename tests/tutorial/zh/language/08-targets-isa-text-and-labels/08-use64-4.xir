@@ -1,0 +1,7 @@
+// 选择 64 位 x86，然后直接编写指令。
+x86.use64()
+
+entry:
+    mov rax, 1
+    add rax, 2
+    ret

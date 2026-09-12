@@ -1,0 +1,8 @@
+// 在汇编期间计算立即数。
+x86.use64()
+const initial_value: u32 = 40 + 2
+
+entry:
+    // 编译期常量会直接成为指令操作数。
+    mov eax, initial_value
+    ret

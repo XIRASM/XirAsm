@@ -1,0 +1,12 @@
+// 明确选择 64 位 x86 指令编码。
+x86.use64()
+
+// 不满足位数要求时，在汇编期间直接拒绝该目标平台。
+if target.bits != 64 {
+    err("this routine requires x86-64")
+}
+
+entry:
+    // 例程只为 x86-64 生成清零和返回指令。
+    xor eax, eax
+    ret

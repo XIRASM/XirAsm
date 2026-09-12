@@ -1,0 +1,20 @@
+# expect-error: COFF symbol names must fit in eight bytes
+import("format/format.inc")
+
+// COFF 符号名的上限是八字节，这里故意超过。
+let object: map = format_coff64(
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
+format_begin(object)
+format_section_begin(object, ".text")
+text_start:
+main:
+    ret
+format_section_end(object, ".text")
+const symbols: list = list.of(
+    format_coff_public("a_very_long_symbol_name", ".text", text_start, main, coff_sym_type_function)
+)
+format_coff_tables_mut(object, symbols, list.new())
+format_finish(object)

@@ -1,0 +1,3 @@
+const banner: string = fs.read_text("banner.txt")
+assert(contains(banner, "XIRASM"))
+emit.bytes(banner)

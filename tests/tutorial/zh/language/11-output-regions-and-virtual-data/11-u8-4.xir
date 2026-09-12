@@ -1,0 +1,6 @@
+emit.u8(0x41)
+reserve(3)
+
+// 逻辑偏移是 4，所以 next 从 FOA 4 开始，前面三个预留字节被写出来。
+output.org("next", 0x2000)
+emit.u8(0x42)

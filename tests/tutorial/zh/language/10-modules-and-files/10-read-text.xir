@@ -1,0 +1,7 @@
+const banner: string = fs.read_text("banner.txt")
+
+// 读进来的是字符串，可以直接用字符串接口检查。
+assert(contains(banner, "XIRASM"))
+
+// 再交给写输出接口，原样进文件。
+emit.bytes(banner)

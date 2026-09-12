@@ -1,0 +1,6 @@
+// 选择 XLEN 为 64 位的 RISC-V 模式。
+riscv.use64()
+
+// 两条指令都会按照当前 64 位 RISC-V 目标编码。
+addi x1, x0, 1
+addi x0, x0, 0

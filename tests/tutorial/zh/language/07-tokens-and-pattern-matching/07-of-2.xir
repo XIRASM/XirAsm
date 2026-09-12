@@ -1,0 +1,11 @@
+// 先自己分好词，再把列表交给 match.tokens，省掉重复分词。
+const input: list = tokens.of("load r1, 42")
+const result: map = match.tokens(
+    "=load destination:name =, value:int",
+    input
+)
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+assert(map.get(captures, "destination") == "r1")
+assert(map.get(captures, "value") == 42)

@@ -1,27 +1,20 @@
 # 6. macOS Mach-O
 
-The Mach-O helpers are a direct XIRASM DSL layer for macOS images. They emit
-records and bytes for a selected CPU type; they do not add a second instruction
-encoder or a native ARM text parser.
+Executables, shared libraries, and object files handed to a linker on macOS all use the Mach-O format. Its organization differs from both PE and ELF: content is grouped into **segments**, each segment holding **sections**, the segment and section names are 16 bytes each, and the names carry fixed meanings — `__TEXT` holds code, `__DATA` holds writable data, and the loader and system tools find content by those names.
 
-## Quick Start
+The `format.inc` layer owns **structure**: the header, the segment commands, the section table, the symbol table, the relocation table, and the offsets between them. It does not encode instructions and does not parse ARM assembly text — the bytes written into a section come from the source.
 
-Choose the product first: use `macho_obj.inc` for a `.o` consumed by a linker,
-`macho_exe.inc` for a direct executable, and `macho_dylib.inc` for a shared
-library. Add `macho_import.inc` only for direct executable dyld imports. The
-checked `tests/format/macho64_*` files are complete layouts for `arm64` and
-`x86_64`; copy one and change its labels, addresses, and emitted ISA bytes.
-The format helpers do not assemble instruction text.
+## Choosing the Product
 
-## Public Entry
+The three Mach-O products come from three constructors, and the choice follows from who finishes the file:
 
-Import the normal format entry point when you want all format helpers:
+```asm id=macho64-exe target=x86-64
+import("format/format.inc")
 
-```asm
-import("format/format.inc");
-
-// The facade accepts arm64 (16 KiB pages) and x86_64 (4 KiB pages).
+// macOS 14 as both the minimum version and the SDK version.
 const version: u64 = macho_exe_macos_version(14, 0, 0)
+
+// Executable: the first segment must be __TEXT and must hold a code section.
 let image: map = format_macho64_exe(
     format_macho64_target_x86_64(version, version),
     list.of(format_macho64_segment(
@@ -31,50 +24,71 @@ let image: map = format_macho64_exe(
     ))
 )
 
-format_begin(image);
-format_section_begin(image, "__text");
+format_begin(image)
+format_section_begin(image, "__text")
 entry:
-db(0x31, 0xc0, 0xc3);
-format_section_end(image, "__text");
-format_entry_mut(image, entry);
-format_finish(image);
+    // The machine code comes from the source: xor eax, eax; ret in x86-64.
+    db(0x31, 0xc0, 0xc3)
+format_section_end(image, "__text")
+format_entry_mut(image, entry)
+format_finish(image)
 ```
 
-The Mach-O helpers are also available directly:
+This example is 4096 bytes with header fields `Magic64 (0xFEEDFACF)`, `CpuType X86-64`, and `FileType Executable`, carrying 6 load commands. The page size follows the CPU: 4 KiB for x86-64 and 16 KiB for arm64, the same values used for AArch64 in the ELF chapter.
 
-```asm
-import("format/macho_obj.inc");
-```
+## Public Entry
+
+Importing `format/format.inc` provides the constructors above. Writing segment commands, section tables, and symbol tables by hand means using the lower-level files:
+
+| Product | Lower-level file | Finishing tool |
+| --- | --- | --- |
+| Relocatable object | `macho_obj.inc` | `ld64` or `ld64.lld` |
+| Executable | `macho_exe.inc` | the macOS loader; signing is external |
+| Shared library | `macho_dylib.inc` | dyld; imports and signing are external |
+| dyld function imports | `macho_import.inc` | for a directly generated executable |
 
 ## Three Products
 
-| Product | Helper | Intended next tool |
-| --- | --- | --- |
-| Relocatable object | `macho_obj.inc` | `ld64` or `ld64.lld` |
-| Executable | `macho_exe.inc` | macOS loader; signing is external |
-| Shared library | `macho_dylib.inc` | dyld; imports and signing are external |
+`format_macho64_object`, `format_macho64_exe`, and `format_macho64_dylib` share one section lifecycle and differ only in the header and the segment commands.
 
-The higher-level `format_macho64_object`, `format_macho64_exe`, and
-`format_macho64_dylib` constructors use the same section lifecycle. A section
-is identified by `(segment_name, section_name)`; when two segments contain the
-same section name, use `format_macho64_section_begin/end` with both names.
-The facade's `MH_OBJECT` form has one implicit segment and therefore requires
-unique section names.
-The facade emits ordinary code, data, and zerofill sections. For objects it
-also owns the symbol table, relocations, and `LC_SYMTAB` end to end — see
-[Object Symbols And Relocations](#object-symbols-and-relocations) below. Dyld
-imports, code signatures, and chained fixups remain explicit lower-level
-helpers or linker responsibilities.
+Segment and section names are each at most 16 bytes, and **a segment name is one the system recognizes**, such as `__TEXT` or `__DATA` (two leading underscores). `__PAGEZERO` and `__LINKEDIT` are generated by `format.inc` and must not be declared.
+
+A section's identity is "segment name plus section name", because two segments may hold a section of the same name:
+
+```text
+// When two segments share a section name, both names are given.
+format_macho64_section_begin(image, "__DATA", "__data")
+
+// Closing it takes both names as well.
+format_macho64_section_end(image, "__DATA", "__data")
+```
+
+With a single segment, `format_section_begin` and `format_section_end` take the section name alone, matching the PE and ELF usage.
+
+Executables and shared libraries carry more requirements than objects, and violating one reports a diagnostic:
+
+| Requirement | Diagnostic |
+| --- | --- |
+| the first segment must be `__TEXT` | `Mach-O first segment must be __TEXT` |
+| at least one code section | `Mach-O executable or dylib requires a code section` |
+| a code section must sit in an executable segment | `Mach-O code section requires an executable segment` |
+| section permissions cannot exceed the segment's | `Mach-O section permissions exceed its segment permissions` |
+| a zerofill section must be last in its segment | `Mach-O zerofill sections must be last in their segment` |
+| section and segment names must be unique | `Mach-O section name is duplicated` / `Mach-O segment name is duplicated` |
+| an executable's entry must fall inside a code section | `Mach-O executable entry is outside its code sections` |
+| a shared library needs at least one export | `Mach-O dylib facade requires at least one export` |
+| the last section must be closed | `Mach-O final section is still open` |
+
+An executable whose entry lands in a data section is rejected, so `format_entry_mut` takes a label inside a code section. A shared library's exports are not optional: `format_macho64_dylib` requires at least one, and `format_finish` reports an error without one.
+
+Section names may run to 16 bytes, wider than the 8 bytes PE allows, but only three purposes are supported: `format_code`, `format_data`, and `format_uninitialized_data`. Mach-O has no "discardable" notion, so `format_discardable` reports `Mach-O sections do not support the discardable attribute`.
 
 ## Object Symbols And Relocations
 
-`format_macho64_object` reserves the `LC_SYMTAB` load command when the header
-is emitted and backfills its offsets at `format_finish`. You never compute
-symbol indexes or string-table offsets; you declare symbols and relocations by
-name and attach them with `format_macho64_tables_mut`:
+The two things an object file hands the linker are a symbol table and a relocation table. `format_macho64_object` reserves the `LC_SYMTAB` command while writing the header and `format_finish` fills in its offsets, so symbol indices and string-table offsets are never computed by hand:
 
-```asm
-import("format/format.inc");
+```asm id=macho64-object target=aarch64
+import("format/format.inc")
 
 const version: u64 = macho_exe_macos_version(14, 0, 0)
 let object: map = format_macho64_object(
@@ -85,26 +99,26 @@ let object: map = format_macho64_object(
     )
 )
 
-format_begin(object);
+format_begin(object)
 
-// Placeholder words whose immediate fields the linker patches.
-format_section_begin(object, "__text");
+// Three placeholder instruction words whose immediate fields the linker fills in.
+format_section_begin(object, "__text")
 text_start:
 call_site:
-    emit.u32(0x94000000);
+    emit.u32(0x94000000)
 page_site:
-    emit.u32(0x90000000);
+    emit.u32(0x90000000)
 lo12_site:
-    emit.u32(0x91000000);
-format_section_end(object, "__text");
+    emit.u32(0x91000000)
+format_section_end(object, "__text")
 
-format_section_begin(object, "__data");
+format_section_begin(object, "__data")
 data_start:
 answer:
-    emit.u64(42);
+    emit.u64(42)
 pointer_slot:
-    emit.u64(0);
-format_section_end(object, "__data");
+    emit.u64(0)
+format_section_end(object, "__data")
 
 const symbols: list = list.of(
     format_macho64_public("_entry", "__text", text_start, call_site, macho_n_sect | macho_n_ext),
@@ -118,189 +132,142 @@ const relocs: list = list.of(
     format_macho64_arm64_reloc("__data", data_start, pointer_slot, "_printf", macho_arm64_reloc_unsigned)
 )
 format_macho64_tables_mut(object, symbols, relocs)
-format_finish(object);
+format_finish(object)
 ```
 
-Symbol semantics:
+This example is 448 bytes, its `FileType` is `Relocatable`, and it carries the `MH_SUBSECTIONS_VIA_SYMBOLS` flag. The symbol table holds three symbols: `_entry` in `__text` and `_answer` in `__data`, both of type `Section`, and `_printf` of type `Undef` in segment 0, waiting for the linker to resolve it.
 
-- `format_macho64_public(name, section_name, section_start, address, symbol_type)`
-  defines a symbol in a section. `symbol_type` is the complete `n_type`; a
-  normal global is `macho_n_sect | macho_n_ext`. The emitted record gets
-  `n_value = address - section_start` and `n_sect` set to the section's
-  1-based index.
-- `format_macho64_extern(name)` declares an undefined external
-  (`N_UNDF | N_EXT`, zero value) that the linker resolves.
-- Names go into the string table; the facade computes every `n_strx`.
+How the two tables correspond:
 
-Relocation semantics:
+| Item | Value |
+| --- | --- |
+| symbol value | the address minus the containing section's start address; the section number is `n_sect`, counting from 1 |
+| defined global symbol | type written as `macho_n_sect \| macho_n_ext` |
+| undefined external symbol | generated by `format_macho64_extern`, type `macho_n_undf \| macho_n_ext`, value 0 |
+| symbol name | written into the string table, with `n_strx` computed by `format.inc` |
+| relocation address | a section-relative offset, which is Mach-O's `r_address` |
+| relocation target | looked up by name in the attached symbol table, with `r_extern` always 1 |
+| relocation pcrel and length | derived by `format_macho64_arm64_reloc` from the AArch64 type; `format_macho64_reloc` takes them explicitly |
 
-- A relocation address is an offset inside its section
-  (`address - section_start`), which is what `r_address` means in an object
-  file.
-- The target symbol is resolved by name against the attached symbol list, and
-  `r_extern` is always 1 with `r_symbolnum` set to the nlist index. For the
-  constructs above the encoding is bit-identical to what clang emits for
-  arm64 object files.
-- `format_macho64_reloc` takes the explicit `pcrel` flag, the `length` power
-  (0 = 1 byte, 1 = 2, 2 = 4, 3 = 8), and the relocation type.
-  `format_macho64_arm64_reloc` derives both from the AArch64 type:
-  `macho_arm64_reloc_unsigned` is a non-pcrel 8-byte field,
-  `branch26`, `page21`, and `got_load_page21`/`tlvp_load_page21` are pcrel
-  4-byte fields, and `pageoff12`, `got_load_pageoff12`, and
-  `tlvp_load_pageoff12` are non-pcrel 4-byte fields.
-- Paired records (`ARM64_RELOC_SUBTRACTOR` with its `ADDEND` follower),
-  `POINTER_TO_GOT`, and the arm64e types are outside the facade; emit them
-  with the direct `macho_relocation_info` helper.
+The two bit fields `format_macho64_arm64_reloc` derives are fixed per AArch64 relocation type:
 
-`format_macho64_tables_mut` validates both lists — names must be unique, and
-every relocation section and symbol must be declared. An object that never
-attaches tables is still valid; it simply carries an empty symbol table.
+| Relocation type | pcrel | length |
+| --- | --- | --- |
+| `macho_arm64_reloc_branch26` | 1 | 2 (4 bytes) |
+| `macho_arm64_reloc_page21` | 1 | 2 (4 bytes) |
+| `macho_arm64_reloc_pageoff12` | 0 | 2 (4 bytes) |
+| `macho_arm64_reloc_unsigned` | 0 | 3 (8 bytes) |
+
+A pcrel of 1 marks a relative field, which the loader leaves alone; a 0 marks an absolute address, which it must adjust. The length is a power: 2 means 4 bytes and 3 means 8 bytes.
+
+`format_macho64_tables_mut` checks both tables: symbol names must be unique, and every section and symbol a relocation names must be declared. An object that never attaches tables is still valid, it simply carries an empty symbol table.
 
 ## Capability Matrix
 
-| Capability | arm64 | x86_64 | Owner |
+| Capability | arm64 | x86_64 | Layer |
 | --- | --- | --- | --- |
-| Mach-O 64 header/segments/sections | yes | yes | `macho_obj.inc` |
-| Facade object with symbols, relocations, and `LC_SYMTAB` | yes | yes | `format.inc` |
-| Direct `MH_EXECUTE` | yes | yes | `macho_exe.inc` |
-| `LC_LOAD_DYLINKER` | yes | yes | `macho_exe_load_dylinker64` |
-| `MH_DYLIB` install name | yes | yes | `macho_dylib.inc` |
-| Ordinary function export trie | yes | yes | `macho_export.inc` |
-| Object relocations | `BRANCH26`, `PAGE21`, `PAGEOFF12` | `BRANCH`, `UNSIGNED` | ISA-specific wrappers |
-| Direct executable function imports | yes | yes | `macho_import.inc` |
-
-The object helper writes `MH_OBJECT`, section and symbol tables, and explicit
-AArch64 `BRANCH26`, `PAGE21`, and `PAGEOFF12` relocation records plus the
-x86_64 external `BRANCH` relocation. The executable
-and dylib headers are CPU-neutral; ARM64 and x86_64 wrappers are provided. The
-executable helper writes a small `MH_EXECUTE` with `__PAGEZERO`,
-`__TEXT,__text`, `LC_LOAD_DYLINKER` for `/usr/lib/dyld`, `LC_MAIN`, and
-`LC_BUILD_VERSION`. The dylib helper writes a
-minimal `MH_DYLIB` with an install name. `macho_export_new` and
-`macho_export_use64` collect ordinary function exports; after their target
-labels are laid out, `macho_export_trie_size64` and
-`macho_export_trie_emit64` generate the export trie. Its load-command size
-fields are placeholders owned by the source and are backfilled in `defer`.
+| Mach-O 64 header / segments / sections | yes | yes | `format.inc` |
+| Object symbols, relocations, `LC_SYMTAB` | yes | yes | `format.inc` |
+| direct `MH_EXECUTE` generation | yes | yes | `format.inc` |
+| `LC_LOAD_DYLINKER` | yes | yes | the executable's lower-level constructors |
+| `MH_DYLIB` install name | yes | yes | `format.inc` |
+| ordinary function export trie | yes | yes | `macho_export.inc` |
+| object relocations | `BRANCH26`, `PAGE21`, `PAGEOFF12` | `BRANCH`, `UNSIGNED` | ISA-specific wrappers |
+| function imports in a direct executable | yes | yes | `macho_import.inc` |
 
 ## Importing Functions In A Direct Executable
 
-`macho_import.inc` provides the small direct-executable path. It emits classic
-non-lazy dyld binding metadata rather than chained fixups: undefined `nlist_64`
-symbols, `LC_SYMTAB`, `LC_DYSYMTAB`, an indirect symbol table,
-`__TEXT,__stubs`, and `__DATA,__got`. Generic records and binding opcodes are
-shared; only the stub bytes differ between arm64 and x86_64.
+A directly generated executable that lets dyld resolve external functions has to carry the binding metadata itself. `macho_import.inc` provides that path, producing classic non-lazy binding rather than chained fixups:
 
-```asm
-import("format/macho_import.inc");
+```text
+import("format/macho_import.inc")
 
 let imports: list = macho_import_new()
 imports = macho_import_use64(imports, "@executable_path/libmath.dylib", "_add7")
 
-// Layout owns the segment VAs and FOAs. Emit the selected ISA's stubs after
-// __text, and emit slots plus dyld/link-edit tables in their declared regions.
-macho_import_emit_stubs_arm64(imports, stubs_vaddr, slots_vaddr);
-// or: macho_import_emit_stubs_x86_64(imports, stubs_vaddr, slots_vaddr);
-macho_import_emit_slots64(imports);
-macho_import_emit_bind64(imports, data_segment_index);
-macho_import_emit_symbols64(imports);
-macho_import_emit_indirect64(imports);
-macho_import_emit_strings64(imports);
+// The surrounding layout supplies each segment's address and file offset; this
+// only writes the records in the order the loader expects.
+macho_import_emit_stubs_arm64(imports, stubs_vaddr, slots_vaddr)
+macho_import_emit_slots64(imports)
+macho_import_emit_bind64(imports, data_segment_index)
+macho_import_emit_symbols64(imports)
+macho_import_emit_indirect64(imports)
+macho_import_emit_strings64(imports)
 ```
 
-The default labels are `<symbol>_stub` and `<symbol>_got`; use
-`macho_import_use64_as` when local label names must differ. One import list may
-contain multiple dependent dylibs and multiple functions per dylib. Library
-ordinals are assigned by first appearance (1..15) and emitted in the bind
-stream and undefined-symbol descriptors. Use
-`macho_import_load_dylibs_size64` and `macho_import_emit_load_dylibs64` to
-declare each unique dependency once. This covers compact CLI/FFI
-consumers without implementing lazy binding, a stub helper, chained fixups, or
-a general linker. See the checked fixtures
-`tests/format/macho64_arm64_exe_import.asm` and
-`tests/format/macho64_x86_64_exe_import.asm` for complete layouts.
-The current helper is for `MH_EXECUTE`; a dylib that itself imports symbols
-still belongs on the linker-backed path.
+The default slot labels are `<symbol>_stub` and `<symbol>_got`; `macho_import_use64_as` supplies other names. One import list may hold several dependency libraries, with library ordinals assigned in order of first appearance (1 through 15) and written into both the bind stream and the undefined-symbol descriptors. Each dependency's `LC_LOAD_DYLIB` is written once, with `macho_import_emit_load_dylibs64`.
 
-For an import-bearing executable, derive the dylib-command, bind, and string
-sizes from the same import list used by the emitters. Such an executable must
-not set `MH_NOUNDEFS`, because its undefined symbols are intentional.
+This layer implements no lazy binding, stub helper, or chained fixups, and it is not a general linker; it covers small command-line tools and FFI consumers. An import-bearing executable holds undefined symbols and therefore must not set `MH_NOUNDEFS`. Complete layouts live in `tests/format/macho64_arm64_exe_import.asm` and `tests/format/macho64_x86_64_exe_import.asm`; a shared library that imports symbols itself still goes through the linker.
 
 ## Exporting FFI Functions
 
-The export helper follows the same collect-then-emit pattern as the PE export
-helpers. Target names are strings while declarations are collected; the
-export trie is emitted only after the target labels have been laid out:
+Exporting works in two steps, as it does for PE: collect first, then generate the export trie once the target labels are laid out.
 
-```asm
-import("format/macho_dylib.inc");
+```text
+import("format/macho_dylib.inc")
 
 let exports: list = macho_export_new()
 exports = macho_export_use64(exports, "add7", "_add7")
 
-// Emit the Mach-O header, __TEXT segment, and load commands here.
-// Define add7 before measuring or emitting the trie.
+// The Mach-O header, the __TEXT segment, and the load commands are written here,
+// and add7 is defined before the trie is measured.
 add7:
     emit.u32(0xd28000e0)
     emit.u32(0xd65f03c0)
 
 let export_size: u64 = macho_export_trie_size64(exports, 0)
 exports_data:
-macho_export_trie_emit64(exports, 0);
+macho_export_trie_emit64(exports, 0)
 
 defer {
-    // Store export_size into the already-emitted
+    // Write export_size into the already emitted
     // LC_DYLD_EXPORTS_TRIE.datasize and __LINKEDIT.filesize fields.
 }
 ```
 
-The example is intentionally a direct-layout sketch: the source owns command
-offsets and must reserve fixed-width fields before `defer` patches them. The
-helper emits ordinary defined exports only; re-exports, weak definitions,
-stub/resolver entries, chained fixups, and code signatures are separate
-features.
+That source is a layout sketch: command offsets are the source's responsibility, and fixed-width fields must be written before `defer` patches them. Only ordinary defined exports are supported; re-exports, weak definitions, stub and resolver entries, chained fixups, and code signatures are outside this helper.
 
 ## Coordinates And Delayed Fields
 
-Direct Mach-O construction has two coordinate systems:
+Laying out Mach-O by hand means keeping two coordinate systems apart:
 
-- labels and `here()` are logical addresses (the value used for `vmaddr` and
-  symbol values);
-- file offsets in `segment_64`, `section_64`, and dyld data commands are FOAs.
+- labels and `here()` are **logical addresses**, used for `vmaddr` and symbol values;
+- the file positions in `segment_64`, `section_64`, and the dyld data commands are **file offsets (FOA)**.
 
-Use explicit layout math or `region_file_offset(label)` for a final FOA. A
-`store.u32`/`store.u64` target is a logical address, not a raw FOA. When a
-header field depends on a later region, emit the field at its final width,
-emit the region during ordinary source or `late_layout`, and patch only the
-value in `defer`. `defer` cannot create bytes, labels, regions, or alignment.
+A final file offset comes from explicit layout arithmetic, or from `region_file_offset(label)`. The targets of `store.u32` and `store.u64` are logical addresses, not raw file offsets. When a header field depends on a later region, write the field at its final width first, generate the region in ordinary source or in `late_layout`, and fill in the value from `defer`. `defer` cannot create bytes, labels, regions, or alignment.
 
 ## Boundary With the Linker
 
-Use the object form for multi-object programs. A direct executable or dylib is
-useful for small images, but it does not replace Apple's linker or code signing.
-The direct import helper generates the dyld metadata for its limited non-lazy
-function-import model. Validate generated files with LLVM's
-Mach-O readers and an independent AArch64 disassembler before distributing them.
+A program built from several object files uses the object form and hands them to `ld64` or `ld64.lld`. A directly generated executable or shared library suits small images, and does not replace Apple's linker or code signing.
 
-The current direct layer intentionally does not claim universal binaries,
-arm64e, chained fixups, lazy binding, more than 15 import libraries per table,
-UUIDs, code signatures, or runtime loading on a non-macOS host. dyld still
-resolves the declared dependency and symbols at load time. Apple Silicon
-executables normally require an external ad-hoc or production signature.
+This layer provides no universal binaries, arm64e, chained fixups, lazy binding, more than 15 import libraries per table, UUIDs, or code signing, and does not promise to run on a non-macOS host. dyld resolves the declared dependencies and symbols at load time; an Apple Silicon executable usually needs an external ad-hoc or production signature as well.
 
 ## Validation
 
-On Windows or another non-macOS host, use LLVM and radare2 as structural
-oracles:
+On a host without macOS, LLVM's tools check the structure:
 
 ```text
 llvm-readobj --file-headers --sections --symbols --relocs file.o
+llvm-objdump -d --macho file.o
 llvm-objdump --macho --private-headers --exports-trie file.dylib
 llvm-objdump --macho --private-headers --bind --indirect-symbols file
 ld64.lld -arch arm64 -platform_version macos 14.0 14.0 ...
 radare2 -q -n -a arm -b 64 -c "pd 4 @ <text-address>" file
 ```
 
-These checks prove Mach-O structure, relocation records, export names, and
-linker interoperability. Running the final arm64 image and testing `dlopen`
-or `dlsym` still requires an Apple Silicon macOS host or an arm64 macOS CI
-runner.
+`llvm-objdump -d` is the most valuable of these: it disassembles the instructions using the relocations and the symbol table, and it is the one step that verifies machine code, symbol values, and relocation records together. The object file above disassembles to:
+
+```text
+_entry:
+       0:  bl      _answer
+       4:  ret
+_answer:
+       8:  mov     w0, #0x2a
+       c:  ret
+```
+
+`bl _answer` shows the relative branch relocation resolved to the right symbol, and `mov w0, #0x2a` shows the instruction word written into the section is a valid A64 encoding. A mistaken relocation bit field or symbol index makes this step print a wrong symbol name or refuse to disassemble at all.
+
+`llvm-readobj --relocs` checks the relocation records themselves, listing each record's section, offset, pcrel, length, extern flag, and type.
+
+Those commands establish the Mach-O structure, the relocation records, the export names, and interoperability with a linker. Actually running an arm64 image, or testing `dlopen` and `dlsym`, still needs an Apple Silicon macOS host or a matching CI runner.

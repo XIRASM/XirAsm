@@ -1,0 +1,9 @@
+const result: map = match.tokens(
+    "=load destination:name =, address:tokens",
+    "load rax, [rbx+(rcx*4)]"
+)
+const captures: map = map.get(result, "captures")
+const address: list = map.get(captures, "address")
+
+assert(map.get(result, "ok"))
+assert(tokens.join(address) == "[rbx+(rcx*4)]")

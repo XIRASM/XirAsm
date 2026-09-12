@@ -1,0 +1,13 @@
+fn adjusted_size(size: u64) -> u64 {
+    const overhead = 4
+    let result = size + overhead
+
+    if result < 16 {
+        result = 16
+    }
+
+    return result
+}
+
+db(adjusted_size(3))    // 16
+db(adjusted_size(20))   // 24

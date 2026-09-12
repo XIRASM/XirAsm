@@ -1,0 +1,7 @@
+fn stop() {
+    break
+}
+
+for index in range(0, 3) {
+    stop()
+}

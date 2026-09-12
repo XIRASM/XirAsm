@@ -185,14 +185,14 @@ APK 写出器覆盖的范围：`apk_res_dir` 扫描 `res/` 目录并编译出 `r
 `tests/format/android_gl_demo/` 就是证据：一份 GLES2 渲染器加包住它的归档，两者都由
 汇编器写出——6,496 字节的库装在 39 KB 的 APK 里，贴图是汇编期生成的。`aapt2` 与
 `zipalign` 能把产物完整读回。签名有意留在汇编器之外，SDK 命令序列见
-[Android 指南](document/apk.md)。
+[Android 指南](document/android.md)。
 
 平台库本身也有一份目录：`import("os/android/imports/liblog.inc")` 之后用
 `android_import_log___android_log_write`，源码里既不写库名也不写 API 级别；
 `import("os/android/defs/native_activity.inc")` 则给出平台回传的结构体布局——来自 NDK
 stub 的 **25 个库、4,416 条（符号, 库）记录**，加上来自 NDK 头文件的 **1,168 个常量与
 161 个字段偏移**，全部逐条与 `llvm-nm`、clang 核对过。两条使用路径与"数据到哪儿就不再
-为真"见 [Android 平台指南](document/os-android.md)。
+为真"见同一份 [Android 指南](document/android.md)。
 
 ## 不只是另一套宏汇编器
 
@@ -225,12 +225,12 @@ ISA 指令改造成一套编程语言 API。
 独立的 [XIRASM VS Code 扩展](https://github.com/XIRASM/xir-vscode)
 提供语法高亮、补全、导航与编译器诊断。
 
-- [完整中文文档 PDF](document/zh/pdf/xirasm-documentation-zh-CN.pdf) - 合并语言指南、
+- [完整中文文档 PDF](document/zh/pdf/xirasm中文文档0.3.0.pdf) - 合并语言指南、
   格式教程与语言 API 参考，适合离线阅读。
+- [中文可执行格式 PDF](document/zh/pdf/xirasm中文可执行格式0.3.0.pdf) - 单讲可执行与目标文件的构造。
 - [中文语言指南](document/zh/language.md) - 学习汇编器与编译期语言模型。
 - [中文格式教程](document/zh/format-tutorial.md) - 使用高层封装构建 PE、COFF 与 ELF。
-- [Android 指南](document/apk.md) - 汇编 NativeActivity 库，以及包住它的 APK、资源表与清单。
-- [Android 平台指南](document/os-android.md) - 用生成的 NDK 符号目录与头文件常量，取代手写的库名与偏移。
+- [Android 指南](document/android.md) - 汇编 NativeActivity 库，以及包住它的 APK、资源表与清单；并用生成的 NDK 符号目录与头文件常量取代手写的库名与偏移。
 - [中文语言 API 参考](document/zh/api-reference.md) - 查询语法与内置 API。
 - [高级格式构造指南（英文）](document/advanced-formats.md) - 直接控制特殊二进制布局。
 

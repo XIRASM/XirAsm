@@ -1,0 +1,15 @@
+// 定义由两个 16 位字段组成的紧凑文件头布局。
+packed struct Header {
+    kind: u16
+    size: u16
+}
+
+// 文件头大小发生变化时立即停止汇编。
+assert(sizeof(Header) == 4, "Header must remain four bytes")
+
+// 写出文件头及其后紧接的三个字节数据。
+emit.struct(Header {
+    kind: 1,
+    size: 3,
+})
+emit.bytes(b"ABC")

@@ -1,0 +1,27 @@
+import("format/format.inc")
+
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable)
+    )
+)
+
+let imports: list = format_elfexe_import_new()
+format_elfexe_import_many_mut(imports, "libc.so.6", list.of("getpid", "getppid"))
+format_elfexe_import_pairs_mut(imports, "libm.so.6", list.of("cos_fn", "cos"))
+format_elfexe_tables_mut(image, imports)
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    call getpid_plt
+    call getppid_plt
+    xor edi, edi
+    mov eax, 60
+    syscall
+format_segment_end(image, ".text")
+
+format_entry_mut(image, start)
+format_finish(image)

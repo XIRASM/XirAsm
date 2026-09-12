@@ -1,0 +1,7 @@
+// < 不是配平字符，所以整条输入都能被 expression 吃掉。
+const result: map = match.tokens("expression:tokens", "left < right")
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+// 拼回来时空格按规范重建，left<right 之间不再有空格。
+assert(tokens.join(map.get(captures, "expression")) == "left<right")

@@ -1,0 +1,10 @@
+virtual.begin(0x3000)              // scratch area at logical address 0x3000
+
+table:
+emit.u32(0x11223344)               // the table starts as 44 33 22 11
+store.u32(table, load.u32(table) ^ 0x01010101)   // XOR it in place: 45 32 23 10
+const encoded: bytes = load.bytes(table, 4)      // snapshot the four bytes
+
+virtual.end()
+
+emit.bytes(encoded)                // only this copy reaches the final file

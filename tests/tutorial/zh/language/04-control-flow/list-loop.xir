@@ -1,0 +1,5 @@
+const opcodes: list = list.of(0x90, 0x90, 0xc3)
+
+for opcode in opcodes {
+    db(opcode)
+}

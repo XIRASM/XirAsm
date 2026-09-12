@@ -1,0 +1,11 @@
+# expect-error: mutable function argument must be a direct let binding
+import("format/format.inc")
+
+// 把构造函数的结果直接交给 _mut 函数：没有绑定，就没有可改写的东西。
+format_entry_mut(
+    format_pe64(
+        format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+        list.of(format_section(".text", format_code | format_readable | format_executable))
+    ),
+    0x1000
+)

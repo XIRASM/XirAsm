@@ -1,0 +1,11 @@
+region.begin("header", 0x1000, 0)
+emit.bytes(b"HDR0")
+
+output.section("payload", 0x2000)
+payload:
+emit.bytes(b"DATA")
+
+defer {
+    assert(payload == 0x2000)
+    assert(region_file_offset(payload) == 4)
+}

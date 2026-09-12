@@ -1,0 +1,5 @@
+macro spell(value) {
+    emit.bytes(operand.text(value))
+}
+
+spell 1 + 2

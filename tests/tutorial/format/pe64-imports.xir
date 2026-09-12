@@ -1,0 +1,44 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_auto,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        // The import section is declared first, then filled by the generator call.
+        format_section(".idata", format_imports | format_readable | format_writeable)
+    )
+)
+
+// A slot defaults to the API name, so instructions can reference it directly.
+let imports: map = format_pe_import_new()
+format_pe_import_many_mut(
+    image,
+    imports,
+    "KERNEL32.DLL",
+    list.of("ExitProcess", "GetCurrentProcessId")
+)
+// The same binding takes further DLLs; pairs gives an API a local alias.
+format_pe_import_pairs_mut(
+    image,
+    imports,
+    "ADVAPI32.DLL",
+    list.of("close_registry_key", "RegCloseKey")
+)
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    // A Windows x64 call needs 32 bytes of shadow space, plus 8 to keep the stack 16-byte aligned.
+    sub rsp, 40
+    // PE64 calls through the RIP-relative import slot.
+    call [rel GetCurrentProcessId]
+    xor ecx, ecx
+    call [rel ExitProcess]
+format_section_end(image, ".text")
+
+// Generate .idata here: do not open the same section around this call.
+format_pe_import_section(image, ".idata", imports)
+
+format_entry_mut(image, start)
+format_finish(image)

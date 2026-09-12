@@ -1,0 +1,5 @@
+fn emit_one() {
+    return 1
+}
+
+emit_one()

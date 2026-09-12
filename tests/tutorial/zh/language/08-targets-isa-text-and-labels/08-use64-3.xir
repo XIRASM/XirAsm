@@ -1,0 +1,8 @@
+// 选择 x86 后端和 64 位模式。
+x86.use64()
+
+// 这个条件在汇编期间判断，不会生成运行时分支。
+if target.isa == .x86_64 {
+    assert(target.bits == 64)
+    mov eax, 1
+}

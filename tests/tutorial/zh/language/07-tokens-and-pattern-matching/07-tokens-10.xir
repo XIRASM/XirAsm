@@ -1,0 +1,4 @@
+// 右方括号没配平，tokens 捕获吃不下 → ok 为假。
+const result: map = match.tokens("=load dest:name =, rest:tokens", "load rax, [rbx")
+
+assert(!map.get(result, "ok"))

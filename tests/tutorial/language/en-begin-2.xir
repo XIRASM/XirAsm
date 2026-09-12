@@ -1,0 +1,13 @@
+region.begin("first", 0x1000, 0)
+
+emit.bytes(b"ABC")
+reserve(13)
+
+assert(here() == 0x1010)
+assert(file_cursor_real() == 3)
+assert(file_cursor_potential() == 16)
+
+region.file_align(8)
+
+region.begin("second", 0x2000, 8)
+emit.u8(0x5a)

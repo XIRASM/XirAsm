@@ -1,0 +1,20 @@
+# expect-error: an ELF image plan declares segments, not sections
+import("format/format.inc")
+
+// An ELF image plan declares load segments, so format_section is the wrong
+// declaration here and the lookup reports it instead of failing on a
+// missing plan key.
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
+
+format_begin(image)
+format_section_begin(image, ".text")
+start:
+    ret
+format_section_end(image, ".text")
+format_entry_mut(image, start)
+format_finish(image)

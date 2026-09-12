@@ -1,0 +1,43 @@
+import("format/format.inc")
+
+// 带 libc 导入的实际程序：用 write 打印，用 getpid 生成结果。
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable),
+        format_segment(".rodata", format_load | format_readable)
+    )
+)
+
+let imports: list = format_elfexe_import_new()
+format_elfexe_import_many_mut(imports, "libc.so.6", list.of("write", "getpid"))
+format_elfexe_tables_mut(image, imports)
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // write(1, message, length)：经 PLT 调用 libc。
+    mov edi, 1
+    lea rsi, [rel message]
+    lea rdx, [rel message_end]
+    sub rdx, rsi
+    call write_plt
+
+    // getpid()：返回当前进程号。
+    call getpid_plt
+
+    // 用退出码把这个值带出去，方便脚本核对。
+    mov edi, eax
+    mov eax, 60
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".rodata")
+message:
+    db("xirasm: write() came from libc through the PLT", 10)
+message_end:
+format_segment_end(image, ".rodata")
+
+format_entry_mut(image, start)
+format_finish(image)

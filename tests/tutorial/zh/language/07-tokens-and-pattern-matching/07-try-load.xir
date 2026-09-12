@@ -1,0 +1,21 @@
+// 每种结构一个函数，函数名就是它的模式。
+fn try_load(line: string) -> map {
+    return match.tokens("=load destination:name =, source:name", line)
+}
+
+fn try_store(line: string) -> map {
+    return match.tokens("=store destination:name =, source:name", line)
+}
+
+const line: string = "store r1, r2"
+
+// 从上往下试；先命中的那个返回搜索结果，后面的不再试。
+if map.get(try_load(line), "ok") {
+    emit.bytes("load")
+} else if map.get(try_store(line), "ok") {
+    const captures: map = map.get(try_store(line), "captures")
+    emit.bytes(map.get(captures, "destination"))   // 这里写出：72 31 72 32
+    emit.bytes(map.get(captures, "source"))
+} else {
+    err("unknown instruction shape", line)
+}

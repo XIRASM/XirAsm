@@ -1,0 +1,4 @@
+import("support.inc")
+import("support.inc")
+
+emit_word(0x1234)

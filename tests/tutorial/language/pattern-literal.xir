@@ -1,0 +1,6 @@
+const result: map = match.tokens(
+    "left:name =&& right:name",
+    "ready && enabled"
+)
+
+assert(map.get(result, "ok"))

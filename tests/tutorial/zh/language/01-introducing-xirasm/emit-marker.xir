@@ -1,0 +1,12 @@
+x86.use64()
+
+fn emit_marker(value: u8) {   // 编译期函数：写出两字节标记
+    db(0x7f, value)
+}
+
+const marker: u8 = 3
+emit_marker(marker)           // 调用在汇编期间执行，不在运行时
+
+start:                        // 从这里开始是指令
+    mov eax, marker
+    ret

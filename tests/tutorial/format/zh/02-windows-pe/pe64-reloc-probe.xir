@@ -1,0 +1,52 @@
+import("format/format.inc")
+
+// 把函数地址存进 .data，再由导出函数读回，用来验证加载器是否修正了它。
+let image: map = format_pe64(
+    format_pe_dll | format_pe_console | format_pe_nx | format_pe_aslr_required,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".data", format_data | format_readable | format_writeable),
+        format_section(".edata", format_exports | format_readable),
+        // format_pe_aslr_required 要求必须声明重定位节。
+        format_section(".reloc", format_fixups | format_readable | format_discardable)
+    )
+)
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+dll_main:
+    // DLL 入口返回非零值表示加载成功。
+    mov eax, 1
+    ret
+worker:
+    // 返回固定值，用来证明指针确实指向它。
+    mov eax, 42
+    ret
+read_pointer:
+    // 把槽里存着的 worker 地址读回来交给宿主。
+    mov rax, [rel worker_pointer]
+    ret
+format_section_end(image, ".text")
+
+// 槽里写的是 worker 的绝对地址，换基址时必须修正。
+format_section_begin(image, ".data")
+worker_pointer:
+    dq(0)
+format_section_end(image, ".data")
+
+let exports: list = format_pe_export_new()
+format_pe_export_many_mut(image, exports, list.of("read_pointer"))
+format_pe_export_section(image, ".edata", exports, "reloc_probe.dll")
+
+let relocs: list = pe_reloc_new()
+format_pe_reloc_add_mut(image, relocs, worker_pointer)
+format_pe_reloc_section(image, ".reloc", relocs)
+
+format_entry_mut(image, dll_main)
+format_finish(image)
+
+// 绝对地址要等标签地址稳定后再回填。
+defer {
+    store.u64(worker_pointer, worker)
+}

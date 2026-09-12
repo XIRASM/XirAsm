@@ -1,0 +1,10 @@
+// prefix 先试空；空的时候 value:int 匹配不上 name，于是 prefix 扩张到 name 再试。
+const result: map = match.tokens(
+    "prefix:tokens value:int",
+    "name 42"
+)
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+assert(tokens.join(map.get(captures, "prefix")) == "name")
+assert(map.get(captures, "value") == 42)

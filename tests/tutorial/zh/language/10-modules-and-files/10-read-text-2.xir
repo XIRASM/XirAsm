@@ -1,0 +1,5 @@
+// 自己读进来再解析：文件里装的必须是合法的 JSON。
+const raw: string = fs.read_text("config.json")
+const config: map = json.parse(raw)
+
+emit.u8(map.get(config, "bits"))

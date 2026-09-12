@@ -1,0 +1,9 @@
+x86.use64()
+
+if target.bits != 64 {
+    err("this routine requires x86-64")
+}
+
+entry:
+    xor eax, eax
+    ret

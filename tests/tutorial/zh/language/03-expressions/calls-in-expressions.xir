@@ -1,0 +1,5 @@
+const name_length = lengthof("XIRASM")        // 6
+const aligned_size = ((37 + 15) / 16) * 16    // 48 = 0x30
+
+db(name_length)
+dd(aligned_size)

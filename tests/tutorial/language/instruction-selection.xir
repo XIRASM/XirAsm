@@ -1,0 +1,11 @@
+x86.use64()
+
+const return_zero = true
+
+entry:
+    if return_zero {
+        xor eax, eax
+    } else {
+        mov eax, 1
+    }
+    ret

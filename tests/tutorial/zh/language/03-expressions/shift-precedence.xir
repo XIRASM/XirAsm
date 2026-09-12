@@ -1,0 +1,4 @@
+const shift_first = 1 + 2 << 3        // 1 + (2 << 3) = 17
+const grouped_shift = (1 + 2) << 3    // 24 = 0x18
+
+dd(shift_first, grouped_shift)

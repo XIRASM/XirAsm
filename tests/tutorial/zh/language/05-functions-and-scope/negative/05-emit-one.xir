@@ -1,0 +1,6 @@
+// 过程不声明返回类型，所以它不能 return 一个值。
+fn emit_one() {
+    return 1
+}
+
+emit_one()

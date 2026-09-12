@@ -1,0 +1,3 @@
+x86.use64()      // a compile-time call
+emit.u8(0x90)    // another compile-time call
+nop              // a processor instruction

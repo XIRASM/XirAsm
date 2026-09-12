@@ -1,0 +1,21 @@
+origin(0x4000)
+
+header:
+emit.u32(0)                   // 后面回填 body 的长度
+emit.u32(0)                   // 后面回填 body 的逻辑地址
+
+body:
+emit.bytes(b"ABCD")
+tail:
+emit.bytes(b"????")           // 占位，稍后改写
+image_end:
+
+defer {
+    store.u32(header, image_end - body)          // body 到映像末尾的长度
+    store.u32(header + 4, body - region_base())  // body 的逻辑地址
+    store.bytes(tail, b"OK!!")                   // 覆盖占位
+
+    assert(load.u32(header) == 8)
+    assert(load.u32(header + 4) == 8)
+    assert(load.bytes(tail, 4) == b"OK!!")
+}

@@ -1,0 +1,5 @@
+const entry_count = 3
+const bytes_per_entry = 8
+const table_size = entry_count * bytes_per_entry
+
+dd(table_size)          // 24 = 0x18

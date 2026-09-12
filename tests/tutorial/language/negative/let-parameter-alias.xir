@@ -1,0 +1,6 @@
+fn touch(let a: u64, let b: u64) {
+    db(0)
+}
+
+let shared = 1
+touch(shared, shared)

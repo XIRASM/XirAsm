@@ -1,0 +1,12 @@
+// 在逻辑地址 0x3000 创建一个临时区域。
+virtual.begin(0x3000)
+
+table:
+emit.u32(0x11223344)              // 区域里先有 44 33 22 11
+store.u32(table, load.u32(table) ^ 0x01010101)   // 原地异或成 45 32 23 10
+const encoded: bytes = load.bytes(table, 4)      // 取出四字节快照
+
+virtual.end()
+
+// 只有显式复制出来的字节才进主输出。
+emit.bytes(encoded)

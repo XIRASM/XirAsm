@@ -1,0 +1,5 @@
+const result: map = match.tokens("=call arguments:tokens", "call")
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+assert(len(map.get(captures, "arguments")) == 0)

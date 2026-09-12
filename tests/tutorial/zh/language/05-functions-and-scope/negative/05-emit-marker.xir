@@ -1,0 +1,6 @@
+// 过程没有返回值，所以不能写进 const。
+fn emit_marker() {
+    db(0x90)
+}
+
+const marker = emit_marker()

@@ -1,0 +1,9 @@
+origin(0x4000)
+
+start:
+emit.u8(0xaa)
+
+assert(region_base() == 0x4000)
+assert(label_addr("start") == 0x4000)
+assert(here() == 0x4001)
+assert(file_offset() == 1)

@@ -3,6 +3,9 @@
 *.zon text eol=lf
 *.asm text eol=lf
 *.inc text eol=lf
+# Tutorial fixtures are generated from the manual, so their bytes must match
+# across checkouts: `tools/doc_examples.py check` hashes them.
+*.xir text eol=lf
 *.tsv text eol=lf
 *.md text eol=lf
 *.ts text eol=lf

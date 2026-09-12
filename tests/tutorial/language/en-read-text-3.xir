@@ -1,0 +1,6 @@
+const raw: string = fs.read_text("project.toml")
+const config: map = toml.parse(raw)
+const target: map = map.get(config, "target")
+
+assert(map.get(target, "bits") == 64)
+emit.u8(0x40)

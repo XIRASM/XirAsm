@@ -1,0 +1,4 @@
+// 前两行没问题，第三行的目标是临时值 list.of(1)。
+let items: list = list.of(1)
+list.push_mut(items, 2)
+list.push_mut(list.of(1), 3)

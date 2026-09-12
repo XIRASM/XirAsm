@@ -1,0 +1,10 @@
+// plan 带 let：函数改的是调用者那个 map 本身。
+fn set_entry(let plan: map, address: u64) {
+    map.set_mut(plan, "entry", address)
+}
+
+let image: map = map.new()
+set_entry(image, 0x401000)
+
+// 回到调用者这边看，改动确实落在 image 上。
+assert(map.get(image, "entry") == 0x401000)

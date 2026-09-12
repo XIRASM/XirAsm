@@ -1,0 +1,6 @@
+x86.use64()
+
+// 两个字节：mov eax, 42 和 ret。
+entry:
+    mov eax, 42
+    ret

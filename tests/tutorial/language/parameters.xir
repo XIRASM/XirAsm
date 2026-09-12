@@ -1,0 +1,7 @@
+fn emit_run(value: u8, count: u64) {
+    for index in range(0, count) {
+        db(value)      // one byte per iteration
+    }
+}
+
+emit_run(0xcc, 4)

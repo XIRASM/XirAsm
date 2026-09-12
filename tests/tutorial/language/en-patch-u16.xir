@@ -1,0 +1,10 @@
+fn patch_u16(address: u64, value: u64) {
+    defer {
+        store.u16(address, value)
+    }
+}
+
+field:
+emit.u16(0)
+
+patch_u16(field, 0x1234)

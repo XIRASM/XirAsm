@@ -1,0 +1,6 @@
+let items: list = list.of(1)
+const snapshot: list = items
+list.push_mut(items, 2)
+
+emit.u8(len(snapshot))    // 这里写出：01
+emit.u8(len(items))       // 这里写出：02

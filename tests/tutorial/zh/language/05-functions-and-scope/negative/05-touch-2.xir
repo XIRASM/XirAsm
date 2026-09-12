@@ -1,0 +1,7 @@
+fn touch(let a: u64, let b: u64) {
+    db(0)
+}
+
+// 同一个 shared 传给两个 let 参数，两处会互相覆盖。
+let shared = 1
+touch(shared, shared)

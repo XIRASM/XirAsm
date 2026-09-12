@@ -1,0 +1,9 @@
+const result: map = match.tokens(
+    "prefix:tokens value:int",
+    "name 42"
+)
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+assert(tokens.join(map.get(captures, "prefix")) == "name")
+assert(map.get(captures, "value") == 42)

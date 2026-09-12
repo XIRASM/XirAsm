@@ -1,0 +1,12 @@
+let options: map = map.new()
+map.set_mut(options, "arch", "x64")
+map.set_mut(options, "mode", "release")
+map.set_mut(options, "arch", "rv64")
+map.set_mut(options, "tags", list.of("asm", "dsl"))
+
+assert(len(options) == 3)                                  // "arch" was replaced
+assert(map.has(options, "arch"))
+assert(!map.has(options, "missing"))
+assert(map.get(options, "arch") == "rv64")
+assert(map.get_or(options, "missing", "default") == "default")
+assert(list.eq(map.get(options, "tags"), list.of("asm", "dsl")))

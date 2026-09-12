@@ -1,0 +1,7 @@
+let items: list = list.of(1, 2)
+list.push_mut(items, 3)
+list.set_mut(items, 0, 4)
+
+let options: map = map.new()
+map.set_mut(options, "arch", "x64")
+map.set_mut(options, "items", items)

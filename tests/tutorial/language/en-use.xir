@@ -1,0 +1,5 @@
+spv.use()
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid

@@ -1,0 +1,9 @@
+const readable = 1 << 0
+const writeable = 1 << 1
+const executable = 1 << 2
+
+const permissions = readable | executable
+
+assert((permissions & executable) != 0)
+assert((permissions & writeable) == 0)
+db(permissions)         // 1 | 4 = 5

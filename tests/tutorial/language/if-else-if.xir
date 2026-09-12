@@ -1,0 +1,9 @@
+const payload_size = 32
+
+if payload_size < 16 {
+    db(1)
+} else if payload_size < 64 {
+    db(2)          // this branch runs
+} else {
+    db(3)
+}

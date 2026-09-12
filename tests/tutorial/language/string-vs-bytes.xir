@@ -1,0 +1,5 @@
+const section_name: string = ".text"
+const signature: bytes = b"MZ"
+
+db(section_name)       // 2e 74 65 78 74
+db(signature)          // 4d 5a

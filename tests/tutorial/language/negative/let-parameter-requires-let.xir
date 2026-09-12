@@ -1,0 +1,6 @@
+fn set_entry(let plan: map, address: u64) {
+    map.set_mut(plan, "entry", address)
+}
+
+const image: map = map.new()
+set_entry(image, 0x401000)

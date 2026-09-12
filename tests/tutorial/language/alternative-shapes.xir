@@ -1,0 +1,21 @@
+const line: string = "store r1, r2"
+const load: map = match.tokens(
+    "=load destination:name =, source:name",
+    line
+)
+
+if map.get(load, "ok") {
+    const captures: map = map.get(load, "captures")
+    emit.bytes(map.get(captures, "destination"))
+} else {
+    const store: map = match.tokens(
+        "=store destination:name =, source:name",
+        line
+    )
+
+    assert(map.get(store, "ok"))
+
+    const captures: map = map.get(store, "captures")
+    emit.bytes(map.get(captures, "destination"))
+    emit.bytes(map.get(captures, "source"))
+}

@@ -1,0 +1,19 @@
+// Point 的两个坐标以紧凑形式连续存放。
+packed struct Point {
+    x: u16
+    y: u16
+}
+
+// raw 与 point 共享同一段四字节存储。
+union ValueBits {
+    raw: u32
+    point: Point
+}
+
+// 此字面量选择 point 作为联合体的当前字段。
+const coordinates: ValueBits = ValueBits {
+    point: Point {
+        x: 0x1122,
+        y: 0x3344
+    }
+}

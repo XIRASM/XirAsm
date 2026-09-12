@@ -1,0 +1,5 @@
+fn add(left, right) -> u64 {
+    return left + right
+}
+
+db(add(20, 22))        // 42 = 0x2a

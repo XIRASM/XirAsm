@@ -1,0 +1,6 @@
+riscv.use32()
+
+if target.isa == .riscv64 {
+    assert(target.xlen == 32)
+    addi x1, x0, 1
+}

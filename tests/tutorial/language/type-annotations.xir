@@ -1,0 +1,8 @@
+const signature: u16 = 0x5a4d   // explicit: it is a file-format field
+const title: string = "XIRASM"
+const marker: bytes = b"OK"
+const enabled: bool = true
+
+const count = 4                 // inferred `integer`
+const name = "payload"          // inferred `string`
+const raw = b"DATA"             // inferred `bytes`

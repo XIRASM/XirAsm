@@ -1,0 +1,5 @@
+// suffix 保存需要原样接在文本之后的两个字节。
+const suffix: bytes = b"CD"
+
+// 依次写出字节 A、字符串 B、字节序列 CD 和显式终止零。
+db(0x41, "B", suffix, 0)

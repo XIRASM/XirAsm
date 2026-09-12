@@ -1,0 +1,10 @@
+origin(0x4000)
+
+emit.u8(0xaa)
+reserve(3)                 // 逻辑上占 3 字节，文件里还没有它们
+
+print("here", here())
+print("file_offset", file_offset())
+print("cursor_real", file_cursor_real())
+print("cursor_potential", file_cursor_potential())
+print("tail_reserve", tail_reserve_size())

@@ -1,0 +1,3 @@
+const raw: string = fs.read_text("config.json")
+const config: map = json.parse(raw)
+emit.u8(map.get(config, "bits"))

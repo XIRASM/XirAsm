@@ -1,0 +1,5 @@
+fn enabled() -> bool {
+    return 1
+}
+
+const result = enabled()

@@ -1,0 +1,14 @@
+region.begin("first", 0x1000, 0)
+
+emit.bytes(b"ABC")     // 3 个真实字节
+reserve(13)            // 推到逻辑地址 16，但文件里还是 3 字节
+
+assert(here() == 0x1010)
+assert(file_cursor_real() == 3)
+assert(file_cursor_potential() == 16)
+
+// 裁掉尾部预留后，把 raw size 对齐到 8。
+region.file_align(8)
+
+region.begin("second", 0x2000, 8)
+emit.u8(0x5a)

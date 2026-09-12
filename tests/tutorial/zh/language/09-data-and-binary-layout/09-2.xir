@@ -1,0 +1,5 @@
+// 自然布局会按字段类型的对齐要求安排偏移。
+struct NaturalHeader {
+    tag: u8
+    size: u32
+}

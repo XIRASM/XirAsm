@@ -1,0 +1,5 @@
+fn touch(let a: u64) {
+    db(0)
+}
+
+touch(5)

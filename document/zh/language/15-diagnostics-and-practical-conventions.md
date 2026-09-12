@@ -27,15 +27,15 @@ app.asm:9:1: error: unknown call: no_such_function
 
 `print` 输出信息，`warn` 输出非致命警告：
 
-```asm
+```asm id=15-print bytes=7d
 // 输出当前位置，帮助用户了解本次汇编采用的映像起点。
-print("image origin", here());
+print("image origin", here())
 // 输出仍然有效，但使用默认对齐值时给出明确提醒。
-warn("using default alignment", 16);
+warn("using default alignment", 16)
 // 确认继续汇编所需的配置条件成立。
-assert(true, "configuration must be valid");
+assert(true, "configuration must be valid")
 // 诊断信息不会改变输出内容，这里实际写出一个字节。
-emit.u8(0x7d);
+emit.u8(0x7d)
 ```
 
 汇编照常成功，输出：
@@ -61,7 +61,7 @@ warning: using default alignment 16
 
 ```text
 if target.bits != 64 {
-    err("this source requires a 64-bit target", target.bits);
+    err("this source requires a 64-bit target", target.bits)
 }
 ```
 
@@ -70,16 +70,16 @@ if target.bits != 64 {
 消息应说明违反的要求：
 
 ```text
-err("section alignment must be a nonzero power of two", alignment);
+err("section alignment must be a nonzero power of two", alignment)
 ```
 
-当源码能够说出预期属性时，不要只写 `invalid value` 这种空泛消息。
+消息要写清违反了哪一条要求，并带上出问题的值。`invalid value` 这种空泛消息说明不了问题出在哪里。
 
 ## 断言
 
 `assert` 是编码不变式最直接的方式：
 
-```asm
+```asm id=15 bytes=01000300414243
 // 定义由两个 16 位字段组成的紧凑文件头布局。
 packed struct Header {
     kind: u16
@@ -87,14 +87,14 @@ packed struct Header {
 }
 
 // 文件头大小发生变化时立即停止汇编。
-assert(sizeof(Header) == 4, "Header must remain four bytes");
+assert(sizeof(Header) == 4, "Header must remain four bytes")
 
 // 写出文件头及其后紧接的三个字节数据。
 emit.struct(Header {
     kind: 1,
     size: 3,
-});
-emit.bytes(b"ABC");
+})
+emit.bytes(b"ABC")
 ```
 
 断言通过时不产生输出。完成后的字节是：
@@ -127,13 +127,13 @@ emit.bytes(b"ABC");
 
 把目标需求写在依赖它的代码附近：
 
-```asm
+```asm id=15-use64 bytes=31c0c3
 // 明确选择 64 位 x86 指令编码。
-x86.use64();
+x86.use64()
 
 // 不满足位数要求时，在汇编期间直接拒绝该目标平台。
 if target.bits != 64 {
-    err("this routine requires x86-64");
+    err("this routine requires x86-64")
 }
 
 entry:
@@ -162,7 +162,7 @@ const page_alignment: u64 = 0x1000
 const record_kind_code: u16 = 3
 ```
 
-算法内部的数值操作数可以保持局部。偏移、标志、结构大小、格式值和对齐策略通常应该命名。
+算法内部的数值操作数可以保持局部。偏移、标志、结构大小、格式值和对齐策略都应该命名。
 
 当数值代表固定选项时，用命名常量。多个字段组成一条记录时，用 struct。需要在编译期收集一组声明、表项或配置时，用 map 或 list。
 
@@ -203,9 +203,9 @@ payload_logical_size
 
 让每个 `defer` 聚焦一组相关字段。一个回填并验证文件头的块，比一个到处修改无关区域的块更容易审查。
 
-## 按职责分模块
+## 按用途分模块
 
-实用的项目布局通常按职责拆分：
+实用的项目布局按用途拆分：
 - 共享常量和数据类型
 - 可重用的写出过程
 - 目标相关指令例程
@@ -217,18 +217,18 @@ payload_logical_size
 
 公共辅助函数应明确说明输入。可以直接传配置、list、map、label 或 option 时，不要依赖隐藏的可变状态。
 
-## 先用 `format.inc`
+## 从 `format.inc` 开始
 
 标准可执行文件和目标文件从 `format/format.inc` 开始：
 
-```asm
+```asm id=15-import
 // 导入用于构造标准文件格式的常规接口。
-import("format/format.inc");
+import("format/format.inc")
 ```
 
 `format.inc` 负责描述符计数、表顺序、生成索引、偏移和常见格式不变式。
 
-只有在实现新的格式接口，或 `format.inc` 无法表达所需布局时，才直接导入更细的格式 include。不要仅仅因为某个函数暴露了更多数字字段就换过去；那些数字通常应该继续由 `format.inc` 维护。
+只有在实现新的格式接口，或 `format.inc` 无法表达所需布局时，才直接导入更细的格式 include。不要仅仅因为某个函数暴露了更多数字字段就换过去；那些数字仍然应该交给 `format.inc` 维护。
 
 项目专用文件应使用第 13 章的 flat 与自定义二进制技术，不要强行塞进操作系统格式。
 
@@ -242,7 +242,7 @@ import("format/format.inc");
 - 入口点和导出符号保持命名
 - 每个公共 include 保留一个可运行的小例子
 
-验证应描述约定，而不是重复实现细节。断言表计数与声明列表一致很有用；断言每一步内部算术则更难维护。
+断言应该检查简单的事实，不要重新计算内部实现。断言表计数与声明列表一致很有用；断言每一步内部算术则更难维护。
 
 ## 找到合适的文档
 

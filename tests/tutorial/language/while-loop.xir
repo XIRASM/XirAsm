@@ -1,0 +1,6 @@
+let value = 1
+
+while value <= 4 {
+    db(value)
+    value = value + 1
+}

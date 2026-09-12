@@ -1,0 +1,7 @@
+fn emit_record(tag: u8, value: u32) {
+    emit.u8(tag)
+    emit.u32(value)
+}
+
+emit_record(1, 0x11223344)
+emit_record(2, 0xaabbccdd)

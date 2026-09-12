@@ -1,0 +1,4 @@
+// 这是上一个动态示例所对应的普通静态写法。
+jmp generated_done
+generated_done:
+ret

@@ -1,0 +1,7 @@
+macro twice(dst, src) {
+    mov dst, src
+    mov dst, src
+}
+
+x86.use64()
+twice eax, ebx

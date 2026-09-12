@@ -1,0 +1,11 @@
+// 一次读入并解析：得到的是一个 map。
+const config: map = json.file("config.json")
+const values: list = map.get(config, "values")
+
+// 布尔值可以直接当条件用。
+assert(map.get(config, "enabled"))
+
+emit.bytes(map.get(config, "name"))    // 字符串
+emit.u8(map.get(config, "bits"))       // 整数
+emit.u8(list.get(values, 0))           // 数组变成 list，按下标取
+emit.u8(list.get(values, 1))

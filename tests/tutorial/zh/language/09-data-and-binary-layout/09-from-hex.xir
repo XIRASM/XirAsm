@@ -1,0 +1,6 @@
+// 从十六进制文本构造精确的四字节签名。
+const signature: bytes = bytes.from_hex("7f454c46")
+
+// 先写出二进制签名，再直接写出四个文本字节。
+emit.bytes(signature)
+emit.bytes("DATA")

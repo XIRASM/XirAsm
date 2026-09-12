@@ -1,0 +1,16 @@
+x86.use64()
+
+main_target:
+emit.u8(0x90)
+
+virtual.begin(0x9000)
+
+gen_start:
+call main_target          // 目标在虚拟区域外面，落位时才解析
+jmp gen_start             // 自跳，同样是落位后解析
+
+virtual.end()
+
+late_layout {
+    region.place("gen_start", 0x8000, 0x10)
+}

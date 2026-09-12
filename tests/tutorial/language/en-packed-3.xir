@@ -1,0 +1,12 @@
+packed struct Header {
+    magic: u16 = 0x5a4d
+    flags: u16 = 1
+    size: u32
+}
+
+const header: Header = Header {
+    size: 0x40
+}
+
+emit.u16(header.magic)
+emit.u32(header.size)

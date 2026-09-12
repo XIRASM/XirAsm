@@ -1,0 +1,15 @@
+// magic 和 flags 提供默认值，size 由每个实例显式指定。
+packed struct Header {
+    magic: u16 = 0x5a4d
+    flags: u16 = 1
+    size: u32
+}
+
+// 字面量只覆盖 size，其余字段沿用声明中的默认值。
+const header: Header = Header {
+    size: 0x40
+}
+
+// 通过普通字段访问读取需要写出的成员。
+emit.u16(header.magic)
+emit.u32(header.size)

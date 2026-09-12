@@ -1,0 +1,2 @@
+const page_size: u64 = 4096   // the width is part of what the format fixes
+const header_size = 64        // inferred from the initial value

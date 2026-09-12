@@ -1,0 +1,19 @@
+# expect-error: an ELF image plan declares segments, not sections
+import("format/format.inc")
+
+// ELF 可执行文件只认装载段，这里故意用 format_section 声明内容：
+// 报的是"计划声明的是装载段"，而不是缺键导致的笼统表达式错误。
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
+
+format_begin(image)
+format_section_begin(image, ".text")
+start:
+    ret
+format_section_end(image, ".text")
+format_entry_mut(image, start)
+format_finish(image)

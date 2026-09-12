@@ -66,14 +66,14 @@ android_import_glesv2_add_slots_mut(imports, list.of(
     android_import_glesv2_glClearColor,
     android_import_glesv2_glClear))
 format_elfso_tables_mut(image, exports, imports)
-format_begin(image);
-format_segment_begin(image, ".text");
+format_begin(image)
+format_segment_begin(image, ".text")
 ANativeActivity_onCreate:
     ldr x8, glClearColor
     blr x8
     ret
-format_segment_end(image, ".text");
-format_finish(image);
+format_segment_end(image, ".text")
+format_finish(image)
 ```
 
 导入槽用符号名做标签，所以调用点就是"取那个槽、跳过去"。两个辅助函数都往同一个导入列表里
@@ -92,10 +92,10 @@ const library: string = android_symbol_library(syms, "__android_log_write")
 const api: u64 = android_symbol_min_api(syms, "__android_log_write")
 const now: bool = android_symbol_available_at(syms, "dlvsym", 24)
 const early: bool = android_symbol_available_at(syms, "dlvsym", 21)
-assert(library == "liblog.so", "liblog provides __android_log_write");
-assert(api == 21, "__android_log_write appears in API 21");
-assert(now, "dlvsym appears in API 24");
-assert(!early, "dlvsym is not available in API 21");
+assert(library == "liblog.so", "liblog provides __android_log_write")
+assert(api == 21, "__android_log_write appears in API 21")
+assert(now, "dlvsym appears in API 24")
+assert(!early, "dlvsym is not available in API 21")
 ```
 
 数据表**第一次查询时才解析**，一次解析可回答任意多次查询。可用的查询有
@@ -111,7 +111,7 @@ assert(!early, "dlvsym is not available in API 21");
 ```asm
 import("os/android/imports/libGLESv2.inc")
 
-assert(android_import_glesv2_min_api <= 26, "libGLESv2 is newer than the project's minimum SDK");
+assert(android_import_glesv2_min_api <= 26, "libGLESv2 is newer than the project's minimum SDK")
 ```
 
 单个符号的同一事实用 `android_symbol_min_api(syms, name)`，或直接用
@@ -136,7 +136,7 @@ ldr w3, [x0, #android_layout_ANativeWindow_Buffer_width_offset64]
 ldr w4, [x0, #android_layout_ANativeWindow_Buffer_height_offset64]
 ldr w5, [x0, #android_layout_ANativeWindow_Buffer_format_offset64]
 
-assert(android_native_window_WINDOW_FORMAT_RGBA_8888 == 1, "the legacy RGBA format");
+assert(android_native_window_WINDOW_FORMAT_RGBA_8888 == 1, "the legacy RGBA format")
 ```
 
 命名规则：

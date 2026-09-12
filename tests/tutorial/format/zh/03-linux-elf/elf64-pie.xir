@@ -1,0 +1,35 @@
+import("format/format.inc")
+
+let image: map = format_elf64(
+    format_elf_pie,
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable),
+        format_segment(".bss", format_load | format_readable | format_writeable),
+        format_segment(".rodata", format_load | format_readable)
+    )
+)
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // 加载器可能把整个映像搬到别处，所以标签一律走 RIP 相对引用。
+    lea rbx, [rel scratch]
+    lea rsi, [rel message]
+    mov dword [rbx], 0x5a
+    mov eax, 60
+    xor edi, edi
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".bss")
+scratch:
+    rb(64)
+format_segment_end(image, ".bss")
+
+format_segment_begin(image, ".rodata")
+message:
+    db("XIRASM PIE", 0)
+format_segment_end(image, ".rodata")
+
+format_entry_mut(image, start)
+format_finish(image)

@@ -1,0 +1,7 @@
+fn emit_run(value: u8, count: u64) {
+    for index in range(0, count) {
+        db(value)      // 每轮一个字节
+    }
+}
+
+emit_run(0xcc, 4)

@@ -18,8 +18,10 @@ usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
+import operator
 import re
 from pathlib import Path
 
@@ -356,6 +358,61 @@ class Layout:
         self.complete = False
 
 
+# `#if` expressions are filtered down to digits and operators before they are
+# evaluated, so only these AST nodes can appear; walking a whitelisted tree
+# instead of calling eval keeps it that way even if the filter ever loosens.
+SAFE_BINOPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.LShift: operator.lshift,
+    ast.RShift: operator.rshift,
+    ast.BitOr: operator.or_,
+    ast.BitXor: operator.xor,
+    ast.BitAnd: operator.and_,
+}
+SAFE_CMPOPS = {
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+}
+
+
+def evaluate_condition(node: ast.expr) -> int | float | bool:
+    """Evaluate a filtered numeric conditional, or raise on anything else."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in SAFE_BINOPS:
+        return SAFE_BINOPS[type(node.op)](
+            evaluate_condition(node.left), evaluate_condition(node.right)
+        )
+    if isinstance(node, ast.UnaryOp) and isinstance(
+        node.op, (ast.USub, ast.UAdd, ast.Invert)
+    ):
+        value = evaluate_condition(node.operand)
+        if isinstance(node.op, ast.USub):
+            return -value
+        if isinstance(node.op, ast.UAdd):
+            return +value
+        return ~value
+    if isinstance(node, ast.Compare) and all(type(op) in SAFE_CMPOPS for op in node.ops):
+        left = evaluate_condition(node.left)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = evaluate_condition(comparator)
+            if not SAFE_CMPOPS[type(op)](left, right):
+                return False
+            left = right
+        return True
+    raise ValueError(f"unsupported conditional syntax: {ast.dump(node)}")
+
+
 class HeaderParser:
     def __init__(self, evaluator: Evaluator, api: int):
         self.evaluator = evaluator
@@ -439,7 +496,7 @@ class HeaderParser:
                             lambda m: str(self.evaluator.values.get(m.group(0), 0)), expression)
         expression = re.sub(r"[^0-9()+\-*/%<>=!&|^~ ]", " ", expression)
         try:
-            return bool(eval(expression, {"__builtins__": {}}, {}))  # noqa: S307 - digits and operators only
+            return bool(evaluate_condition(ast.parse(expression, mode="eval").body))
         except Exception:
             return False
 

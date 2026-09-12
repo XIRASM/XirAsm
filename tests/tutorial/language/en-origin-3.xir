@@ -1,0 +1,12 @@
+origin(0x4000)
+emit.u8(0xaa)
+
+virtual.begin()
+
+scratch:
+emit.u16(0x1234)
+const copied: bytes = load.bytes(scratch, 2)
+
+virtual.end()
+
+emit.bytes(copied)

@@ -1,0 +1,4 @@
+name = "XR"
+
+[target]
+bits = 64

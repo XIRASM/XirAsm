@@ -1,0 +1,6 @@
+x86.use64()
+
+if target.isa == .x86_64 {
+    assert(target.bits == 64)
+    mov eax, 1
+}

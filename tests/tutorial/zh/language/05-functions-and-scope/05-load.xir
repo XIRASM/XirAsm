@@ -1,0 +1,7 @@
+macro load(reg, source) {
+    mov reg, source
+}
+
+x86.use64()
+const OFFSET: u64 = 7
+load rax, OFFSET        // 编码器收到的是 `mov rax, 7`

@@ -1,0 +1,7 @@
+const base: bytes = bytes.from_hex("414243")
+const marked: bytes = bytes.insert(base, 1, b"-")     // 41 2d 42 43
+const patched: bytes = bytes.replace(marked, 2, 1, b"Z")
+const trailer: bytes = bytes.repeat(2, 0xff)
+const result: bytes = bytes.concat(patched, trailer)
+
+emit.bytes(result)      // 这里写出：41 2d 5a 43 ff ff

@@ -1,0 +1,8 @@
+const signature: u16 = 0x5a4d   // 显式写出：它是文件格式字段
+const title: string = "XIRASM"
+const marker: bytes = b"OK"
+const enabled: bool = true
+
+const count = 4                 // 推断为 `integer`
+const name = "payload"          // 推断为 `string`
+const raw = b"DATA"             // 推断为 `bytes`

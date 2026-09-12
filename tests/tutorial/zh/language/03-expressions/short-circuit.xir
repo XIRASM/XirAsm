@@ -1,0 +1,4 @@
+const enabled = true
+const safe = enabled || (1 / 0 == 0)   // 右边的除法根本不会执行
+
+assert(safe)

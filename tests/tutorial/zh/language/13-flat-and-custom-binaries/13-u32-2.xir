@@ -1,0 +1,23 @@
+table_foa_field:
+emit.u32(0)              // 回填表所在的 FOA
+emit.bytes(b"HDR")
+
+const table_origin: u64 = 0x8000
+const table_foa: u64 = 0x10
+
+// 先在临时区域里把表拼出来。
+virtual.begin(0)
+table_tmp:
+emit.bytes(b"TAB")
+table_tmp_end:
+virtual.end()
+
+late_layout {
+    // 建一个真实区域，把临时表拷到指定坐标。
+    region.begin("late-table", table_origin, table_foa)
+    emit.bytes(load.bytes(table_tmp, table_tmp_end - table_tmp))
+}
+
+defer {
+    store.u32(table_foa_field, table_foa)
+}

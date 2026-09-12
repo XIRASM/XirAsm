@@ -1,0 +1,24 @@
+table_offset_field:
+emit.u32(0)
+emit.bytes(b"HDR")
+
+const table_origin: u64 = 0x8000
+virtual.begin(table_origin)
+table:
+emit.bytes(b"TAB")
+const table_bytes: bytes = load.bytes(table, 3)
+const table_size: u64 = here() - table
+virtual.end()
+
+const table_foa: u64 = file_cursor_real()
+
+late_layout {
+    region.begin("late-table", table_origin, table_foa)
+    emit.bytes(table_bytes)
+}
+
+defer {
+    store.u32(table_offset_field, table_foa)
+    assert(load.u32(table_offset_field) == table_foa)
+    assert(table_size == 3)
+}

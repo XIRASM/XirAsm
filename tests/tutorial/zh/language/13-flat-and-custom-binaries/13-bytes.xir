@@ -1,0 +1,8 @@
+// 固定头：4 字节签名 + 版本号 + 保留字段。
+emit.bytes(b"RAW1")
+emit.u16(1)
+emit.u16(0)
+
+// 头后面紧跟 payload。
+payload:
+emit.bytes(b"ABC")

@@ -1,0 +1,8 @@
+// add 在后面才声明，这里先用它。
+const answer = add(20, 22)
+
+fn add(left: u64, right: u64) -> u64 {
+    return left + right
+}
+
+db(answer)

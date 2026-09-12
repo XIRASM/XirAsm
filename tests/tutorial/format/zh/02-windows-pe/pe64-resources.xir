@@ -1,0 +1,24 @@
+import("format/format.inc")
+
+// 带资源节的 PE：.res 是 rc.exe / windres 编译出来的资源树。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_auto,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        // .rsrc 必须声明为 format_resources。
+        format_section(".rsrc", format_resources | format_readable)
+    )
+)
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    ret
+format_section_end(image, ".text")
+
+// 复制资源树并注册资源目录；不要在这个调用之外再打开 .rsrc。
+format_pe_resource_section(image, ".rsrc", "app.res")
+
+format_entry_mut(image, start)
+format_finish(image)
+

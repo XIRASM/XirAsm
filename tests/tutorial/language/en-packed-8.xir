@@ -1,0 +1,12 @@
+packed struct Header {
+    kind: u16
+    size: u16
+}
+
+assert(sizeof(Header) == 4, "Header must remain four bytes")
+
+emit.struct(Header {
+    kind: 1,
+    size: 3,
+})
+emit.bytes(b"ABC")

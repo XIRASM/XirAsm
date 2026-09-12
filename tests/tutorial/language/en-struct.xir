@@ -1,0 +1,4 @@
+struct NaturalHeader {
+    tag: u8
+    size: u32
+}

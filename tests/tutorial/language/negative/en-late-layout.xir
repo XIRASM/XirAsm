@@ -1,0 +1,3 @@
+late_layout {
+    let x = 1              // a late block has no local scope
+}

@@ -1,0 +1,5 @@
+// 同一个模块导入两次，模块内容也只会求值一次。
+import("support.inc")
+import("support.inc")
+
+emit_word(0x1234)

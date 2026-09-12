@@ -1,0 +1,8 @@
+// 选择 XLEN 为 32 位的 RISC-V 模式。
+riscv.use32()
+
+// 同时检查后端系列与 XLEN。
+if target.isa == .riscv64 {
+    assert(target.xlen == 32)
+    addi x1, x0, 1
+}

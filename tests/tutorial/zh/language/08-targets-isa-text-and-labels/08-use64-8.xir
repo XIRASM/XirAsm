@@ -1,0 +1,5 @@
+x86.use64()
+
+loop:
+    nop
+    jmp short loop      // short 选两字节形式，所以是 eb fd

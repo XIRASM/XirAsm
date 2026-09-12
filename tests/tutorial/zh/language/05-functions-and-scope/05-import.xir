@@ -1,0 +1,10 @@
+// 导入之后，这些助记符就都按宏解析，直接写汇编文本即可。
+import("arm/a64-macros.inc")
+const OFFSET: u64 = 16
+fadd v0.4s, v1.4s, v2.4s             // 浮点 SIMD 加法
+movi v3.4s, #255, lsl #8             // 立即数：按 lane 移位铺开
+ldr x2, [sp, #OFFSET]                // 基址 + 编译期算出的字节偏移
+ld2 {v31.s, v0.s}[3], [sp], x4       // 结构访存：一次取两个 lane，带写回
+ldr x5, data                         // 标号作为地址操作数
+data:
+emit.u64(0)

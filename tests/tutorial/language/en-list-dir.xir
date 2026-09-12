@@ -1,0 +1,6 @@
+for entry in fs.list_dir("assets") {
+    if fs.is_dir(sym.join("assets/", entry)) {
+        continue
+    }
+    emit.file(sym.join("assets/", entry))
+}

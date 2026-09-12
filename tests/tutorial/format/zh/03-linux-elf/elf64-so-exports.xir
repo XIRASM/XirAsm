@@ -1,0 +1,31 @@
+import("format/format.inc")
+
+let image: map = format_elf64_so(
+    "libxirasm_demo.so",
+    list.of(
+        format_segment(".text", format_load | format_readable | format_executable)
+    )
+)
+
+let exports: list = format_elfso_export_new()
+// 两个函数按标签原名导出，符号大小都是 4 字节。
+format_elfso_export_many_mut(exports, list.of("x_add7", "x_sub3"), ".text", 4)
+// answer_impl 以 x_answer 之名导出，符号大小 6 字节。
+format_elfso_export_pairs_mut(exports, list.of("answer_impl", "x_answer"), ".text", 6)
+format_elfso_tables_mut(image, exports, list.new())
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+x_add7:
+    lea eax, [rdi + 7]
+    ret
+x_sub3:
+    lea eax, [rdi - 3]
+    ret
+answer_impl:
+    mov eax, 42
+    ret
+format_segment_end(image, ".text")
+
+format_finish(image)

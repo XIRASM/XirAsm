@@ -1,0 +1,4 @@
+const enabled = true
+const safe = enabled || (1 / 0 == 0)   // the division never runs
+
+assert(safe)

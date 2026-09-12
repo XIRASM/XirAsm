@@ -1,0 +1,10 @@
+fn is_page(value: u64) -> bool {
+    return value == 0x1000
+}
+
+fn signature() -> bytes {
+    return b"XR"
+}
+
+assert(is_page(0x1000))
+db(signature())

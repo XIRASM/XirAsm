@@ -1,0 +1,44 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_auto,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        // 导入节必须先声明，再交给 format_pe_import_section 生成内容。
+        format_section(".idata", format_imports | format_readable | format_writeable)
+    )
+)
+
+// 槽名默认取 API 原名；导入完成后可在指令中直接引用这些标号。
+let imports: map = format_pe_import_new()
+format_pe_import_many_mut(
+    image,
+    imports,
+    "KERNEL32.DLL",
+    list.of("ExitProcess", "GetCurrentProcessId")
+)
+// 同一个绑定可以继续加入其他 DLL；pairs 用于给 API 指定本地别名。
+format_pe_import_pairs_mut(
+    image,
+    imports,
+    "ADVAPI32.DLL",
+    list.of("close_registry_key", "RegCloseKey")
+)
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    // Windows x64 调用需要 32 字节 shadow space；此处额外占用 8 字节以保持 16 字节栈对齐。
+    sub rsp, 40
+    // PE64 通过 RIP 相对的导入槽调用。
+    call [rel GetCurrentProcessId]
+    xor ecx, ecx
+    call [rel ExitProcess]
+format_section_end(image, ".text")
+
+// 在此生成 .idata：不要在该调用之外再次打开同一个节。
+format_pe_import_section(image, ".idata", imports)
+
+format_entry_mut(image, start)
+format_finish(image)

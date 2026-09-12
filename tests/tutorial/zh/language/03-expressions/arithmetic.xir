@@ -1,0 +1,6 @@
+const total = 2 + 3 * 4       // 14
+const grouped = (2 + 3) * 4   // 20
+const quotient = 17 / 5       // 3
+const remainder = 17 % 5      // 2
+
+dd(total, grouped, quotient, remainder)

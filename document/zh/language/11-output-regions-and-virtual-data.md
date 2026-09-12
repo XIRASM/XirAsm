@@ -1,59 +1,97 @@
 # 第 11 章：输出区域与虚拟数据
 
-写最简单的 flat binary 时，可以把“地址”和“文件偏移”当成同一件事：第一个字节地址是 0，FOA 也是 0，后面一起增长。
+写最简单的 flat binary 时，“地址”和“文件偏移”是一样的（标号值 / 偏移值）：第一个字节的地址是 0，文件偏移也是 0，往后一起长，这在汇编器里叫地址跟进，反正中文就这么理解就对了。
 
-但只要开始写 PE、ELF、COFF，或者手写自己的二进制格式，这个假设马上就会出错：
+如果你不用自己构造可执行格式，比如自定义格式，或不想专研OS那些可执行格式，那么可以跳过这部分，只了解`origin`/`here`这俩个API就行。
 
-- `.text` 运行时可能映射到 `0x401000`，但它在文件里通常从较小的 raw 偏移开始；
-- BSS 需要占一段运行时地址，却不应该把整段零都写进文件；
-- 文件头里的 RVA、raw pointer、raw size、virtual size 往往要等各段都写完后才能回填；
-- 有些表要先在临时空间里生成、测量、改字节，再复制到真正的输出里。
+只要开始写 PE、ELF、COFF，或者自己定一种二进制格式，这个假设就不成立了：
 
-所以本章只讲一件事：XIRASM 怎样把 **逻辑地址 / RVA**、**raw 文件偏移 / FOA**、**最终进入文件的字节** 和 **临时虚拟输出** 分开管理。
+- `.text` 运行时可能映射到 `0x401000`，但在文件里从一个很小的偏移开始；
+- BSS 要占住一段运行时地址，却不能把那一大段零都写进文件；
+- 文件头里的 RVA、raw pointer、raw size、virtual size，要等各段都写完了才能回填；
+- 有些表要先在临时空间里生成、测量、改字节，最后才复制到真正的输出里。
 
-## 先分清 RVA 和 FOA
+XIRASM 用四个互相独立的量来描述这些差别：**逻辑地址（RVA）**、**raw 文件偏移（FOA）**、**最终写进文件的字节**，以及**临时虚拟输出**。
 
-一个真实输出区域至少有四个量：
+## RVA 与 FOA
 
-| 名称 | 说明 |
-| --- | --- |
-| `origin` | 区域的逻辑地址基准。标号地址从这里开始算；写 PE 时通常对应 RVA 或 image base + RVA，写 ELF 时通常对应虚拟地址。 |
-| `file_offset` / FOA | 区域在 raw 文件中的起始偏移。 |
-| `logical size` | 区域占用的逻辑地址范围。`reserve` 会计入这个大小。 |
-| `file size` | 区域最终实际写进 raw 文件的字节数。尾部 `reserve` 可以不计入这个大小。 |
+一个真实输出区域有四个量：
 
-这四个量不能互相代替。改 `origin` 不会自动插入文件填充；改 FOA 也不会改变标号地址。PE 里的 `VirtualAddress`、`PointerToRawData`、`VirtualSize`、`SizeOfRawData` 之所以容易写错，就是因为它们分别来自这几类信息。
+| 名称                   | 含义                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `origin`             | 这个区域的逻辑地址基准。标号地址从这里开始计算。写 PE 时通常对应 RVA 或 image base + RVA，写 ELF 时通常对应虚拟地址。 |
+| `file_offset`（FOA） | 这个区域在 raw 文件里的起始偏移。                                                                                     |
+| `logical size`       | 这个区域占掉的逻辑地址范围。`reserve` 计入这个大小。                                                                    |
+| `file size`          | 这个区域最后真正写进 raw 文件的字节数。区域尾部的 `reserve` 可以不计入。                                               |
 
-写布局时常用这些查询：
+这四个量互相代替不了。改 `origin` 不会顺手补上文件里的填充；改 FOA 也不会挪动标号地址。PE 头里 `VirtualAddress`、`PointerToRawData`、`VirtualSize`、`SizeOfRawData` 容易写错，就是因为它们分别来自这四个量。
 
-| 查询 | 返回什么 |
-| --- | --- |
-| `region_base()` | 当前区域的 `origin`，也就是标号地址的基准。 |
-| `here()` | 当前逻辑地址。 |
-| `file_offset()` | 当前已经确定的 raw 文件偏移；尾部只有 `reserve` 时，它仍停在真实文件尾部。 |
-| `file_cursor_real()` | 下一个已经确定会写进 raw 文件的位置。可以把它当成“当前真实 FOA”。 |
-| `file_cursor_potential()` | 如果把当前尾部 `reserve` 也保留成文件里的零填充，下一个 FOA 会是多少。 |
-| `tail_reserve_size()` | 当前区域末尾还有多少 `reserve` 尚未进入 raw 文件。 |
+写布局时常用这几个查询。注意它们回答的是**两个不同的坐标系**：逻辑地址那一套（和标号同一个坐标系），和文件偏移那一套：
 
-注意：`file_cursor_potential()` 只是 API 名。实际判断很简单：它等于“真实 FOA + 尾部还没落地的 reserve”。
+| 查询                        | 它回答的问题                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `region_base()`           | 这个区域的逻辑地址基准是多少（标号地址从这个基准开始计算）。                            |
+| `here()`                  | 当前逻辑地址是多少。作用相当于传统汇编器里的`$`。                           |
+| `file_offset()`           | 已经写进 raw 文件的字节数是多少。**它就是下一个真字节要落的文件位置**。 |
+| `file_cursor_real()`      | 同上，和`file_offset()` 取值完全一样。                                      |
+| `file_cursor_potential()` | 如果把尾部那段还没落地的 `reserve` 也计入，下一个文件位置会是多少。        |
+| `tail_reserve_size()`     | 当前区域末尾还有多少个保留字节没进 raw 文件。                                 |
 
-这些 API 主要给自定义格式和格式库内部使用。普通 PE/COFF/ELF 用法优先看 `format.inc` 包装层；它会替你维护大部分 RVA/FOA 关系。
+`file_offset()` 和 `file_cursor_real()` 是一回事，两个名字都在用。真正有区别的是后两个：**`file_cursor_potential()` 把待落的预留计入，`file_offset()` 不计入。**
+
+## 用 `print` 看中间值
+
+上面这几个查询在不同阶段的取值不一样，光看文档容易记混。`print` 能把值直接打出来，是排查布局问题时最顺手的工具：
+
+- 它**不写输出文件**，只往诊断里加一条 `note`；
+- 值按内容打印：整数给十进制数值（不是字节），字符串给文本，`bytes` 给 `b"..."`，`list` 和 `map` 带长度展开。
+
+`print` 可以接多个实参，它们按顺序拼在一条 note 里。`origin(0x4000)`、写一个字节、再 `reserve(3)` 之后：
+
+```asm id=11-origin
+origin(0x4000)
+
+emit.u8(0xaa)
+reserve(3)                 // 逻辑上占 3 字节，文件里还没有它们
+
+print("here", here())
+print("file_offset", file_offset())
+print("cursor_real", file_cursor_real())
+print("cursor_potential", file_cursor_potential())
+print("tail_reserve", tail_reserve_size())
+```
+
+装配时打出来的是：
+
+```text
+note: here 16388
+note: file_offset 1
+note: cursor_real 1
+note: cursor_potential 4
+note: tail_reserve 3
+```
+
+读法：`here` 是逻辑地址 `0x4004`，`file_offset` 是文件偏移 `1`——**两个数在各自的坐标系里都表示"当前位置"**，所以本来就该不一样，不能拿数值直接比。`file_cursor_potential()` 的 `4` 意思是"如果那 3 个预留字节也写进文件，下一个文件位置会是 4"。
+
+`warn` 报 warning，`err` 报 error 并让汇编失败；`print` 只是 note，不影响结果。
+
+这些接口主要给自定义格式和格式库内部用。写普通 PE/COFF/ELF 时先看 `format.inc` 的包装层，大部分 RVA/FOA 关系它已经替你维护好了。
 
 ## `origin` 只改逻辑地址
 
-`origin(address)` 修改当前区域的逻辑地址基准，不修改文件偏移。
+`origin(address)` 改当前区域的逻辑地址基准，不动文件偏移：
 
-```asm
-// 把当前输出区域的逻辑起点设为 0x4000。
-origin(0x4000);
+```asm id=11-origin-2 bytes=aa
+// 区域逻辑起点设为 0x4000；文件里仍然从 0 开始。
+origin(0x4000)
 
 start:
-emit.u8(0xaa);
+emit.u8(0xaa)
 
-assert(region_base() == 0x4000);
-assert(label_addr("start") == 0x4000);
-assert(here() == 0x4001);
-assert(file_offset() == 1);
+assert(region_base() == 0x4000)
+assert(label_addr("start") == 0x4000)
+assert(here() == 0x4001)      // 写出一个字节后逻辑地址前进一格
+assert(file_offset() == 1)
 ```
 
 输出只有一个字节：
@@ -62,79 +100,76 @@ assert(file_offset() == 1);
 aa
 ```
 
-这里 `start` 的地址是 `0x4000`，但文件里仍然只写了一个字节。`origin` 适合 flat 输出设置装载地址，或者在某个区域内调整标号地址基准。它不会创建新区，也不会把文件位置跳到 `0x4000`。
+`start` 的地址是 `0x4000`，文件里却只写了一个字节。`origin` 用来给 flat 输出设装载地址，或者在某个区域里挪动标号地址基准。它不会创建新区，也不会把文件位置跳到 `0x4000`。
 
-## `region.begin` 显式指定 RVA 和 FOA
+## `region.begin` 指定 RVA 和 FOA
 
-`region.begin(name, origin, file_offset)` 开始一个新的真实输出区域。它同时指定：
+`region.begin(name, origin, file_offset)` 开始一个新的真实输出区域，同时给出这个区域的逻辑地址基准和起始 FOA。三个参数都要写：参数个数不对会报 `InvalidApiArity`。
 
-- `origin`：这个区域的逻辑地址基准；
-- `file_offset`：这个区域在 raw 文件中的起始 FOA。
-
-```asm
+```asm id=11-begin bytes=4844000000000000000000000000000044415441
 // header 的逻辑地址从 0x1000 开始，raw 文件偏移从 0 开始。
-region.begin("header", 0x1000, 0);
+region.begin("header", 0x1000, 0)
 
 header:
-emit.bytes(b"HD");
+emit.bytes(b"HD")
 
-// payload 有自己的逻辑地址，并从 FOA 0x10 开始。
-region.begin("payload", 0x2000, 0x10);
+// payload 有自己的逻辑地址，从 FOA 0x10 开始。
+region.begin("payload", 0x2000, 0x10)
 
 payload:
-emit.bytes(b"DATA");
+emit.bytes(b"DATA")
 
-assert(label_addr("header") == 0x1000);
-assert(label_addr("payload") == 0x2000);
+assert(label_addr("header") == 0x1000)
+assert(label_addr("payload") == 0x2000)
 ```
 
-`header` 占 FOA 0 和 1，`payload` 从 FOA 0x10 开始。中间没有真实区域写入的 raw 范围，最终 flat 文件会补零：
+`header` 占 FOA 0 和 1，`payload` 从 FOA 0x10 开始。中间那一段没有区域写入，flat 文件会补零：
 
 ```text
 48 44 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 44 41 54 41
 ```
 
-`region.begin` 不是“插入字节”，也不是 PE/ELF/COFF 的 section 声明。它只告诉 XIRASM：接下来的输出属于一个新区域，并且这个区域的逻辑地址和 raw 文件偏移是多少。
+`region.begin` 不是“插入字节”，也不是 PE/ELF/COFF 的 section 声明。它只说明：接下来的输出属于一个新区域，这个区域的逻辑地址和 raw 文件偏移分别是多少。
 
-区域之间是否按 FOA 递增、是否重叠、是否留洞，调用者自己负责。写标准格式时不要直接散用 `region.begin` 拼 PE/ELF/COFF 头；优先使用 `format.inc`，只在手写自定义格式或实现格式辅助函数时直接管理这些区域。
+区域之间是否按 FOA 递增、是否重叠、是否留洞，由调用者自己负责。写标准格式时不要拿 `region.begin` 去拼 PE/ELF/COFF 的文件头；优先用 `format.inc`，只在手写自定义格式或实现格式辅助函数时才直接管理区域。
 
-## `reserve` 推进逻辑大小，但尾部可以不进文件
+## `reserve` 与尾部预留
 
-写真实字节时，逻辑地址和 raw 文件尾部都会前进：
+写真实字节时，逻辑地址和 raw 文件尾部一起前进：
 
-```asm
-emit.u8(0xaa);
+```asm id=11-u8
+emit.u8(0xaa)
 
-assert(file_cursor_real() == 1);
-assert(file_cursor_potential() == 1);
-assert(tail_reserve_size() == 0);
+assert(file_cursor_real() == 1)          // 一个字节真的进了文件
+assert(file_cursor_potential() == 1)
+assert(tail_reserve_size() == 0)         // 没有待落的预留
 ```
 
-`reserve(n)` 不一样。它推进逻辑地址，但如果它还在区域尾部，XIRASM 不会立刻把它写成文件里的零：
+`reserve(n)` 不一样：它推进逻辑地址，但只要这段预留还在区域末尾，XIRASM 就不会立刻把它写成文件里的零：
 
-```asm
-emit.u8(0xaa);
-reserve(3);
+```asm id=11-u8-2
+emit.u8(0xaa)      // 文件里 1 个字节
+reserve(3)         // 逻辑地址前进 3 格，文件没动
 
-assert(here() == 4);
-assert(file_cursor_real() == 1);
-assert(file_cursor_potential() == 4);
-assert(tail_reserve_size() == 3);
+assert(here() == 4)                      // 逻辑上已经占 4 字节
+assert(file_cursor_real() == 1)          // 文件里还是 1 个字节
+assert(file_cursor_potential() == 4)     // 这 3 字节也可以选择保留
+assert(tail_reserve_size() == 3)
 ```
 
-这时区域逻辑上已经占 4 字节，但 raw 文件只有 `aa` 一个字节。尾部 3 字节可以被裁掉，也可以在后续选择中变成文件里的零填充。
+这时区域逻辑上占 4 字节，raw 文件里只有 `aa`。尾部那 3 字节可以被裁掉，也可以在后面选择保留成文件里的零填充。
 
-如果 `reserve` 后面又写真实字节，它就不再是“尾部预留”，而是文件中间的间隙，必须进入 raw 文件：
+如果 `reserve` 之后又写了真实字节，它就不再是尾部预留，而是文件中间的间隙，必须进 raw 文件：
 
-```asm
-emit.u8(0xaa);
-reserve(3);
-emit.u8(0xbb);
+```asm id=11-u8-3 bytes=aa000000bb
+emit.u8(0xaa)
+reserve(3)
+emit.u8(0xbb)      // 夹在两个真实字节中间，3 个零必须写出来
 
-assert(file_cursor_real() == 5);
-assert(file_cursor_potential() == 5);
-assert(tail_reserve_size() == 0);
+assert(file_cursor_real() == 5)
+assert(file_cursor_potential() == 5)
+assert(tail_reserve_size() == 0)         // 已经不是尾部预留了
 ```
 
 文件内容：
@@ -143,42 +178,19 @@ assert(tail_reserve_size() == 0);
 aa 00 00 00 bb
 ```
 
-这条规则是写 BSS、section 尾部 padding、raw size / virtual size 的基础：尾部 reserve 增加逻辑大小；只有它被后续真实字节夹在中间，或你主动选择保留它时，才会变成 raw 文件里的零。
+这条规则是写 BSS、section 尾部 padding、raw size / virtual size 的基础：尾部预留增加逻辑大小；只有它被后面的真实字节夹住，或者你主动选择保留，才会变成 raw 文件里的零。
 
-## `output.section` 裁掉尾部 reserve
+## `output.org` 保留尾部预留
 
-`output.section(name, origin)` 用“当前真实 FOA”开始下一个区域。也就是：前一个区域末尾还没有进入文件的 `reserve` 会被裁掉。
+`output.org(name, origin)` 从**逻辑偏移**开始下一个区域。它把前面区域末尾那段还没落地的 `reserve` 一起计入，于是预留变成 raw 文件里真实的零填充：
 
-```asm
-emit.u8(0x41);
-reserve(3);
+```asm id=11-u8-4 bytes=4100000042
+emit.u8(0x41)
+reserve(3)
 
-// next 从 FOA 1 开始，前面的尾部 reserve 不写入文件。
-output.section("next", 0x2000);
-emit.u8(0x42);
-```
-
-第一个区域的逻辑大小仍然是 4，但 raw 文件大小只有 1。新区域接在 FOA 1，所以输出是：
-
-```text
-41 42
-```
-
-这就是 BSS 一类区域常要的行为：内存里要有地址范围，文件里不要写一大段零。
-
-`output.section` 只裁掉“还在区域尾部”的 reserve。已经位于文件中间的间隙不会被删除。
-
-## `output.org` 保留尾部 reserve
-
-`output.org(name, origin)` 用“把尾部 reserve 也算进去后的 FOA”开始下一个区域。也就是：前一个区域末尾的 `reserve` 会变成 raw 文件里的零填充。
-
-```asm
-emit.u8(0x41);
-reserve(3);
-
-// next 从 FOA 4 开始，前面的三个 reserve 字节保留为文件间隙。
-output.org("next", 0x2000);
-emit.u8(0x42);
+// 逻辑偏移是 4，所以 next 从 FOA 4 开始，前面三个预留字节被写出来。
+output.org("next", 0x2000)
+emit.u8(0x42)
 ```
 
 输出是：
@@ -187,76 +199,93 @@ emit.u8(0x42);
 41 00 00 00 42
 ```
 
-所以二者的选择可以直接按 FOA 说：
+## `output.section` 裁掉尾部预留
 
-| 操作 | 新区域从哪里开始 |
-| --- | --- |
-| `output.section` | 从真实 raw 文件尾部开始，尾部 reserve 不进文件。 |
-| `output.org` | 从 reserve 之后开始，尾部 reserve 作为零填充保留在文件里。 |
+`output.section(name, origin)` 从**文件偏移**开始下一个区域。它不看逻辑偏移，所以前一个区域末尾那段还没进文件的 `reserve` 直接被裁掉：
 
-二者都会给新区域设置新的 `origin`。`origin` 只影响标号地址，不影响上面这个 FOA 选择。
+```asm id=11-u8-5 bytes=4142
+emit.u8(0x41)
+reserve(3)
+
+// 文件偏移是 1，所以 next 从 FOA 1 开始，尾部预留不写进文件。
+output.section("next", 0x2000)
+emit.u8(0x42)
+```
+
+第一个区域的逻辑大小仍然是 4，raw 文件大小只有 1。新区域接在 FOA 1 后面，所以输出是：
+
+```text
+41 42
+```
+
+BSS 一类区域要的正是这个：内存里要有地址范围，文件里不要写一大段零。
+
+注意裁掉的是**区域尾部**那段预留。如果 `reserve` 后面还跟着真实字节，它早就是文件中间的间隙了，这段不会被删。
+
+两者的区别在于新区域从哪里接：
+
+| 操作               | 接在哪个位置                                  | 尾部预留的去向     |
+| ------------------ | --------------------------------------------- | ------------------ |
+| `output.org`     | 当前**逻辑偏移**（`here()` 那个位置） | 变成文件里的零填充 |
+| `output.section` | 当前**文件偏移**（真实写到的位置）      | 被裁掉，不进文件   |
+
+两者都会给新区域设置新的 `origin`。`origin` 只影响标号地址，不影响上面这个选择。
 
 ## `region.file_align` 只对齐 raw size
 
-`region.file_align(alignment)` 对齐的是当前区域最终写入 raw 文件的大小。它不推进逻辑地址，也不会把尾部 reserve 变成逻辑内容。
+`region.file_align(alignment)` 对齐的是当前区域最终写入 raw 文件的大小。它不推进逻辑地址，也不会把尾部预留变成逻辑内容：
 
-```asm
-region.begin("first", 0x1000, 0);
+```asm id=11-begin-2 bytes=41424300000000005a
+region.begin("first", 0x1000, 0)
 
-emit.bytes(b"ABC");
-reserve(13);
+emit.bytes(b"ABC")     // 3 个真实字节
+reserve(13)            // 推到逻辑地址 16，但文件里还是 3 字节
 
-assert(here() == 0x1010);
-assert(file_cursor_real() == 3);
-assert(file_cursor_potential() == 16);
+assert(here() == 0x1010)
+assert(file_cursor_real() == 3)
+assert(file_cursor_potential() == 16)
 
-// 裁掉尾部 reserve 后，把 raw size 对齐到 8。
-region.file_align(8);
+// 裁掉尾部预留后，把 raw size 对齐到 8。
+region.file_align(8)
 
-region.begin("second", 0x2000, 8);
-emit.u8(0x5a);
+region.begin("second", 0x2000, 8)
+emit.u8(0x5a)
 ```
 
-`ABC` 三个真实字节参与 raw size 对齐，XIRASM 补 5 个零，把第一区域的 raw size 补到 8。第二区域从 FOA 8 开始：
+`ABC` 三个真实字节参与 raw size 对齐，XIRASM 补 5 个零，把第一个区域的 raw size 补到 8。第二个区域从 FOA 8 开始：
 
 ```text
 41 42 43 00 00 00 00 00 5a
 ```
 
-第一区域的逻辑大小仍然是 16，因为 `reserve(13)` 已经推进了逻辑地址。`region.file_align` 改的是 raw 文件大小，不是 RVA 范围。
+第一个区域的逻辑大小仍然是 16，因为 `reserve(13)` 已经推进了逻辑地址。`region.file_align` 改的是 raw 文件大小，不是 RVA 范围。
 
-对齐值必须是非零的 2 的幂。调用 `region.file_align` 后，当前区域的文件输出已经结束；继续写真实字节前，应开始另一个区域。
+对齐值必须是非零的 2 的幂。调用 `region.file_align` 之后，当前区域的文件输出就结束了；要接着写真实字节，得开始另一个区域。
 
-它和 `align` 的区别很重要：
+它和 `align` 的区别：
 
-- `align` 是普通输出操作，会推进逻辑地址；如果形成文件间隙，就会写填充字节。
-- `region.file_align` 是区域收尾操作，只对齐该区域的 raw size。
+- `align` 是普通输出操作，会推进逻辑地址；如果形成文件间隙，就要写出填充字节。
+- `region.file_align` 是区域收尾操作，只对齐这个区域的 raw size。
 
 需要“RVA 也往前走”时用 `align`；只需要“raw size 对齐到 FileAlignment”时用 `region.file_align`。
 
-## 虚拟区域是临时输出，不自动进文件
+## 虚拟区域
 
-虚拟区域用于临时组装、测量、读取或改写字节。它有自己的逻辑地址和字节内容，但不会自动写进最终文件。
+虚拟区域用来临时组装、测量、读取或改写字节。它有自己的逻辑地址和字节内容，但不会自动写进最终文件：
 
-```asm
+```asm id=11-begin-3 bytes=45322310
 // 在逻辑地址 0x3000 创建一个临时区域。
-virtual.begin(0x3000);
+virtual.begin(0x3000)
 
 table:
-emit.u32(0x11223344);
-store.u32(table, load.u32(table) ^ 0x01010101);
-const encoded: bytes = load.bytes(table, 4)
+emit.u32(0x11223344)              // 区域里先有 44 33 22 11
+store.u32(table, load.u32(table) ^ 0x01010101)   // 原地异或成 45 32 23 10
+const encoded: bytes = load.bytes(table, 4)      // 取出四字节快照
 
-virtual.end();
+virtual.end()
 
-// 只有显式复制出来的字节才会进入主输出。
-emit.bytes(encoded);
-```
-
-虚拟区域里最初是：
-
-```text
-44 33 22 11
+// 只有显式复制出来的字节才进主输出。
+emit.bytes(encoded)
 ```
 
 变换后复制到主输出的是：
@@ -265,144 +294,118 @@ emit.bytes(encoded);
 45 32 23 10
 ```
 
-虚拟区域适合做资源表、导出表、字符串池、校验数据等临时构造。里面可以写数据、`reserve`、`align`、定义标号、写 ISA 指令，也可以用 `load.*` 和 `store.*` 读写这些临时字节。
+对照一下：那个临时区域刚创建时里面是 `44 33 22 11`，异或之后才变成上面这四个字节；主输出里只有这最后的四字节，`44 33 22 11` 从没进过文件。
 
-但它有三个边界：
+虚拟区域适合做资源表、导出表、字符串池、校验数据这类临时构造。里面可以写数据、`reserve`、`align`、定义标号、写 ISA 指令，也可以用 `load.*` 和 `store.*` 读写这些临时字节。
 
-- 每个 `virtual.begin` 必须有对应的 `virtual.end`。
-- 虚拟区域里不能启动主输出区域；`output.section` 和 `output.org` 只能在回到真实输出后调用。
-- 需要回填的指令在虚拟区域里保持"未回填"：`emit.bytes` 拷贝的是虚拟字节的**快照**，而快照发生在回填之前，所以里面还是编码时的占位值。scratch 里如果放的是带引用的代码，请用 `region.place` 把整个区域落位（见下）。
+`virtual.begin()` 也可以不带参数，这时逻辑地址取**当前地址**：
 
-虚拟区域里的地址不是最终文件位置。要让虚拟内容进入文件，可以用 `emit.bytes(...)` 或格式库提供的复制流程拷贝字节，也可以用 `region.place` 把整个区域落位。
+```asm id=11-bytes
+emit.bytes(b"AB")
 
-## `region.place`：把 scratch 内容落进文件
+// 不给 origin：临时区域从当前地址接着算。
+virtual.begin()
+emit.bytes(b"CT")
+virtual.end()
 
-`region.place(label, origin, file_offset)` 把 `label` 所在的虚拟区域变成真实输出区域，坐标由调用者指定。和 `emit.bytes` 不同，它保留该区域的指令、标号和引用，所以 scratch 里写的跳转与调用会由正常的 fixup 流程按**落位后的地址**解析：
+emit.bytes(b"D")       // 这里写出：41 42 44
+```
 
-```asm
-x86.use64();
+虚拟区域里的 `CT` 没有进文件，主输出只有 `AB` 和 `D`。参数只能给 0 个或 1 个，给两个会报 `InvalidApiArity`。
+
+它有三条边界：
+
+- 每个 `virtual.begin` 都要有对应的 `virtual.end`。
+- 虚拟区域里不能启动主输出区域；`output.section` 和 `output.org` 只能在回到真实输出之后调用。
+- 需要回填的指令在虚拟区域里保持"未回填"：`emit.bytes` 拷贝的是虚拟字节的**快照**，而快照发生在回填之前，所以里面还是编码时的占位值。scratch 里放的是带引用的代码时，要用 `region.place` 把整个区域落位（见下）。
+
+虚拟区域里的地址不是最终文件位置。要让虚拟内容进文件，可以用 `emit.bytes(...)` 或格式库的复制流程拷贝字节，也可以用 `region.place` 把整个区域落位。
+
+虚拟区域和普通区域一样，字节只存在于逻辑地址上。写到尾部预留那一段会失败：
+
+```asm id=11-u8-6 error=this store writes 1 byte at 0x2, but the finished output image holds 1 byte; a reserved tail is not in the file (InvalidApiArgument)
+emit.u8(0xaa)
+reserve(3)                  // 尾部预留：逻辑上占 3 字节，文件里只有 1 字节
+
+defer {
+    store.u8(2, 0x55)       // 地址 2 落在那段预留里，写不进去
+}
+```
+
+诊断会把地址和文件长度都说清楚：
+
+```text
+error: this store writes 1 byte at 0x2, but the finished output image holds 1 byte; a reserved tail is not in the file (InvalidApiArgument)
+```
+
+## `region.place` 把虚拟内容落进文件
+
+`region.place(label, origin, file_offset)` 把 `label` 所在的虚拟区域变成真实输出区域，坐标由调用者给出。和 `emit.bytes` 不同，它保留这个区域里的指令、标号和引用，所以 scratch 里写的跳转和调用会由正常的 fixup 流程按**落位后的地址**解析：
+
+```asm id=11-use64 bytes=90000000000000000000000000000000e8fb7fffffe9f6ffffff
+x86.use64()
 
 main_target:
 emit.u8(0x90)
 
-virtual.begin(0x9000);
+virtual.begin(0x9000)
+
 gen_start:
-call main_target
-jmp gen_start
-virtual.end();
+call main_target          // 目标在虚拟区域外面，落位时才解析
+jmp gen_start             // 自跳，同样是落位后解析
+
+virtual.end()
 
 late_layout {
-    region.place("gen_start", 0x8000, 0x10);
+    region.place("gen_start", 0x8000, 0x10)
 }
 ```
 
-落位后的区域从文件偏移 `0x10` 开始写字节，两个引用都能命中目标：`call main_target` 指向主输出，`jmp gen_start` 指向落位后的地址。
-
-落位会让该区域成为当前活动区域，并把位置放在它已有内容**之后**，所以后续输出直接续写在里面。区域以该标号命名，列表与告警显示的就是这个名字。落位要发生在 fixup 解析之前，所以 `late_layout` 是自然的调用位置。普通发射期从 scratch 里读出来的值（`load.*`、`label_addr`）描述的是**scratch 地址**，不是落位后的地址。
-
-## `load.*` / `store.*` 只作用于当前活动区域
-
-发射期里，`load.*` 和 `store.*` 寻址的是**当前活动区域自己的字节范围**。在虚拟区域里，它们读写的就是 scratch 字节：
-
-```asm
-virtual.begin(0x3000);
-
-emit.bytes(b"AB");
-store.u8(0x3000, 0x5a);
-const patched: bytes = load.bytes(0x3000, 2)
-
-virtual.end();
-
-emit.bytes(patched);
-```
-
-`virtual.end()` 之后活动区域回到外围区域，同一个调用寻址的就是真实输出字节。从 scratch 读出来的值是**拷贝**：block 结束后依然有效，这也是虚拟区域把中间结果交给主输出的方式。
-
-虚拟区域不会读写其它区域的字节，外围输出也不会按地址去读 scratch 字节。两侧通过**值**交汇；当 scratch 里放的是带引用的代码时，通过 `region.place` 交汇。
-
-## 省略虚拟 origin：从当前位置的逻辑地址开始
-
-`virtual.begin()` 可以不传参数。省略时，虚拟区域的逻辑地址从外围区域当前的 `here()` 开始。
-
-```asm
-origin(0x4000);
-emit.u8(0xaa);
-
-// 当前 here() 是 0x4001，虚拟区域也从这里开始算地址。
-virtual.begin();
-
-scratch:
-emit.u16(0x1234);
-const copied: bytes = load.bytes(scratch, 2)
-
-virtual.end();
-
-emit.bytes(copied);
-```
-
-`scratch` 的逻辑地址是 `0x4001`，但虚拟输出不会替换主输出，也不会推进主输出位置。最终文件是：
+虚拟区域从逻辑地址 `0x8000`、FOA `0x10` 落位。输出的头 16 个字节是主输出里那个 `0x90` 加上补齐，接着是落位过来的 `call` 和 `jmp`：
 
 ```text
-aa 34 12
+90 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+e8 fb 7f ff ff
+e9 f6 ff ff ff
 ```
 
-这种写法适合“按当前地址假装组装一段内容，然后只取它的字节结果”的场景。
+`call` 的位移 `0x7ffb` 指向落位后的 `main_target`（`0x0000`），`jmp` 的位移 `0xfffffff6` 指回落位后的 `gen_start`（`0x8010`）。两者都由落位后的地址计算得到，源文件里没有手写偏移。
 
-## 最终区域信息只能在收尾阶段查询
+## `load.*` / `store.*` 只在当前活动区域
 
-写出阶段能知道“当前正在写到哪里”，但不能查询所有区域最终的 raw size / logical size。原因很简单：后面的区域、尾部 reserve、文件对齐、late layout 和最终收尾都可能影响最终布局事实。
+`load.*` 和 `store.*` 读写的是当前活动区域里已经生成的字节：
 
-区域最终事实只能在收尾阶段查询：
+```asm id=11-u8-7 bytes=42
+emit.u8(0x5a)
 
-| 查询 | 返回什么 |
-| --- | --- |
-| `region_file_offset(address)` | 包含该地址的区域最终从哪个 FOA 开始。 |
-| `region_file_size(address)` | 该区域最终写进 raw 文件的字节数。 |
-| `region_logical_size(address)` | 该区域最终占用的逻辑地址大小，包含尾部 reserve。 |
+// 先读出原值，再原地改掉：first 留下的是改写前的 0x5a。
+const first: u64 = load.u8(0)
+store.u8(0, 0x42)
 
-这三个查询通常用于回填文件头。例如 PE section header 里的 `PointerToRawData`、`SizeOfRawData`、`VirtualSize`，或者 ELF program header 里的 `p_offset`、`p_filesz`、`p_memsz`，都应该等布局稳定后再写。
+assert(load.u8(0) == 0x42)
+assert(first == 0x5a)
+```
 
-如果在普通写出阶段调用这些查询，会因为没有最终 output image 而报错。下一章介绍收尾阶段：它可以读取最终布局、回填已经存在的字节、做断言和校验，但不能再改变布局。
+```text
+42
+```
 
-## 怎么选
+`load.u8(0)` 读出的是改写前的值 `0x5a`，`store.u8(0, 0x42)` 把第 0 个字节改掉。最终写出的只有 `42`。
 
-只设置 `origin`：
+地址是相对于当前活动区域起点的偏移。虚拟区域的字节要靠 `load.*` 读出来，或者用 `region.place` 落位。
 
-- 单个 flat 输出需要非零装载地址；
-- 文件偏移和逻辑位置仍然同步推进。
+## 最终区域信息只在收尾阶段查询
 
-用 `region.begin`：
+这几个查询只有在收尾阶段才有确定的答案：
 
-- 逻辑地址和 FOA 都已经明确；
-- 你正在手写自定义格式，或者实现 `format.inc` 这类格式接口。
+| 查询                             | 返回什么                             |
+| -------------------------------- | ------------------------------------ |
+| `region_file_offset(address)`  | `address` 所在区域最终的起始 FOA。 |
+| `region_file_size(address)`    | 这个区域最终写进 raw 文件的字节数。  |
+| `region_logical_size(address)` | 这个区域最终的逻辑大小，含尾部预留。 |
 
-用 `output.section`：
+用它们回填文件头。例如 PE 的 section 头需要 `PointerToRawData`、`SizeOfRawData`、`VirtualSize`，ELF 的程序头需要 `p_offset`、`p_filesz`、`p_memsz` 这类字段，这些都要等布局定下来之后再写。
 
-- 新区域应该紧接真实 raw 文件尾部；
-- 前一区域尾部 reserve 只表示逻辑大小，不应该占文件空间。
+在普通输出阶段调用这几个查询会失败，因为最终映像那时还不存在。要等 `defer`（第 12 章）里再查。
 
-用 `output.org`：
-
-- 新区域应该从 reserve 之后开始；
-- 前一区域尾部 reserve 必须变成文件里的零填充。
-
-用 `region.file_align`：
-
-- 区域 raw size 需要按文件格式对齐；
-- 不希望改变逻辑地址范围。
-
-用虚拟区域：
-
-- 需要临时生成、测量、读取或改写一段字节；
-- 这些临时字节只有显式复制后才进入最终文件。
-
-一句话总结：
-
-- 标号、`here()`、`origin` 讲的是逻辑地址 / RVA；
-- `file_offset()`、`file_cursor_real()` 讲的是已经确定的 FOA；
-- `file_cursor_potential()` 只是在问“如果尾部 reserve 也进文件，FOA 会到哪里”；
-- `region_file_*` 和 `region_logical_size` 只能在最终布局稳定后用于回填和检查。
-
-下一章介绍收尾处理：读取稳定布局、回填字节、计算校验和、验证映像，但不再改变布局。
-
-[返回目录](../language.md)
+[返回语言目录](../language.md)

@@ -1,0 +1,5 @@
+const count: u8 = 4
+
+for value in range(0, count) {   // 0 <= value < count, unrolled during assembly
+    db(value)                    // one byte per iteration
+}

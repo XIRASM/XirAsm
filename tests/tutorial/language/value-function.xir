@@ -1,0 +1,6 @@
+fn align_up(value: u64, alignment: u64) -> u64 {
+    return ((value + alignment - 1) / alignment) * alignment
+}
+
+const header_size = align_up(0x73, 0x20)
+dw(header_size)        // 0x80

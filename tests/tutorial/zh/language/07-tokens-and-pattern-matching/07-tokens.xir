@@ -1,0 +1,14 @@
+// 拿这一行源码当输入：要求它以 load 开头，逗号后跟一段配平的词法单元。
+const line: string = "load rax, [rbx+(rcx*4)]"
+const result: map = match.tokens(
+    "=load destination:name =, source:tokens",
+    line
+)
+
+// 整条输入都匹配上了，才有捕获可读。
+assert(map.get(result, "ok"))
+
+const captures: map = map.get(result, "captures")
+assert(map.get(captures, "destination") == "rax")
+// source 是 tokens 捕获，拿到的是词法单元列表，拼回来仍是原文那一段。
+assert(tokens.join(map.get(captures, "source")) == "[rbx+(rcx*4)]")

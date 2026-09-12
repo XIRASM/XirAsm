@@ -1,0 +1,9 @@
+// 函数里再声明函数：外层被调用时就会报错。
+fn outer() {
+    fn inner() {
+        db(1)
+    }
+    inner()
+}
+
+outer()

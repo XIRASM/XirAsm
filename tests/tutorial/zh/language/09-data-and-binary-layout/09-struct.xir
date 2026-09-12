@@ -1,0 +1,9 @@
+struct Pair {
+    left: u32
+    right: u32
+}
+
+// 字段要从值上读，所以先绑到名字上，再取字段。
+const pair: Pair = Pair { left: 1, right: 2 }
+
+emit.u8(pair.left)      // 这里写出：01

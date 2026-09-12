@@ -1,0 +1,6 @@
+// 带小数点的字面量是 f64；窄化成 f32 要显式写 f32(...)。
+const scale: f64 = 1.5
+const compact: f32 = f32(scale)
+
+emit.f32(compact)       // 这里写出：00 00 c0 3f
+emit.f64(scale * 2.0)   // 这里写出：00 00 00 00 00 00 08 40

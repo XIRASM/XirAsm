@@ -1,0 +1,25 @@
+import("format/format.inc")
+
+// BSS 的正确写法：只用 rb() 预留大小，不写初始化字节。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".bss", format_uninitialized_data | format_readable | format_writeable)
+    )
+)
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    ret
+format_section_end(image, ".text")
+
+// rb(8) 只登记内存大小，文件里不占字节。
+format_section_begin(image, ".bss")
+scratch:
+    rb(8)
+format_section_end(image, ".bss")
+
+format_entry_mut(image, start)
+format_finish(image)

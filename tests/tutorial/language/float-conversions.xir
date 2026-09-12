@@ -1,0 +1,2 @@
+emit.f64(1.5)          // a fractional literal is already f64
+emit.f32(f32(1.5))     // f32(...) narrows explicitly

@@ -1,0 +1,7 @@
+fn emit_pair(value: u8) {
+    db(value)          // the body may contain anything the call site could
+    db(value + 1)
+}
+
+emit_pair(2)
+emit_pair(8)

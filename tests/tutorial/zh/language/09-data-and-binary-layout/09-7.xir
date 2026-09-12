@@ -1,0 +1,9 @@
+// 自然布局会在 tag 与 size 之间加入三个零填充字节。
+struct NaturalHeader {
+    tag: u8 = 0x41
+    size: u32 = 0x11223344
+}
+
+// 空字面量使用所有字段默认值，并立即写出完整结构体布局。
+const header: NaturalHeader = NaturalHeader { }
+emit.struct(header)

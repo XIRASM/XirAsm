@@ -1,0 +1,9 @@
+fn down(n: u64) -> u64 {
+    if n == 0 {
+        return 0
+    }
+
+    return down(n - 1) + 1
+}
+
+db(down(128))

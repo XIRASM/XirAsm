@@ -1,0 +1,3 @@
+fn bump(let value: u64) -> u64 {
+    return value + 1
+}

@@ -1,0 +1,7 @@
+fn set_entry(let plan: map, address: u64) {
+    map.set_mut(plan, "entry", address)
+}
+
+// image 是 const，不能交给 let 参数改写。
+const image: map = map.new()
+set_entry(image, 0x401000)

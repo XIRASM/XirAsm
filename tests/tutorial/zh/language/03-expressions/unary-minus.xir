@@ -1,0 +1,3 @@
+const all_bits = -1
+
+dq(all_bits)            // 八个 `ff` 字节

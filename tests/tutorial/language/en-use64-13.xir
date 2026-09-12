@@ -1,0 +1,8 @@
+x86.use64()
+
+packed struct SaveArea {
+    rax: u64
+    rcx: u64
+}
+
+sub rsp, sizeof(SaveArea)

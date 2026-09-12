@@ -1,0 +1,9 @@
+const payload_size = 32
+
+if payload_size < 16 {
+    db(1)
+} else if payload_size < 64 {
+    db(2)          // 走这个分支
+} else {
+    db(3)
+}

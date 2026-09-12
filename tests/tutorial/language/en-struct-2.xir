@@ -1,0 +1,8 @@
+struct Pair {
+    left: u32
+    right: u32
+}
+
+const pair: Pair = Pair { left: 1, right: 2 }
+
+emit.u8(pair.left)

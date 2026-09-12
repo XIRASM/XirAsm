@@ -1,0 +1,19 @@
+x86.use64()
+
+// tag 占 1 字节，value 要对齐到 4，所以中间补 3 字节，尾部再补 2 字节。
+struct StackFrame {
+    tag: u8,
+    value: u32,
+    tail: u16,
+}
+
+assert(sizeof(StackFrame) == 12)
+assert(offset_of(StackFrame, value) == 4)
+assert(offset_of(StackFrame, tail) == 8)
+
+// 偏移由 offset_of 算，不要在源码里写死数字。
+sub rsp, sizeof(StackFrame)
+mov dword [rsp + offset_of(StackFrame, value)], 0x44332211
+mov eax, [rsp + offset_of(StackFrame, value)]
+mov word [rsp + offset_of(StackFrame, tail)], 0x6655
+add rsp, sizeof(StackFrame)

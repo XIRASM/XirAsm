@@ -1,0 +1,6 @@
+{
+  "name": "XR",
+  "bits": 64,
+  "enabled": true,
+  "values": [1, 2]
+}

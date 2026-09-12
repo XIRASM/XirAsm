@@ -1,0 +1,40 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    // The DLL role sets IMAGE_FILE_DLL in the file header.
+    format_pe_dll | format_pe_console | format_pe_nx | format_pe_aslr_auto,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".edata", format_exports | format_readable)
+    )
+)
+
+let exports: list = format_pe_export_new()
+// Two labels exported under their own names.
+format_pe_export_many_mut(image, exports, list.of("x_add7", "x_sub3"))
+// answer_impl exported as x_answer.
+format_pe_export_pairs_mut(image, exports, list.of("answer_impl", "x_answer"))
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+dll_main:
+    // A DLL entry returns nonzero to report a successful load.
+    mov eax, 1
+    ret
+x_add7:
+    lea eax, [ecx + 7]
+    ret
+x_sub3:
+    lea eax, [ecx - 3]
+    ret
+answer_impl:
+    mov eax, 42
+    ret
+format_section_end(image, ".text")
+
+// The last argument is the DLL's own name, written into the export directory.
+format_pe_export_section(image, ".edata", exports, "xirasm_demo.dll")
+
+format_entry_mut(image, dll_main)
+format_finish(image)

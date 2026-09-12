@@ -1,8 +1,8 @@
 # XIRASM 格式教程
 
-这份教程讲如何用 XIRASM 直接生成 PE、ELF、COFF 和 macOS Mach-O 等常见文件。日常写这些格式时，从 `format/format.inc` 开始：你声明文件类型、节或装载段、入口、导入导出和重定位；`format.inc` 负责生成文件头、表项、文件偏移、RVA、对齐和最终回填。
+这份教程讲如何用 XIRASM 直接生成 PE、ELF、COFF 和 macOS Mach-O 文件。写法从 `format/format.inc` 开始：声明文件类型、节或装载段、入口、导入导出和重定位，文件头、表项、文件偏移、RVA、对齐以及最终回填由 `format.inc` 生成。
 
-如果你过去主要在 C、C++、Rust 或其他语言里写内联汇编，文件格式通常由编译器、链接器和运行时处理。XIRASM 直接生成输出文件，所以你需要明确回答这些问题：
+如果过去主要在 C、C++、Rust 或其他语言里写内联汇编，文件格式通常由编译器、链接器和运行时处理，不需要自己回答下面这些问题。XIRASM 直接生成输出文件，因此每一项都要明确给出：
 
 - 程序从哪个标签开始执行；
 - 哪些字节是代码，哪些字节是数据；
@@ -12,19 +12,19 @@
 - 文件里哪些绝对地址需要让加载器或链接器修正；
 - 最终阶段需要回填哪些地址、校验和或表项字段。
 
-本教程只需要一个导入：
+整个教程只需要一个导入：
 
 ```asm
-import("format/format.inc");
+import("format/format.inc")
 ```
 
-`include/format/` 下有几类文件，日常使用不用全部了解：
+`include/format/` 下的文件分三类，日常使用不必全部了解：
 
-- `format.inc` 是常用入口，提供格式配置、节/装载段声明、导入、导出、资源、重定位、符号表和最终生成流程；
-- `pe32.inc`、`pe64.inc`、`elf32.inc`、`elf64.inc` 是按位宽拆出的专用入口，维护已有源码或写专门格式时才需要直接导入；
-- `pe.inc`、`elfexe.inc`、`elfobj.inc` 等文件暴露更细的文件头、目录、节表、程序头和动态表构造函数，只有在 `format.inc` 表达不了目标布局时才需要。
+- `format.inc` 是常用入口，提供格式配置、节与装载段声明、导入、导出、资源、重定位、符号表和最终生成流程；
+- `pe32.inc`、`pe64.inc`、`elf32.inc`、`elf64.inc` 是按位宽拆出的专用入口，维护已有源码或编写专门格式时才直接导入；
+- `pe.inc`、`elfexe.inc`、`elfobj.inc` 等文件提供更细的文件头、目录、节表、程序头和动态表构造函数，`format.inc` 无法表达目标布局时才使用。
 
-本教程只讲 `format.inc`。需要手写 PE/ELF 头部、目录、节表、程序头或动态表时，再阅读[高级格式构造指南](../advanced-formats.md)。
+需要手写 PE/ELF 头部、目录、节表、程序头或动态表时，阅读[高级格式构造指南](../advanced-formats.md)。
 
 ## 章节
 
@@ -40,7 +40,7 @@ import("format/format.inc");
 | 目标 | 起始函数 | 主要操作 |
 | --- | --- | --- |
 | Windows 可执行文件 | `format_pe32` 或 `format_pe64` | `format_section_begin`、`format_pe_import_section`、`format_pe_resource_section`、`format_pe_reloc_section` |
-| Windows DLL | `format_pe32` 或 `format_pe64`，选项包含 `format_pe_dll` | `format_pe_export_section`，可选导入、资源和重定位 |
+| Windows DLL | `format_pe32` 或 `format_pe64`，选项含 `format_pe_dll` | `format_pe_export_section`，可选导入、资源和重定位 |
 | Linux 可执行文件 | `format_elf32` 或 `format_elf64`，选项为 `format_elf_exec` | `format_segment_begin`、`format_entry_mut`、`format_finish` |
 | Linux PIE | `format_elf64`，选项为 `format_elf_pie` | `format_segment_begin`、`format_entry_mut`、`format_finish` |
 | Linux 共享库 | `format_elf64_so` | `format_elfso_tables_mut`、`format_segment_begin`、`format_finish` |
@@ -54,45 +54,43 @@ import("format/format.inc");
 
 ## 基本生命周期
 
-格式配置都遵循同一条主线：
+所有格式配置都沿同一条主线推进：
 
-```text
-import("format/format.inc");
+```asm id=format-lifecycle target=x86-64
+import("format/format.inc")
 
-// 1. 创建格式配置：文件族、位宽、权限、节或装载段。
-let image: map = ...
+// 1. 建立配置：文件角色、子系统、安全选项、ASLR 策略。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        // 2. 声明这个文件有哪些节。
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
 
-// 2. 可选：把导入、导出、符号表或重定位表挂到配置上。
-format_*_tables_mut(image, ...)
+// 3. 开始输出：头部和节表的空间在这里预留。
+format_begin(image)
 
-// 3. 开始输出文件。format.inc 会在这里预留头部和表项空间。
-format_begin(image);
-
-// 4. 在已经声明过的节或装载段里写代码和数据。
-format_section_begin(image, ".text");
+// 4. 只能写进已经声明过的节。
+format_section_begin(image, ".text")
 start:
+    xor eax, eax
     ret
-format_section_end(image, ".text");
+format_section_end(image, ".text")
 
-// 5. 可执行文件设置入口，然后完成输出。
+// 5. 可执行文件设入口，然后完成全部回填。
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
-构造函数和描述函数会返回值，例如 `format_pe64(...)`、`format_section(...)`、`format_segment(...)`。名称以 `_mut` 结尾的函数是语句式更新函数，会直接修改传入的 `let` 绑定：
+第 1 章给出了这个骨架的完整版本，以及 ELF 可执行文件对应的写法。
 
-```text
-let image: map = format_pe64(options, sections)
-format_entry_mut(image, start)
-format_finish(image);
-```
-
-需要更新同一个配置时，继续使用同一个 `let` 绑定即可。`_mut` 函数的可变参数必须是直接的 `let` 绑定，不能是 `const`、临时表达式、字段访问或函数返回值。
+需要交给链接器的元数据（符号表、重定位表、导入导出表）在第 3 步之前挂到配置上，因为头部和动态表要为它们预留空间。判断某个函数属于哪一类，看它是否以 `format_*_tables_mut` 命名；其余生成节内容的函数放在第 3 步之后、第 5 步之前。
 
 ## 使用原则
 
-- 先选输出文件类型，再写节、装载段和表项；不要从 PE/ELF 原始字段开始推。
-- PE、COFF、ELF 目标文件使用 `format_section(...)`；ELF 可执行文件和共享库使用 `format_segment(...)`。
-- `format.inc` 会派生头部、表项、对齐、RVA、文件偏移和最终回填；你只负责声明内容边界和必要元数据。
-- 同一文件不要一边使用 `format.inc`，一边手写 PE/ELF 头部或表项；如果必须手写这些字段，就整份文件按高级格式构造方式组织。
-- 能从最小 `.text` 模板开始，就先让最小模板跑通，再逐步加入导入、导出、资源、重定位和 BSS。
+- 先选输出文件类型，再写节、装载段和表项，不要从 PE/ELF 的原始字段开始推。
+- PE、COFF 和 ELF 目标文件用 `format_section(...)` 声明节；ELF 可执行文件和共享库用 `format_segment(...)` 声明装载段。
+- 头部、表项、对齐、RVA、文件偏移和最终回填都由 `format.inc` 生成，源文件只声明内容边界和必要元数据。
+- 同一个文件不要一边用 `format.inc`，一边手写 PE/ELF 头部或表项；必须手写这些字段时，整份文件都按高级格式构造的方式组织。
+- 从最小的 `.text` 模板开始，先让最小模板汇编通过，再逐步加入导入、导出、资源、重定位和 BSS。

@@ -1,0 +1,40 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    // 角色改为 format_pe_dll，文件头会置 IMAGE_FILE_DLL 位。
+    format_pe_dll | format_pe_console | format_pe_nx | format_pe_aslr_auto,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".edata", format_exports | format_readable)
+    )
+)
+
+let exports: list = format_pe_export_new()
+// 两个标签按原名导出。
+format_pe_export_many_mut(image, exports, list.of("x_add7", "x_sub3"))
+// answer_impl 以 x_answer 之名导出。
+format_pe_export_pairs_mut(image, exports, list.of("answer_impl", "x_answer"))
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+dll_main:
+    // DLL 入口返回非零值表示加载成功。
+    mov eax, 1
+    ret
+x_add7:
+    lea eax, [ecx + 7]
+    ret
+x_sub3:
+    lea eax, [ecx - 3]
+    ret
+answer_impl:
+    mov eax, 42
+    ret
+format_section_end(image, ".text")
+
+// 最后一个参数是 DLL 自身的名字，写入导出目录。
+format_pe_export_section(image, ".edata", exports, "xirasm_demo.dll")
+
+format_entry_mut(image, dll_main)
+format_finish(image)

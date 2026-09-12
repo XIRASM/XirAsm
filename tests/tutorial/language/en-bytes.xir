@@ -1,0 +1,6 @@
+emit.bytes(b"RAW1")
+emit.u16(1)
+emit.u16(0)
+
+payload:
+emit.bytes(b"ABC")

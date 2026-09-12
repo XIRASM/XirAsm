@@ -1,0 +1,9 @@
+for value in range(0, 8) {
+    if value == 6 {
+        break
+    }
+    if (value & 1) != 0 {
+        continue
+    }
+    db(value)          // even values below 6
+}

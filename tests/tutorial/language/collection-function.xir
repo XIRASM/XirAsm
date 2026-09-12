@@ -1,0 +1,12 @@
+fn encode_u16(values: list) -> bytes {
+    let result: bytes = bytes.new()
+
+    for value in values {
+        result = bytes.concat(result, bytes.le(value, 2))
+    }
+
+    return result
+}
+
+const words: list = list.of(0x1234, 0xabcd)
+emit.bytes(encode_u16(words))

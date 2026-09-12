@@ -1,0 +1,7 @@
+// `=&&` 要求这里出现的就是逻辑与这个词法单元本身。
+const result: map = match.tokens(
+    "left:name =&& right:name",
+    "ready && enabled"
+)
+
+assert(map.get(result, "ok"))

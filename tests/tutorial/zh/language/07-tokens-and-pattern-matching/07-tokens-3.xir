@@ -1,0 +1,14 @@
+const assignment: map = match.tokens("=set target:name =, value:int", "set count, 0x2a")
+const operation: map = match.tokens("left:name operator:token right:name", "count + step")
+const message: map = match.tokens("=db text:quoted", "db 'READY'")
+
+assert(map.get(assignment, "ok"))
+
+const assignment_captures: map = map.get(assignment, "captures")
+const operation_captures: map = map.get(operation, "captures")
+const message_captures: map = map.get(message, "captures")
+
+assert(map.get(assignment_captures, "target") == "count")
+assert(map.get(assignment_captures, "value") == 42)        // `int` 变成了数
+assert(map.get(operation_captures, "operator") == "+")     // `token` 是文本
+assert(map.get(message_captures, "text") == "READY")       // `quoted` 去掉了引号

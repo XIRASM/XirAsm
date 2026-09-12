@@ -1,0 +1,3 @@
+const middle: bytes = fs.read_bytes("payload.bin", 1, 2)
+assert(len(middle) == 2)
+emit.bytes(middle)

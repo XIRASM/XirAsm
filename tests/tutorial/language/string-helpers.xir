@@ -1,0 +1,9 @@
+const raw_name: string = "  Kernel64  "
+const name: string = lower(trim(raw_name))
+
+assert(name == "kernel64")
+assert(starts_with(name, "kernel"))
+assert(ends_with(name, "64"))
+assert(contains(name, "nel"))
+
+emit.bytes(name)

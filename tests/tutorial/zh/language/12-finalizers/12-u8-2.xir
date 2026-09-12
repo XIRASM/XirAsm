@@ -1,0 +1,10 @@
+emit.u8(0x10)
+
+// 两个块按登记顺序各执行一次，接在默认输出尾部。
+late_layout {
+    emit.u8(0x20)
+}
+
+late_layout {
+    emit.u8(0x30)
+}

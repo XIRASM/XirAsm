@@ -1,0 +1,17 @@
+# expect-error: format section has multiple purposes
+import("format/format.inc")
+
+// 一个节同时声明两种用途：用途只能选一个。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        format_section(".mixed", format_code | format_data | format_readable)
+    )
+)
+format_begin(image)
+format_section_begin(image, ".mixed")
+start:
+    ret
+format_section_end(image, ".mixed")
+format_entry_mut(image, start)
+format_finish(image)

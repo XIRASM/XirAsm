@@ -1,0 +1,2 @@
+db("\u41")     // too few digits
+db("\ud800")   // a lone surrogate is not a code point

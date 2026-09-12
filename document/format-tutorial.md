@@ -1,41 +1,30 @@
 # XIRASM Format Tutorial
 
-This tutorial is the practical starting point for building executable files,
-dynamic libraries, and object files with XIRASM, including macOS Mach-O.
+This tutorial shows how to produce PE, ELF, COFF, and macOS Mach-O files directly with XIRASM. Everything starts from `format/format.inc`: you declare the file kind, its sections or load segments, the entry point, imports, exports, and relocations, and the file headers, tables, file offsets, RVAs, alignment, and final backfills are generated for you.
 
-If you have mostly written inline assembly inside C, C++, Rust, or another
-language, the surrounding toolchain has usually handled the file format for you.
-A loadable program still needs answers to these questions:
+If you have mostly written inline assembly inside C, C++, Rust, or another language, the surrounding toolchain handled the file format, and none of the following questions came up. XIRASM writes the output file itself, so every one of them has to be answered:
 
-- where execution starts;
-- which bytes are code and which bytes are data;
+- which label execution starts at;
+- which bytes are code and which are data;
 - which ranges become readable, writable, or executable memory;
-- which ranges occupy memory but do not occupy initialized file bytes;
-- which external functions are imported or exported;
-- which absolute addresses must be fixed if the loader chooses another base;
-- which fields an external linker must patch later.
+- which ranges occupy memory but take no initialized file bytes;
+- which external symbols are imported or exported;
+- which absolute addresses the loader or linker has to adjust;
+- which fields need a final backfill.
 
-`format.inc` turns those answers into file headers, tables, offsets, RVAs,
-alignment, and final backfills. Normal PE, COFF, and ELF programs start here:
+The whole tutorial needs one import:
 
 ```asm
-// Import the common PE/COFF/ELF format API.
-import("format/format.inc");
+import("format/format.inc")
 ```
 
-The files under `include/format/` serve different jobs:
+The files under `include/format/` fall into three groups, and day-to-day work needs only the first:
 
-- `format.inc` is the common entry point for format configuration, named
-  sections or segments, imports, exports, resources, relocations, symbols, and
-  finalization.
-- `pe32.inc`, `pe64.inc`, `elf32.inc`, and `elf64.inc` are thin width-specific
-  entry points for existing sources or specialized format code.
-- `pe.inc`, `elfexe.inc`, `elfobj.inc`, and related files are direct
-  construction helpers for advanced control over fields and table rows.
+- `format.inc` is the common entry point: format configuration, section and segment declarations, imports, exports, resources, relocations, symbol tables, and the final generation pass.
+- `pe32.inc`, `pe64.inc`, `elf32.inc`, and `elf64.inc` are width-specific entry points, imported directly only to keep an existing source working or to write a specialized format.
+- `pe.inc`, `elfexe.inc`, `elfobj.inc`, and their relatives expose finer constructors for headers, directories, section tables, program headers, and dynamic tables, used when `format.inc` cannot express the layout you need.
 
-This tutorial covers `format.inc`. Use the
-[Advanced Format Construction Guide](advanced-formats.md) only when a standard
-configuration cannot express the file you need.
+For hand-written PE/ELF headers, directories, section tables, program headers, or dynamic tables, read the [Advanced Format Construction Guide](advanced-formats.md).
 
 ## Chapters
 
@@ -51,7 +40,7 @@ configuration cannot express the file you need.
 | Goal | Start with | Main calls |
 | --- | --- | --- |
 | Windows executable | `format_pe32` or `format_pe64` | `format_section_begin`, `format_pe_import_section`, `format_pe_resource_section`, `format_pe_reloc_section` |
-| Windows DLL | `format_pe32` or `format_pe64` with `format_pe_dll` | `format_pe_export_section`, optional imports, resources, relocations |
+| Windows DLL | `format_pe32` or `format_pe64` with `format_pe_dll` | `format_pe_export_section`, optional imports, resources, and relocations |
 | Linux executable | `format_elf32` or `format_elf64` with `format_elf_exec` | `format_segment_begin`, `format_entry_mut`, `format_finish` |
 | Linux PIE | `format_elf64` with `format_elf_pie` | `format_segment_begin`, `format_entry_mut`, `format_finish` |
 | Linux shared object | `format_elf64_so` | `format_elfso_tables_mut`, `format_segment_begin`, `format_finish` |
@@ -65,39 +54,43 @@ configuration cannot express the file you need.
 
 ## Lifecycle
 
-Format configurations all follow the same shape:
+Every format configuration follows one line of five steps:
 
-```text
-import("format/format.inc");
+```asm id=format-lifecycle target=x86-64
+import("format/format.inc")
 
-// 1. Create a configuration: file family, width, permissions, sections or segments.
-let image: map = ...
+// 1. Build the configuration: file role, subsystem, safety flags, ASLR policy.
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        // 2. Declare which sections the file has.
+        format_section(".text", format_code | format_readable | format_executable)
+    )
+)
 
-// 2. Optional: attach imports, exports, symbols, or relocations.
-format_*_tables_mut(image, ...)
+// 3. Start the output: the headers and section rows are reserved here.
+format_begin(image)
 
-// 3. Start the output file. Headers and table rows are reserved here.
-format_begin(image);
-
-// 4. Emit code or data inside a declared name.
-format_section_begin(image, ".text");
+// 4. Content goes only inside a declared section.
+format_section_begin(image, ".text")
 start:
+    xor eax, eax
     ret
-format_section_end(image, ".text");
+format_section_end(image, ".text")
 
-// 5. Executables set an entry point, then finish the file.
+// 5. An executable sets its entry, then every field is backfilled.
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
-Configuration and declaration mutators are statements. Their mutable argument
-must be a direct `let` binding:
+Chapter 1 shows this skeleton in full, together with the ELF executable equivalent.
 
-```text
-let image: map = format_pe64(options, sections)
-format_entry_mut(image, start)
-format_finish(image);
-```
+Metadata destined for the linker — symbol tables, relocation tables, import and export tables — attaches to the configuration before step 3, because the headers and dynamic tables have to reserve room for it. A function belongs to that group when its name ends in `format_*_tables_mut`; the rest write section content and belong between steps 3 and 5.
 
-Constructors and descriptors still return values. Functions ending in `_mut`
-update the named configuration or declaration collection in place.
+## Usage Principles
+
+- Choose the output kind first, then write sections, segments, and tables; do not start from raw PE/ELF fields.
+- Use `format_section(...)` for PE, COFF, and ELF object files; use `format_segment(...)` for ELF executables and shared objects.
+- Headers, tables, alignment, RVAs, file offsets, and the final backfills come from `format.inc`; the source declares content boundaries and the metadata that cannot be derived.
+- Do not mix `format.inc` with hand-written PE/ELF headers or tables in one file; when those fields must be written by hand, organize the whole file as advanced construction.
+- Start from the smallest `.text` template, get it assembling, and only then add imports, exports, resources, relocations, and BSS.

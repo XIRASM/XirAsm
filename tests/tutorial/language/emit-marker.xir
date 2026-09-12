@@ -1,0 +1,12 @@
+x86.use64()
+
+fn emit_marker(value: u8) {   // compile-time function: writes a two-byte marker
+    db(0x7f, value)
+}
+
+const marker: u8 = 3
+emit_marker(marker)           // the call runs during assembly, not at run time
+
+start:                        // instructions from here to the end
+    mov eax, marker
+    ret

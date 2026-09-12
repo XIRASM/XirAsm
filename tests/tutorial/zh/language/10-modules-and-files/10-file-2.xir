@@ -1,0 +1,6 @@
+// TOML 的表（[target]）会变成嵌套的 map。
+const config: map = toml.file("project.toml")
+const target: map = map.get(config, "target")
+
+emit.bytes(map.get(config, "name"))
+emit.u8(map.get(target, "bits"))

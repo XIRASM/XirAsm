@@ -1,0 +1,19 @@
+region.begin("payload", 0x5000, 0)
+
+file_size_field:
+emit.u32(0)                   // 回填区域的文件大小
+logical_size_field:
+emit.u32(0)                   // 回填区域的逻辑大小
+
+body:
+emit.u8(0xaa)
+reserve(3)                    // 尾部预留，不进文件
+
+defer {
+    store.u32(file_size_field, region_file_size(body))
+    store.u32(logical_size_field, region_logical_size(body))
+
+    assert(region_file_offset(body) == 0)
+    assert(region_file_size(body) == 9)
+    assert(region_logical_size(body) == 12)
+}

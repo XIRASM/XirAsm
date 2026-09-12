@@ -1,0 +1,4 @@
+for index in range(0, 3) {
+    const encoded = index + 0x10
+    db(encoded)
+}

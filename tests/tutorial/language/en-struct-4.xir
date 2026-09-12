@@ -1,0 +1,7 @@
+struct NaturalHeader {
+    tag: u8 = 0x41
+    size: u32 = 0x11223344
+}
+
+const header: NaturalHeader = NaturalHeader { }
+emit.struct(header)

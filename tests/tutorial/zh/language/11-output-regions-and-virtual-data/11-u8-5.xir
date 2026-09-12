@@ -1,0 +1,6 @@
+emit.u8(0x41)
+reserve(3)
+
+// 文件偏移是 1，所以 next 从 FOA 1 开始，尾部预留不写进文件。
+output.section("next", 0x2000)
+emit.u8(0x42)

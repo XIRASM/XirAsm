@@ -1,0 +1,5 @@
+const base: list = list.of(1, 2)
+const grown: list = list.push(base, 3)
+
+emit.u8(len(base))        // 这里写出：02
+emit.u8(len(grown))       // 这里写出：03

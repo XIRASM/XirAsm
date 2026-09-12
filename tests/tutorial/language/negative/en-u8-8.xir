@@ -1,0 +1,6 @@
+emit.u8(0xaa)
+reserve(3)                  // three logical bytes the file does not hold
+
+defer {
+    store.u8(2, 0x55)       // address 2 falls inside that reserve
+}

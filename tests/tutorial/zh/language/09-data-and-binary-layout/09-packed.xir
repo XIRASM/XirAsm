@@ -1,0 +1,15 @@
+packed struct Inner {
+    a: u8
+    b: u64
+}
+
+struct Outer {
+    tag: u8
+    inner: Inner
+    tail: u8
+}
+
+assert(sizeof(Inner) == 9)            // 紧凑：中间和末尾都没有填充
+assert(sizeof(Outer) == 24)
+assert(offset_of(Outer, inner) == 8)  // Inner 要求 8 字节对齐，所以跳过 7 字节
+assert(offset_of(Outer, tail) == 17)

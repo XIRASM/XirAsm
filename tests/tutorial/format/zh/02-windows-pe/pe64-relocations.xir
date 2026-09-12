@@ -1,0 +1,52 @@
+import("format/format.inc")
+
+let image: map = format_pe64(
+    // 要求 ASLR，因此必须声明重定位节。
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_required,
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".data", format_data | format_readable | format_writeable),
+        format_section(".idata", format_imports | format_readable | format_writeable),
+        format_section(".reloc", format_fixups | format_readable | format_discardable)
+    )
+)
+
+let imports: map = format_pe_import_new()
+format_pe_import_many_mut(image, imports, "KERNEL32.DLL", list.of("ExitProcess"))
+
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    // Windows x64 调用前先留出 shadow space。
+    sub rsp, 40
+    // 从 .data 中取出函数地址再调用。
+    mov rax, [rel worker_pointer]
+    call rax
+    mov ecx, eax
+    call [rel ExitProcess]
+worker:
+    mov eax, 42
+    ret
+format_section_end(image, ".text")
+
+format_section_begin(image, ".data")
+// 该槽保存绝对地址，加载器更换基址时必须修正它。
+worker_pointer:
+    dq(0)
+format_section_end(image, ".data")
+
+format_pe_import_section(image, ".idata", imports)
+
+// 记录的是「槽本身」的地址，不是它指向的 worker。
+let relocs: list = pe_reloc_new()
+format_pe_reloc_add_mut(image, relocs, worker_pointer)
+format_pe_reloc_section(image, ".reloc", relocs)
+
+format_entry_mut(image, start)
+format_finish(image)
+
+// 绝对地址必须等全部标签地址稳定后再回填。
+defer {
+    store.u64(worker_pointer, worker)
+}

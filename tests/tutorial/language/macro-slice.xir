@@ -1,0 +1,6 @@
+macro first_three(arg) {
+    const head: operand = operand.slice(arg, 0, 3)
+    emit.bytes(operand.text(head))
+}
+
+first_three abcdef

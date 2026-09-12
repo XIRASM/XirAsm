@@ -1,0 +1,9 @@
+const sections: list = split("text,data,bss", ",")
+const path: string = join(sections, "/")
+
+assert(len(sections) == 3)
+assert(list.get(sections, 0) == "text")
+assert(list.get(sections, 2) == "bss")
+assert(path == "text/data/bss")
+
+emit.bytes(path)        // 这里写出：74 65 78 74 2f 64 61 74 61 2f 62 73 73

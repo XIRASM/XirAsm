@@ -1,0 +1,5 @@
+fn emit_marker() {
+    db(0x90)
+}
+
+const marker = emit_marker()

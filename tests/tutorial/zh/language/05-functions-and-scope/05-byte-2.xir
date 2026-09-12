@@ -1,0 +1,19 @@
+macro byte(value) {
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+
+macro twice(dst, src) {
+    mov dst, src
+    mov dst, src
+}
+
+macro bytes(...values) {
+    for item in values {
+        byte item
+    }
+}
+
+x86.use64()
+twice eax, ebx          // 这里写出：89 d8 89 d8
+bytes 1, 2, 3           // 这里写出：01 02 03

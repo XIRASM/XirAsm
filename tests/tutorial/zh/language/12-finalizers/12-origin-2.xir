@@ -1,0 +1,22 @@
+origin(0x5000)
+
+checksum:
+emit.u16(0)                   // 校验和占位
+
+payload:
+emit.bytes(b"ABCD")
+payload_end:
+
+defer {
+    let cursor = payload
+    let sum = 0
+
+    // 逐字节累加 payload。
+    while cursor < payload_end {
+        sum = sum + load.u8(cursor)
+        cursor = cursor + 1
+    }
+
+    store.u16(checksum, sum)
+    assert(load.u16(checksum) == 266)
+}

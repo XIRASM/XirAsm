@@ -1,0 +1,2 @@
+db(1);   // accepted
+db(2)    // the same statement without it

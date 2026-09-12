@@ -1,0 +1,12 @@
+total_size:
+emit.u32(0)
+emit.bytes(b"DATA")
+
+late_layout {
+    emit.bytes(b"END!")
+}
+
+defer {
+    store.u32(total_size, region_file_size(total_size))
+    assert(load.u32(total_size) == 12)
+}

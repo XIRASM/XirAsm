@@ -1,0 +1,15 @@
+packed struct Inner {
+    a: u8
+    b: u64
+}
+
+struct Outer {
+    tag: u8
+    inner: Inner
+    tail: u8
+}
+
+assert(sizeof(Inner) == 9)            // packed: no padding inside or after
+assert(sizeof(Outer) == 24)
+assert(offset_of(Outer, inner) == 8)  // Inner aligns to 8, so seven bytes are skipped
+assert(offset_of(Outer, tail) == 17)

@@ -1,0 +1,7 @@
+macro emit_one(value) {
+    const n: u64 = operand.eval(value)
+    emit.u8(n)
+}
+
+const LIMIT: u64 = 7
+emit_one LIMIT + 1      // 这里写出：08

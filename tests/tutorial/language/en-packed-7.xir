@@ -1,0 +1,10 @@
+packed struct ChunkHeader {
+    kind: u16
+    size: u16
+}
+
+emit.struct(ChunkHeader {
+    kind: 1,
+    size: 3,
+})
+emit.bytes(b"ABC")

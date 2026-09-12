@@ -1,0 +1,9 @@
+const sections: list = split("text,data,bss", ",")
+const path: string = join(sections, "/")
+
+assert(len(sections) == 3)
+assert(list.get(sections, 0) == "text")
+assert(list.get(sections, 2) == "bss")
+assert(path == "text/data/bss")
+
+emit.bytes(path)

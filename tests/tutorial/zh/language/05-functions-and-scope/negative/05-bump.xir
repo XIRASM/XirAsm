@@ -1,0 +1,4 @@
+// 带 -> 的声明不能配 let 参数：写回调用者要靠语句调用，而这里返回的是值。
+fn bump(let value: u64) -> u64 {
+    return value + 1
+}

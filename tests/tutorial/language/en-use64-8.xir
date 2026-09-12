@@ -1,0 +1,5 @@
+x86.use64()
+
+loop:
+    nop
+    jmp short loop

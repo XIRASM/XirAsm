@@ -1,0 +1,7 @@
+emit.u8(0xaa)      // 文件里 1 个字节
+reserve(3)         // 逻辑地址前进 3 格，文件没动
+
+assert(here() == 4)                      // 逻辑上已经占 4 字节
+assert(file_cursor_real() == 1)          // 文件里还是 1 个字节
+assert(file_cursor_potential() == 4)     // 这 3 字节也可以选择保留
+assert(tail_reserve_size() == 3)

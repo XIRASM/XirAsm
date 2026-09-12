@@ -1,0 +1,4 @@
+print("image origin", here())
+warn("using default alignment", 16)
+assert(true, "configuration must be valid")
+emit.u8(0x7d)

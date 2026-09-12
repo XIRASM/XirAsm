@@ -1,0 +1,9 @@
+emit.u8(0)
+
+defer {
+    store.u8(0, 1)
+}
+
+defer {
+    store.u8(0, load.u8(0) + 1)
+}

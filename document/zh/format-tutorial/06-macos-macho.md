@@ -1,25 +1,20 @@
 # 6. macOS Mach-O
 
-Mach-O helper 是面向 macOS 镜像的 XIRASM DSL 格式层。它根据选择的 CPU 类型
-发射格式记录和字节，不增加第二套指令编码器，也不增加原生 ARM 文本解析器。
+macOS 上的可执行程序、共享库和供链接器使用的目标文件都用 Mach-O 格式。它和 PE、ELF 的组织方式都不同：内容按**段（segment）**分组，每个段下面再放**节（section）**，段和节的名字各占 16 字节，而且名字有固定含义——`__TEXT` 放代码，`__DATA` 放可写数据，加载器和系统工具按这些名字定位内容。
 
-## 快速开始
+`format.inc` 这一层负责**结构**：头部、段命令、节表、符号表、重定位表，以及它们之间的偏移关系。它不参与指令编码，也不解析 ARM 汇编文本——写进节里的字节由源文件给出。
 
-先选择产物：`.o` 使用 `macho_obj.inc` 并交给 linker，直接可执行文件使用
-`macho_exe.inc`，共享库使用 `macho_dylib.inc`。只有 direct executable 需要
-dyld 导入时才加入 `macho_import.inc`。`tests/format/macho64_*` 是 `arm64`
-和 `x86_64` 的完整布局样例；复制后一起修改 label、地址和 ISA 字节即可。
-格式 helper 不负责汇编指令文本。
+## 先选产物
 
-## 公共入口
+Mach-O 的三类产物用三个不同的构造函数建立，选择依据是「谁来收尾」：
 
-需要所有格式 helper 时，使用正常的格式入口：
+```asm id=macho64-exe target=x86-64
+import("format/format.inc")
 
-```asm
-import("format/format.inc");
-
-// facade 支持 arm64（16 KiB 页）和 x86_64（4 KiB 页）。
+// macOS 14 作为最低版本和 SDK 版本。
 const version: u64 = macho_exe_macos_version(14, 0, 0)
+
+// 可执行文件：首段必须是 __TEXT，且必须含一个代码节。
 let image: map = format_macho64_exe(
     format_macho64_target_x86_64(version, version),
     list.of(format_macho64_segment(
@@ -29,46 +24,71 @@ let image: map = format_macho64_exe(
     ))
 )
 
-format_begin(image);
-format_section_begin(image, "__text");
+format_begin(image)
+format_section_begin(image, "__text")
 entry:
-db(0x31, 0xc0, 0xc3);
-format_section_end(image, "__text");
-format_entry_mut(image, entry);
-format_finish(image);
+    // 机器码由你给出：xor eax, eax; ret 的 x86-64 编码。
+    db(0x31, 0xc0, 0xc3)
+format_section_end(image, "__text")
+format_entry_mut(image, entry)
+format_finish(image)
 ```
 
-也可以直接导入 Mach-O 层：
+生成的映像为 4096 字节，头字段为 `Magic64 (0xFEEDFACF)`、`CpuType X86-64`、`FileType Executable`，共 6 条 load command。页大小按 CPU 决定：x86-64 取 4 KiB，arm64 取 16 KiB，和 ELF 那章 AArch64 的取值一致。
 
-```asm
-import("format/macho_obj.inc");
-```
+## 公共入口
+
+只导入 `format/format.inc` 就能拿到上面这些构造函数。需要直接写段命令、节表、符号表时，才改用更底层的那几个文件：
+
+| 产物 | 底层文件 | 收尾工具 |
+| --- | --- | --- |
+| 可重定位目标文件 | `macho_obj.inc` | `ld64` 或 `ld64.lld` |
+| 可执行文件 | `macho_exe.inc` | macOS 加载器；签名由外部工具完成 |
+| 共享库 | `macho_dylib.inc` | dyld；导入与签名由外部工具完成 |
+| dyld 函数导入 | `macho_import.inc` | 用于直接生成的可执行文件 |
 
 ## 三种产物
 
-| 产物 | Helper | 后续工具 |
-| --- | --- | --- |
-| 可重定位目标文件 | `macho_obj.inc` | `ld64` 或 `ld64.lld` |
-| 可执行文件 | `macho_exe.inc` | macOS loader；签名由外部工具完成 |
-| 共享库 | `macho_dylib.inc` | dyld；导入和签名由外部工具完成 |
+`format_macho64_object`、`format_macho64_exe`、`format_macho64_dylib` 共用同一套节生命周期，差别只在头部和段命令。
 
-高层 `format_macho64_object`、`format_macho64_exe` 和
-`format_macho64_dylib` 使用相同的节生命周期。节的身份是
-`(segment_name, section_name)`；如果两个段包含同名节，请使用同时指定两个名称的
-`format_macho64_section_begin/end`。`MH_OBJECT` facade 只有一个隐含段，因此要求节名唯一。
-这一层生成普通代码、数据和 zerofill 节。对目标文件而言，符号表、重定位和
-`LC_SYMTAB` 也由 facade 端到端管理——见下文
-[目标文件符号与重定位](#目标文件符号与重定位)。dyld 导入、代码签名和
-chained fixups 仍由更底层 helper 或 linker 负责。
+段和节的名字都是 ≤ 16 字节，而且**段名必须是 `__TEXT`、`__DATA` 这类系统认识的名字**（两个下划线开头）。`__PAGEZERO` 和 `__LINKEDIT` 由 `format.inc` 自己生成，不要声明。
+
+节的身份是「段名 + 节名」，因为不同段可以放同名节：
+
+```text
+// 两个段共用一个节名时，两个名字都要给出。
+format_macho64_section_begin(image, "__DATA", "__data")
+
+// 关闭时同样给出两个名字。
+format_macho64_section_end(image, "__DATA", "__data")
+```
+
+只有一个段时，`format_section_begin` 和 `format_section_end` 只收节名就够了，和 PE、ELF 的用法一致。
+
+可执行文件和共享库的约束比目标文件多，违反时报错：
+
+| 约束 | 诊断 |
+| --- | --- |
+| 首段必须是 `__TEXT` | `Mach-O first segment must be __TEXT` |
+| 至少有一个代码节 | `Mach-O executable or dylib requires a code section` |
+| 代码节必须落在可执行段里 | `Mach-O code section requires an executable segment` |
+| 节的权限不能超过所在段 | `Mach-O section permissions exceed its segment permissions` |
+| 零填充节必须排在段内最后 | `Mach-O zerofill sections must be last in their segment` |
+| 节名、段名不能重复 | `Mach-O section name is duplicated` / `Mach-O segment name is duplicated` |
+| 可执行文件的入口必须落在代码节内 | `Mach-O executable entry is outside its code sections` |
+| 共享库至少要有一个导出 | `Mach-O dylib facade requires at least one export` |
+| 最后一个节必须已经关闭 | `Mach-O final section is still open` |
+
+可执行文件的入口落在数据节里会被拒绝，因此 `format_entry_mut` 要传代码节内的标签。共享库的导出不是可选项——`format_macho64_dylib` 要求至少声明一个导出，否则 `format_finish` 直接报错。
+
+节名可以用到 16 字节，比 PE 的 8 字节宽；但节的用途只支持三种：`format_code`、`format_data`、`format_uninitialized_data`。Mach-O 没有「可丢弃」这个概念，`format_discardable` 会报 `Mach-O sections do not support the discardable attribute`。
 
 ## 目标文件符号与重定位
 
-`format_macho64_object` 在发射头部时预留 `LC_SYMTAB` load command，并在
-`format_finish` 时回填其中的偏移。你不需要计算符号下标或字符串表偏移；只要按
-名称声明符号和重定位，再用 `format_macho64_tables_mut` 挂上去：
+目标文件里供链接器使用的两项内容是符号表和重定位表。`format_macho64_object` 在写头部时预留 `LC_SYMTAB` 命令，`format_finish` 回填其中的偏移，因此不用自己计算符号下标或字符串表偏移：
 
-```asm
-import("format/format.inc");
+```asm id=macho64-object target=aarch64
+import("format/format.inc")
 
 const version: u64 = macho_exe_macos_version(14, 0, 0)
 let object: map = format_macho64_object(
@@ -79,26 +99,26 @@ let object: map = format_macho64_object(
     )
 )
 
-format_begin(object);
+format_begin(object)
 
-// 占位字，其立即数字段由链接器回填。
-format_section_begin(object, "__text");
+// 三处占位指令字，立即数字段留给链接器。
+format_section_begin(object, "__text")
 text_start:
 call_site:
-    emit.u32(0x94000000);
+    emit.u32(0x94000000)
 page_site:
-    emit.u32(0x90000000);
+    emit.u32(0x90000000)
 lo12_site:
-    emit.u32(0x91000000);
-format_section_end(object, "__text");
+    emit.u32(0x91000000)
+format_section_end(object, "__text")
 
-format_section_begin(object, "__data");
+format_section_begin(object, "__data")
 data_start:
 answer:
-    emit.u64(42);
+    emit.u64(42)
 pointer_slot:
-    emit.u64(0);
-format_section_end(object, "__data");
+    emit.u64(0)
+format_section_end(object, "__data")
 
 const symbols: list = list.of(
     format_macho64_public("_entry", "__text", text_start, call_site, macho_n_sect | macho_n_ext),
@@ -112,167 +132,140 @@ const relocs: list = list.of(
     format_macho64_arm64_reloc("__data", data_start, pointer_slot, "_printf", macho_arm64_reloc_unsigned)
 )
 format_macho64_tables_mut(object, symbols, relocs)
-format_finish(object);
+format_finish(object)
 ```
 
-符号语义：
+生成的映像为 448 字节，`FileType` 为 `Relocatable`，带 `MH_SUBSECTIONS_VIA_SYMBOLS` 标志。符号表里有三个符号：`_entry` 落在 `__text`、`_answer` 落在 `__data`，两者类型都是 `Section`；`_printf` 类型是 `Undef`，落在段 0，等待链接器解析。
 
-- `format_macho64_public(name, section_name, section_start, address, symbol_type)`
-  在某个节内定义符号。`symbol_type` 是完整的 `n_type`；普通全局符号写
-  `macho_n_sect | macho_n_ext`。发射的记录中
-  `n_value = address - section_start`，`n_sect` 是该节从 1 开始的下标。
-- `format_macho64_extern(name)` 声明未定义外部符号
-  （`N_UNDF | N_EXT`，值为 0），由链接器解析。
-- 名称会写进字符串表，每个 `n_strx` 都由 facade 计算。
+符号和重定位的对应关系：
 
-重定位语义：
+| 项目 | 取值方式 |
+| --- | --- |
+| 符号值 | 地址减去所在节的起始地址；节号是 1 起算的 `n_sect` |
+| 已定义的全局符号 | 类型写成 `macho_n_sect \| macho_n_ext` |
+| 未定义的外部符号 | 由 `format_macho64_extern` 生成，类型是 `macho_n_undf \| macho_n_ext`，值为 0 |
+| 符号名 | 写进字符串表，`n_strx` 由 `format.inc` 计算 |
+| 重定位地址 | 同样是节内偏移，对应 Mach-O 的 `r_address` |
+| 重定位目标 | 按名字在挂载的符号表里查，`r_extern` 恒为 1 |
+| 重定位的 pcrel 与长度 | `format_macho64_arm64_reloc` 从 AArch64 类型推出；用 `format_macho64_reloc` 时要自己给出 |
 
-- 重定位地址是节内偏移（`address - section_start`），也就是目标文件中
-  `r_address` 的含义。
-- 目标符号按名称在挂载的符号列表中解析；`r_extern` 恒为 1，
-  `r_symbolnum` 是 nlist 下标。对上述用法，编码与 clang 为 arm64 目标文件
-  生成的结果逐位一致。
-- `format_macho64_reloc` 需要显式的 `pcrel` 标志、`length` 幂
-  （0 = 1 字节，1 = 2，2 = 4，3 = 8）和重定位类型。
-  `format_macho64_arm64_reloc` 会从 AArch64 类型自动推导两者：
-  `macho_arm64_reloc_unsigned` 是非 pcrel 的 8 字节字段，
-  `branch26`、`page21` 和 `got_load_page21`/`tlvp_load_page21` 是 pcrel 的
-  4 字节字段，`pageoff12`、`got_load_pageoff12` 和 `tlvp_load_pageoff12`
-  是非 pcrel 的 4 字节字段。
-- 配对记录（`ARM64_RELOC_SUBTRACTOR` 及其 `ADDEND` 后继）、`POINTER_TO_GOT`
-  和 arm64e 类型不在 facade 范围内；请用直接的 `macho_relocation_info`
-  helper 发射。
+`format_macho64_arm64_reloc` 推出的两个位域，按 AArch64 重定位类型固定取值：
 
-`format_macho64_tables_mut` 会对两张表做校验——名称必须唯一，重定位涉及的节
-和符号都必须已声明。从不挂表的目标文件依然合法，只是带一张空符号表。
+| 重定位类型 | pcrel | length |
+| --- | --- | --- |
+| `macho_arm64_reloc_branch26` | 1 | 2（4 字节） |
+| `macho_arm64_reloc_page21` | 1 | 2（4 字节） |
+| `macho_arm64_reloc_pageoff12` | 0 | 2（4 字节） |
+| `macho_arm64_reloc_unsigned` | 0 | 3（8 字节） |
+
+pcrel 为 1 表示这个字段是相对寻址，加载器不需要修正；为 0 表示字段里是绝对地址，必须修正。长度是幂次：2 表示 4 字节，3 表示 8 字节。
+
+`format_macho64_tables_mut` 会检查两张表：符号名必须唯一，重定位引用的节和符号必须已经声明。不挂表的目标文件也合法，只是符号表为空。
 
 ## 能力矩阵
 
 | 能力 | arm64 | x86_64 | 所属层 |
 | --- | --- | --- | --- |
-| Mach-O 64 头部/段/节 | 支持 | 支持 | `macho_obj.inc` |
-| facade 目标文件（符号、重定位、`LC_SYMTAB`） | 支持 | 支持 | `format.inc` |
-| 直接生成 `MH_EXECUTE` | 支持 | 支持 | `macho_exe.inc` |
-| `LC_LOAD_DYLINKER` | 支持 | 支持 | `macho_exe_load_dylinker64` |
-| `MH_DYLIB` install name | 支持 | 支持 | `macho_dylib.inc` |
+| Mach-O 64 头部 / 段 / 节 | 支持 | 支持 | `format.inc` |
+| 目标文件的符号、重定位、`LC_SYMTAB` | 支持 | 支持 | `format.inc` |
+| 直接生成 `MH_EXECUTE` | 支持 | 支持 | `format.inc` |
+| `LC_LOAD_DYLINKER` | 支持 | 支持 | 可执行文件的底层构造函数 |
+| `MH_DYLIB` install name | 支持 | 支持 | `format.inc` |
 | 普通函数 export trie | 支持 | 支持 | `macho_export.inc` |
 | 目标文件重定位 | `BRANCH26`、`PAGE21`、`PAGEOFF12` | `BRANCH`、`UNSIGNED` | ISA 专用包装函数 |
-| 直接可执行文件函数导入 | 支持 | 支持 | `macho_import.inc` |
-
-目标文件层发射 `MH_OBJECT`、节表、符号表，以及显式的 AArch64
-`BRANCH26`、`PAGE21`、`PAGEOFF12` 重定位记录和 x86_64 外部 `BRANCH` 重定位。
-可执行文件和 dylib 的头部
-与 CPU 无关，当前提供 ARM64 和 x86_64 包装函数。可执行文件层发射一个小型
-`MH_EXECUTE`，包含 `__PAGEZERO`、`__TEXT,__text`、指向 `/usr/lib/dyld` 的
-`LC_LOAD_DYLINKER`、`LC_MAIN` 和
-`LC_BUILD_VERSION`。dylib 层发射一个带 install name 的最小 `MH_DYLIB`，并
-提供 `macho_export_new` 和 `macho_export_use64` 收集普通函数导出。目标 label
-完成布局后，使用 `macho_export_trie_size64` 和 `macho_export_trie_emit64`
-生成 export trie；其 load-command 大小字段由源代码预留，并在 `defer` 中回填。
+| 直接可执行文件的函数导入 | 支持 | 支持 | `macho_import.inc` |
 
 ## 在直接可执行文件中导入函数
 
-`macho_import.inc` 提供精简的直接可执行文件导入路径。它使用经典 non-lazy
-dyld 绑定元数据而不是 chained fixups：undefined `nlist_64` 符号、`LC_SYMTAB`、
-`LC_DYSYMTAB`、间接符号表、`__TEXT,__stubs` 和 `__DATA,__got`。通用记录和
-绑定 opcode 由两种 ISA 共用，只有 stub 字节区分 arm64 与 x86_64。
+直接生成的可执行文件要让 dyld 在加载时解析外部函数，就得自己写绑定信息。`macho_import.inc` 提供这条路径，生成的是传统的 non-lazy 绑定，不是 chained fixups：
 
-```asm
-import("format/macho_import.inc");
+```text
+import("format/macho_import.inc")
 
 let imports: list = macho_import_new()
 imports = macho_import_use64(imports, "@executable_path/libmath.dylib", "_add7")
 
-// 布局负责各段的 VA 和 FOA。先在 __text 后发射所选 ISA 的 stub，
-// 再在已声明的区域发射 slot 和 dyld/link-edit 表。
-macho_import_emit_stubs_arm64(imports, stubs_vaddr, slots_vaddr);
-// 或：macho_import_emit_stubs_x86_64(imports, stubs_vaddr, slots_vaddr);
-macho_import_emit_slots64(imports);
-macho_import_emit_bind64(imports, data_segment_index);
-macho_import_emit_symbols64(imports);
-macho_import_emit_indirect64(imports);
-macho_import_emit_strings64(imports);
+// 各段的地址和文件偏移由外部布局给出，这里只按顺序写出各段信息。
+macho_import_emit_stubs_arm64(imports, stubs_vaddr, slots_vaddr)
+macho_import_emit_slots64(imports)
+macho_import_emit_bind64(imports, data_segment_index)
+macho_import_emit_symbols64(imports)
+macho_import_emit_indirect64(imports)
+macho_import_emit_strings64(imports)
 ```
 
-默认 label 是 `<symbol>_stub` 和 `<symbol>_got`；需要不同本地名称时使用
-`macho_import_use64_as`。一个 import list 可以包含多个依赖 dylib，每个 dylib
-也可以包含多个函数。库 ordinal 按首次出现顺序分配（1..15），同时写入 bind
-流和 undefined symbol 描述。使用 `macho_import_load_dylibs_size64` 与
-`macho_import_emit_load_dylibs64` 可为每个唯一依赖只发射一次 load command。这个范围可满足小型
-CLI/FFI 消费端，不实现 lazy binding、stub helper、chained fixups 或通用 linker。
-完整布局见 `tests/format/macho64_arm64_exe_import.asm` 和
-`tests/format/macho64_x86_64_exe_import.asm`。当前 helper 面向 `MH_EXECUTE`；
-dylib 自身导入符号仍应走 linker-backed 路径。导入型可执行文件应让 dylib
-command、bind 和 string 尺寸都从同一个 import list 推导，并分别只发射一次；
-它包含未定义符号，因此不能设置 `MH_NOUNDEFS`。
+导入槽的默认标签是 `<symbol>_stub` 和 `<symbol>_got`，需要别的名字时用 `macho_import_use64_as`。一个导入列表可以放多个依赖库，库序号按首次出现的顺序分配（1 到 15），同时写进绑定流和未定义符号描述。每个依赖库的 `LC_LOAD_DYLIB` 只用 `macho_import_emit_load_dylibs64` 写一次。
+
+这一层不实现 lazy binding、stub helper、chained fixups，也不是通用链接器，够小型命令行工具和 FFI 调用方使用。导入型可执行文件含有未定义符号，因此不能设置 `MH_NOUNDEFS`。完整布局见 `tests/format/macho64_arm64_exe_import.asm` 和 `tests/format/macho64_x86_64_exe_import.asm`；共享库自己导入符号仍要走链接器。
 
 ## 导出 FFI 函数
 
-导出 helper 与 PE 导出 helper 使用相同的“先收集、后发射”模式。收集阶段
-保存目标 label 名称；目标 label 完成布局后才计算和发射 export trie：
+导出和 PE 一样分两步：先收集，目标标签完成布局后再生成 export trie。
 
-```asm
-import("format/macho_dylib.inc");
+```text
+import("format/macho_dylib.inc")
 
 let exports: list = macho_export_new()
 exports = macho_export_use64(exports, "add7", "_add7")
 
-// 这里发射 Mach-O 头部、__TEXT 段和 load commands。
-// 在计算或发射 trie 之前定义 add7。
+// 这里写出 Mach-O 头部、__TEXT 段和 load command，并定义 add7。
 add7:
     emit.u32(0xd28000e0)
     emit.u32(0xd65f03c0)
 
 let export_size: u64 = macho_export_trie_size64(exports, 0)
 exports_data:
-macho_export_trie_emit64(exports, 0);
+macho_export_trie_emit64(exports, 0)
 
 defer {
-    // 将 export_size 写入已经发射的
+    // 把 export_size 写进已经写出的
     // LC_DYLD_EXPORTS_TRIE.datasize 和 __LINKEDIT.filesize 字段。
 }
 ```
 
-这段代码是 direct-layout 结构示意：命令偏移由源代码负责，`defer` 之前必须
-先预留固定宽度字段。当前 helper 只支持普通已定义导出；re-export、weak 定义、
-stub/resolver、chained fixups 和代码签名属于后续功能。
+这段代码是布局示意：命令偏移由源文件负责，`defer` 之前必须先把固定宽度字段写出来。当前只支持普通的已定义导出，re-export、weak 定义、stub/resolver、chained fixups 和代码签名不在此列。
 
-## 坐标和延迟字段
+## 坐标与延迟字段
 
-直接构造 Mach-O 时要区分两套坐标：
+自己排布 Mach-O 时要分清两套坐标：
 
-- label 和 `here()` 是逻辑地址，用于 `vmaddr` 和符号值；
-- `segment_64`、`section_64` 以及 dyld 数据命令中的文件位置是 FOA。
+- 标签和 `here()` 是**逻辑地址**，用于 `vmaddr` 和符号值；
+- `segment_64`、`section_64` 以及 dyld 数据命令里的文件位置是**文件偏移（FOA）**。
 
-最终 FOA 应来自显式布局计算或 `region_file_offset(label)`。`store.u32`/`store.u64`
-的目标是逻辑地址，不是原始 FOA。依赖后续区域的头部字段应先按最终宽度发射，
-再在普通源码或 `late_layout` 中生成区域，最后只在 `defer` 中回填数值。
-`defer` 不能创建字节、label、region 或对齐。
+最终的文件偏移来自显式布局计算，或者由 `region_file_offset(label)` 给出。`store.u32`、`store.u64` 的目标是逻辑地址，不是原始文件偏移。某个头部字段依赖后面的区域时，先把该字段按最终宽度写出来，在普通源码或 `late_layout` 中生成该区域，最后在 `defer` 里回填数值。`defer` 不能创建字节、标签、区域或对齐。
 
 ## 与链接器的边界
 
-多目标文件程序应使用目标文件形式，再交给 `ld64` 或 `ld64.lld`。直接生成的
-可执行文件或 dylib 适合小型镜像，但不替代 Apple linker 或代码签名。直接导入
-helper 会为其受限的 non-lazy 函数导入模型生成 dyld 元数据。发布前应使用 LLVM
-Mach-O 工具和独立 AArch64 反汇编器验证。
+由多个目标文件组成的程序用目标文件形式，交由 `ld64` 或 `ld64.lld` 链接。直接生成的可执行文件和共享库适合小型镜像，但不替代 Apple 的链接器和代码签名。
 
-当前 direct 层不承诺 universal binary、arm64e、chained fixups、lazy binding、
-每张表超过 15 个导入库、UUID、代码签名，也不承诺在非 macOS 主机上运行时加载。
-dyld 仍在加载时解析声明的依赖和符号。Apple Silicon 可执行文件通常还需要
-外部 ad-hoc 或正式签名。
+这一层不提供 universal binary、arm64e、chained fixups、lazy binding、每张表超过 15 个导入库、UUID 和代码签名，也不保证在非 macOS 主机上运行。dyld 在加载时解析声明的依赖和符号；Apple Silicon 的可执行文件通常还需要外部的 ad-hoc 或正式签名。
 
-## 验证
+## 验证方法
 
-在 Windows 或其他非 macOS 主机上，可以使用 LLVM 和 radare2 做结构验证：
+在没有 macOS 主机的环境里，用 LLVM 工具核对结构：
 
 ```text
 llvm-readobj --file-headers --sections --symbols --relocs file.o
+llvm-objdump -d --macho file.o
 llvm-objdump --macho --private-headers --exports-trie file.dylib
 llvm-objdump --macho --private-headers --bind --indirect-symbols file
 ld64.lld -arch arm64 -platform_version macos 14.0 14.0 ...
 radare2 -q -n -a arm -b 64 -c "pd 4 @ <text-address>" file
 ```
 
-这些检查可以证明 Mach-O 结构、重定位记录、导出名称和 linker 互操作性；
-真正运行 arm64 镜像以及测试 `dlopen`/`dlsym`，仍需要 Apple Silicon macOS
-主机或 arm64 macOS CI runner。
+`llvm-objdump -d` 最有价值：它按重定位和符号表把指令反汇编出来，是唯一能同时验证机器码、符号值和重定位记录三者对得上的一步。上面那份目标文件反汇编后得到：
+
+```text
+_entry:
+       0:  bl      _answer
+       4:  ret
+_answer:
+       8:  mov     w0, #0x2a
+       c:  ret
+```
+
+`bl _answer` 说明相对分支的重定位被正确解析，`mov w0, #0x2a` 说明写进节里的指令字是有效的 A64 编码。如果重定位位域或符号下标写错，这一步会显示错误的符号名或直接拒绝反汇编。
+
+`llvm-readobj --relocs` 用来核对重定位记录本身，会列出每条记录所在节、偏移、pcrel、length、extern 和类型。
+
+这些命令能核对 Mach-O 结构、重定位记录、导出名称和链接器互操作性。真正运行 arm64 镜像、测试 `dlopen` 或 `dlsym` 仍然需要 Apple Silicon 的 macOS 主机或对应的 CI runner。

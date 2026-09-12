@@ -1,76 +1,50 @@
-﻿# 第 2 章：值与绑定
+# 第 2 章：值与绑定
 
 ## 值只存在于汇编期间
 
-XIRASM 的值都在汇编期间使用。它们可以参与计算、决定要写出什么内容，但“把值绑定到名字”这件事本身不会写字节，也不会预留内存。
+XIRASM 的值都是编译期值。绑定只给值起名；只有指令、数据调用、布局操作或格式接口用到它时，它才进入输出。
 
-```asm
-// 这里只创建编译期值，不会向输出写入任何字节。
-const magic: u16 = 0x5a4d
+```asm id=value-is-not-output target=x86-64 bytes=4d5a
+const magic: u16 = 0x5a4d   // 给值起名，此时还没有写出任何字节
+dw(magic)                   // 这一行才写出 `4d 5a`
 ```
-
-这行只是给值取名为 `magic`，不会把 `4d 5a` 写进输出文件。要写出这个值，需要调用数据写出接口：
-
-```asm
-// 声明 16 位魔数，再通过数据接口按对应宽度写出。
-const magic: u16 = 0x5a4d
-dw(magic);
-```
-
-同样的规则适用于可变绑定、字符串、字节序列、集合和函数返回值。只有指令、数据调用、布局操作或格式接口实际使用这些值时，它们才会影响输出。
 
 ## 常量
 
-常量用 `const` 声明。声明后，这个名字不能再指向别的值：
+`const` 绑定一个不能重新赋值的名字：
 
-```asm
-// 页面大小和文件头大小在整个汇编过程中保持不变。
-const page_size: u64 = 4096
-const header_size = 64
-// 布尔常量可直接用于后续的编译期条件。
-const enabled: bool = true
+```asm id=const-decl target=x86-64
+const page_size: u64 = 4096   // 宽度是约定的一部分
+const header_size = 64        // 由初始值推断
 ```
-
-一般形式是：
 
 ```text
 const name = expression
 const name: type = expression
 ```
 
-如果 XIRASM 能从初始值推断类型，类型注解可以省略。当宽度或值类型本身就是二进制约定的一部分时，应显式写出类型。
+初始值能决定类型时可以省略类型注解；宽度属于二进制约定时要写出类型。给 `const` 重新赋值是错误：
 
-常量声明末尾不加分号。给常量重新赋值会报错：
-
-```text
+```asm id=const-reassign target=x86-64
 const value = 1
 value = 2
 ```
 
-除非这段源码确实需要在汇编期间更新这个名字，否则优先用 `const`。
+```text
+bad.xir:2:1: error: the declaration syntax is not valid (InvalidValueDeclaration)
+```
 
 ## 可变绑定
 
-汇编期间需要逐步更新一个值时，用 `let`：
+`let` 绑定的名字可以在汇编期间更新：
 
-```asm
-// 逐步增加偏移量，最后写出计算结果。
+```asm id=mutable-offset target=x86-64 bytes=14000000
 let offset: u32 = 0
-offset = offset + 16
+offset = offset + 16   // 赋值在汇编期间执行
 offset = offset + 4
 
-dd(offset);
+dd(offset)             // 20 = 0x14
 ```
-
-输出：
-
-```text
-14 00 00 00
-```
-
-声明和赋值都发生在汇编期间，不会在最终程序中创建名为 `offset` 的运行时变量。
-
-形式是：
 
 ```text
 let name = expression
@@ -78,34 +52,19 @@ let name: type = expression
 name = expression
 ```
 
-和常量一样，赋值末尾不加分号。作为语句的调用仍然需要分号：
+声明和赋值都是编译期工作，输出里没有对应的运行时变量。只在确实要更新这个名字时才用 `let`。
 
-```asm
-// 更新编译期绑定，然后把最终值写成一个字节。
-let value = 1
-value = value + 1
-db(value);
-```
+## 类型注解与类型推断
 
-## 类型注解和类型推断
-
-绑定可以显式写出类型：
-
-```asm
-// 明确写出类型，让字段宽度和文本用途直接出现在源码里。
-const signature: u16 = 0x5a4d
+```asm id=type-annotations target=x86-64
+const signature: u16 = 0x5a4d   // 显式写出：它是文件格式字段
 const title: string = "XIRASM"
 const marker: bytes = b"OK"
 const enabled: bool = true
-```
 
-也可以让 XIRASM 从初始值推断类型：
-
-```asm
-// 这些值的类型都可以由字面量直接确定。
-const count = 4
-const name = "payload"
-const raw = b"DATA"
+const count = 4                 // 推断为 `integer`
+const name = "payload"          // 推断为 `string`
+const raw = b"DATA"             // 推断为 `bytes`
 ```
 
 常用的值类型：
@@ -113,100 +72,133 @@ const raw = b"DATA"
 | 类型 | 用途 | 示例 |
 | --- | --- | --- |
 | `integer` | 通用编译期整数 | `42` |
-| `u8` | 8 位无符号值 | `0xff` |
-| `u16` | 16 位无符号值 | `0x5a4d` |
-| `u32` | 32 位无符号值 | `0x401000` |
-| `u64` | 64 位无符号值 | `0x140000000` |
-| `i8` | 8 位有符号值 | `-1` |
-| `i16` | 16 位有符号值 | `-200` |
-| `i32` | 32 位有符号值 | `-4096` |
-| `i64` | 64 位有符号值 | `-0x100000000` |
+| `u8`、`u16`、`u32`、`u64` | 对应宽度的无符号值 | `0xff`、`0x5a4d`、`0x401000`、`0x140000000` |
+| `i8`、`i16`、`i32`、`i64` | 对应宽度的有符号值 | `-1`、`-200`、`-4096`、`-0x100000000` |
+| `usize` | 与宿主地址同宽的无符号值 | `16` |
 | `f32` | IEEE-754 32 位浮点数 | `f32(1.5)` |
 | `f64` | IEEE-754 64 位浮点数 | `1.5` |
 | `bool` | 编译期条件 | `true` |
 | `string` | 编译期文本 | `"kernel"` |
-| `bytes` | 确切的字节序列 | `b"PE"` |
+| `bytes` | 按字面取值的字节序列 | `b"PE"` |
 
-列表、映射、结构体、联合体和类型值在后面的章节介绍。
+列表、映射、结构体和类型值在后面的章节介绍。
 
-固定位宽整数适合表示二进制字段和函数参数。如果函数只关心“这是整数”，不关心具体宽度，可以使用 `integer`。最终写出几个字节，由调用的输出接口决定。
+固定宽度整数用于锁定二进制字段或函数参数；`integer` 用于只关心"是整数"的场合，写出几个字节由调用的输出接口决定。有符号值使用补码，声明时就会检查取值范围：
 
-固定位宽有符号整数使用补码表示。创建绑定或结构字段时会检查取值范围；打包有符号字段时，会按字段宽度写出低 8、16、32 或 64 位。
+```asm id=signed-range target=x86-64
+const offset: i32 = -1
+const too_big: i8 = 200      // 200 放不进 i8
+```
 
-带小数部分或指数的十进制字面量类型为 `f64`。用 `f32(value)` 显式窄化为 `f32`，用 `f64(value)` 把 `f32` 扩展为 `f64`。整数和浮点值之间不会隐式转换。
+```text
+bad.xir:2:1: error: the declaration syntax is not valid (InvalidValueDeclaration)
+```
 
-## 字符串和字节序列
+数据调用接收无符号值，所以负数要写成它的补码位型：
 
-字符串和字节序列是不同类型的值：
+```asm id=negative-bit-pattern target=x86-64 bytes=ffffffff
+dd(0xffffffff)          // -1 的四个字节
+```
 
-```asm
-// 节名是文本，而文件签名表示精确的两个字节。
+有符号绑定不会被自动转换：
+
+```asm id=signed-to-data-call target=x86-64
+const offset: i32 = -1
+
+dd(offset)
+```
+
+```text
+bad.xir:3:1: error: lowering failed: InvalidApiInteger
+```
+
+带小数部分或指数的十进制字面量类型是 `f64`；`f32(value)` 显式窄化，`f64(value)` 显式扩展。整数和浮点数之间不会隐式转换：
+
+```asm id=float-conversions target=x86-64 bytes=000000000000f83f0000c03f
+emit.f64(1.5)          // 带小数的字面量本身就是 f64
+emit.f32(f32(1.5))     // f32(...) 显式窄化
+```
+
+```asm id=int-float-mismatch target=x86-64
+emit.f64(1)            // 1 是整数
+```
+
+```text
+bad.xir:1:1: error: a call argument does not match what the call expects (InvalidApiArgument)
+```
+
+## 字符串与字节序列
+
+`string` 是文本，`bytes` 是按字面取值的字节序列：
+
+```asm id=string-vs-bytes target=x86-64 bytes=2e746578744d5a
 const section_name: string = ".text"
 const signature: bytes = b"MZ"
+
+db(section_name)       // 2e 74 65 78 74
+db(signature)          // 4d 5a
 ```
 
-文本名称、路径、动态生成的指令文本，以及所有要求文本参数的接口，都用字符串。需要精确字节序列时，用 `bytes`。
+文本名称、路径、生成的指令文本，以及要求文本参数的接口都用字符串；需要精确字节序列时用 `bytes`。有些数据接口两者都接受：
 
-有些输出接口两种类型都接受：
-
-```asm
-// 字符串和显式字节序列会按参数顺序连续写出。
-db("AB", b"CD");
+```asm id=db-mixed-categories target=x86-64 bytes=41424344
+db("AB", b"CD")
 ```
-
-输出四个字节：
 
 ```text
 41 42 43 44
 ```
 
-其他接口可能只接受其中一种。提前在绑定里区分清楚，源码会更容易检查。
+## 转义序列
+
+引号字面量使用同一套转义，单引号双引号、带不带 `b` 前缀都一样：
+
+| 转义 | 字节 |
+| --- | --- |
+| `\n` | 换行，`0x0a` |
+| `\r` | 回车，`0x0d` |
+| `\t` | 制表符，`0x09` |
+| `\0` | NUL，`0x00` |
+| `\\` | 一个反斜杠 |
+| `\"`（在 `"…"` 中）、`\'`（在 `'…'` 中） | 开启该字面量的那个引号 |
+| `\uXXXX` | 该码位的 UTF-8 字节 |
+
+```asm id=escape-decoded target=x86-64 bytes=41c3a9612262610962410942610962
+db("\u0041")   // 41：恰好四位十六进制数字对应一个码位
+db("\u00e9")   // c3 a9：它的 UTF-8 字节
+db("a""b")     // 61 22 62：把开引号写两遍等于一个引号
+db("a\tb")     // 61 09 62
+db(b"A\tB")    // 41 09 42：`b` 前缀解码同一套转义
+db('a\tb')     // 61 09 62：单引号也一样
+```
+
+`\uXXXX` 的用途是读回生成的平台文本：Windows API 表用 `"\u0000"` 表示它要的 NUL 字节。除此之外的反斜杠一律原样保留，所以 `\u41` 和 `\ud800` 就是写下的那几个字符：
+
+```asm id=escape-unknown target=x86-64 bytes=5c7534315c7564383030
+db("\u41")     // 位数不够
+db("\ud800")   // 孤立代理项不是码位
+```
+
+要把反斜杠当作数据，就得写成两个：
+
+```asm id=escape-doubled-backslash target=x86-64 bytes=615c7462610962
+db("a\\tb")    // 61 5c 74 62：反斜杠是数据
+db("a\tb")     // 61 09 62：反斜杠是转义
+```
 
 ## 块作用域
 
-绑定属于它声明时所在的作用域。块会创建一个嵌套作用域：
+代码块会创建嵌套作用域：
 
-```asm
-// 外层常量在内部代码块结束后仍然可见。
+```asm id=block-scope target=x86-64 bytes=0201
 const value = 1
 
 {
-    // 内层绑定只在这个代码块中遮蔽外层同名常量。
-    let value = 2
-    // 离开代码块后，再次使用外层的 value。
-    db(value);
+    let value = 2   // 在块内遮蔽外层的 `value`
+    db(value)       // 02
 }
 
-db(value);
+db(value)           // 01：外层绑定重新可见
 ```
-
-输出：
-
-```text
-02 01
-```
-
-内部的 `value` 只在块内遮蔽外部的常量。块结束后，外部的 `value` 重新可见。
-
-函数参数和局部绑定也属于函数作用域。嵌套块可以引入临时名字，不影响外部绑定。
-
-当一小段代码确实需要临时名字时，遮蔽可以让代码更短。但如果内外两个名字的含义容易混淆，就不要重复使用同一个名字。
-
-## 选择 const 还是 let
-
-用最贴近意图的绑定：
-
-| 情况 | 优先选 |
-| --- | --- |
-| 固定选项、大小、名称或计算结果 | `const` |
-| 语言自身管理的循环计数器 | 循环绑定 |
-| 累计的偏移量、校验和或累加器 | `let` |
-| 只在小范围代码块里变化的值 | 块内 `let` |
-| 宽度属于文件格式约定的值 | 显式类型注解 |
-| 类型显而易见的临时值 | 类型推断 |
-
-描述格式、常量表和生成规则时，大多数名字都应是 `const`。只有短小、局部、确实需要逐步更新的计算，才使用 `let`。
-
-下一章讲产生这些值的表达式：算术、比较、布尔逻辑、位运算、字段访问和函数调用。
 
 [返回语言指南](../language.md)

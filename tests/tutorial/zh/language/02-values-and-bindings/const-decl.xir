@@ -1,0 +1,2 @@
+const page_size: u64 = 4096   // 宽度是约定的一部分
+const header_size = 64        // 由初始值推断

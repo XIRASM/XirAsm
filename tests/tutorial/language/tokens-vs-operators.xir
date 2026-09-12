@@ -1,0 +1,5 @@
+const result: map = match.tokens("expression:tokens", "left < right")
+const captures: map = map.get(result, "captures")
+
+assert(map.get(result, "ok"))
+assert(tokens.join(map.get(captures, "expression")) == "left<right")

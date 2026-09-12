@@ -1,0 +1,9 @@
+fn triangular(value: u64) -> u64 {
+    if value == 0 {
+        return 0
+    }
+
+    return value + triangular(value - 1)
+}
+
+db(triangular(4))       // 4 + 3 + 2 + 1

@@ -1,0 +1,6 @@
+let items: list = list.of(1)
+const snapshot: list = items
+list.push_mut(items, 2)
+
+assert(list.eq(snapshot, list.of(1)))
+assert(list.eq(items, list.of(1, 2)))

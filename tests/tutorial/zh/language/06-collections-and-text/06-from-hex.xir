@@ -1,0 +1,8 @@
+const magic: bytes = bytes.from_hex("58495200")
+const version: bytes = bytes.le(3, 2)
+const header: bytes = bytes.concat(magic, version)
+
+assert(bytes.eq(magic, bytes.from_hex("58495200")))
+assert(bytes.hex(version) == "0300")
+
+emit.bytes(header)      // 这里写出：58 49 52 00 03 00

@@ -1,0 +1,23 @@
+import("format/format.inc")
+
+// 选项 format_elf_exec 表示传统可执行文件；换成 format_elf_pie 就是 PIE。
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        // 装载段：可读可执行，加载器会把它映射进内存。
+        format_segment(".text", format_load | format_readable | format_executable)
+    )
+)
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // 系统调用 60：exit(0)。
+    mov eax, 60
+    xor edi, edi
+    syscall
+format_segment_end(image, ".text")
+
+format_entry_mut(image, start)
+format_finish(image)

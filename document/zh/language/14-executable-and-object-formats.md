@@ -4,16 +4,16 @@ PE、COFF、ELF 不是“把指令和数据拼在一起”就够了。它们还�
 
 XIRASM 用格式库生成这些结构：
 
-```asm
+```asm id=14-import
 // 导入常用的 PE/COFF/ELF 格式接口。
-import("format/format.inc");
+import("format/format.inc")
 ```
 
 使用 `format.inc` 时，源码描述“文件里有哪些 section 或 segment、入口在哪里、需要哪些表”。表计数、表项顺序、文件偏移、虚拟地址和文件头字段由格式库推导。
 
-本章只讲通用工作顺序。完整的格式选项、导入、导出、重定位、共享库和目标文件示例，请看[《格式教程》](../format-tutorial.md)。如果你确实要自己安排文件头和表项，再看[《高级格式构造指南》](../../advanced-formats.md)。
+完整的格式选项、导入、导出、重定位、共享库和目标文件示例见[《格式教程》](../format-tutorial.md)；自己安排文件头和表项时见[《高级格式构造指南》](../../advanced-formats.md)。
 
-## 先声明映像再写内容
+## 声明映像
 
 使用格式库的程序，第一步是声明输出文件包含哪些 section 或 segment。每个描述符给出名称、用途和权限。
 
@@ -30,10 +30,10 @@ import("format/format.inc");
 
 以下示例创建 x86-64 ELF 可执行文件，含一个可加载、可读、可执行的 segment：
 
-```asm
+```asm id=14-import-2
 // 导入格式接口，并选择 64 位 x86 指令编码。
-import("format/format.inc");
-x86.use64();
+import("format/format.inc")
+x86.use64()
 
 // 声明 ELF64 可执行映像及其唯一的可装载代码段。
 let image: map = format_elf64(
@@ -45,20 +45,20 @@ let image: map = format_elf64(
         )
     )
 )
-format_begin(image);
+format_begin(image)
 
 // 在声明的 .text 段中写入程序入口代码。
-format_segment_begin(image, ".text");
+format_segment_begin(image, ".text")
 start:
     // 调用 Linux 退出系统调用，并把退出状态设为零。
     mov eax, 60
     xor edi, edi
     syscall
-format_segment_end(image, ".text");
+format_segment_end(image, ".text")
 
 // 绑定入口标号，随后完成文件头和表项。
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
 在 x86-64 Linux 下，这个程序以状态码 0 退出。
@@ -113,7 +113,7 @@ format_segment_end(image, name)
 
 ```text
 format_entry_mut(image, start)
-format_finish(image);
+format_finish(image)
 ```
 
 `format_entry_mut` 会直接更新第一个参数传入的 `let` 绑定；这里不需要维护多个不可变中间副本。`format_finish` 随后验证可执行文件具备所需入口信息。
@@ -142,7 +142,7 @@ format_finish(image);
 
 只是生成常见的多 section 可执行文件、DLL、目标文件、共享库、导入表、导出表或重定位表时，不需要绕过 `format.inc`。
 
-不要混用两套写法。更细的构造函数通常要求调用者自己管理计数、行号、偏移和格式不变式；这些正是 `format.inc` 会替你维护的内容。
+不要混用两套写法。更细的构造函数要求调用者自己管理计数、行号、偏移和格式规则；这些正是 `format.inc` 会替你维护的内容。
 
 第 11 到 13 章的 `region.begin`、虚拟区域、`late_layout` 和 `defer` 只负责布局：字节放在文件哪里、逻辑地址是多少、最终字段何时回填。它们不会自动生成 PE/COFF/ELF 的 section、segment、符号表或重定位表记录。需要这些格式记录时，用 `format_section_begin`、`format_segment_begin` 和对应的格式 API。只有在实现新格式接口，或 `format.inc` 表达不了的专用布局时，才直接组合区域和收尾阶段。
 
@@ -160,7 +160,5 @@ format_finish(image);
 - 什么时候用 `format.inc`，什么时候直接构造格式字段
 
 已知所需格式系列时直接查 API Reference。
-
-下一章讲诊断和源文件组织惯例。
 
 [返回目录](../language.md)

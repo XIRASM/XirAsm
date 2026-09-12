@@ -1,0 +1,6 @@
+db("\u0041")   // 41: exactly four hexadecimal digits name a code point
+db("\u00e9")   // c3 a9: its UTF-8 bytes
+db("a""b")     // 61 22 62: the opening quote written twice is one quote
+db("a\tb")     // 61 09 62
+db(b"A\tB")    // 41 09 42: the `b` prefix decodes the same escapes
+db('a\tb')     // 61 09 62: so do single quotes

@@ -1,0 +1,14 @@
+// header 的逻辑地址从 0x1000 开始，raw 文件偏移从 0 开始。
+region.begin("header", 0x1000, 0)
+
+header:
+emit.bytes(b"HD")
+
+// payload 有自己的逻辑地址，从 FOA 0x10 开始。
+region.begin("payload", 0x2000, 0x10)
+
+payload:
+emit.bytes(b"DATA")
+
+assert(label_addr("header") == 0x1000)
+assert(label_addr("payload") == 0x2000)

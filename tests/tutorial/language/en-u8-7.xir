@@ -1,0 +1,8 @@
+emit.u8(0x5a)
+
+// Read the old value first, then patch in place: `first` keeps the 0x5a.
+const first: u64 = load.u8(0)
+store.u8(0, 0x42)
+
+assert(load.u8(0) == 0x42)
+assert(first == 0x5a)

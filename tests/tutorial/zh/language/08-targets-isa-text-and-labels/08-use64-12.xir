@@ -1,0 +1,7 @@
+// 定义一个标号，并把它的逻辑地址写入输出。
+x86.use64()
+
+entry:
+    ret
+
+dq(label_addr(entry))

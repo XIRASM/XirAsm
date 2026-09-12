@@ -1,0 +1,6 @@
+// 算了一个值却没写 return，所以函数没有结果可交。
+fn incomplete(value: u64) -> u64 {
+    const doubled = value * 2
+}
+
+const result = incomplete(4)

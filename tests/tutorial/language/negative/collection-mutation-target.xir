@@ -1,0 +1,3 @@
+let items: list = list.of(1)
+list.push_mut(items, 2)
+list.push_mut(list.of(1), 3)

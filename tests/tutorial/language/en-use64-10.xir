@@ -1,0 +1,8 @@
+x86.use64()
+
+entry:
+    jmp short finished
+    mov eax, 1
+
+finished:
+    ret

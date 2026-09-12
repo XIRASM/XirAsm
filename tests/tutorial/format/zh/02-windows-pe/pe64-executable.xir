@@ -1,0 +1,28 @@
+import("format/format.inc")
+
+// 可执行文件、控制台子系统，启用 DEP，不启用 ASLR。
+let image: map = format_pe64(
+    format_pe_exe | format_pe_console | format_pe_nx | format_pe_aslr_disabled,
+    list.of(
+        // 代码节：可读可执行。
+        format_section(".text", format_code | format_readable | format_executable),
+        // BSS：只在内存中占 64 字节，不写入文件字节。
+        format_section(".bss", format_uninitialized_data | format_readable | format_writeable)
+    )
+)
+format_begin(image)
+
+format_section_begin(image, ".text")
+start:
+    xor eax, eax
+    ret
+format_section_end(image, ".text")
+
+format_section_begin(image, ".bss")
+    rb(64)
+format_section_end(image, ".bss")
+
+// 入口地址不得为零：PE 配置未设置入口时，format_finish 报
+// "PE executable or DLL requires an entry address"。
+format_entry_mut(image, start)
+format_finish(image)

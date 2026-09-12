@@ -1,0 +1,10 @@
+const payload_size = 96
+const maximum_size = 128
+
+assert(payload_size > 0 && payload_size <= maximum_size)
+
+const format_name = "raw"
+const signature = b"OK"
+
+assert(format_name == "raw")
+assert(signature == b"OK")

@@ -1,0 +1,47 @@
+import("format/format.inc")
+
+// Linux x86-64 实际程序：算出结果，打印一行，用退出码报告状态。
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        // 代码段：可读可执行。
+        format_segment(".text", format_load | format_readable | format_executable),
+        // 只读数据段：提示文本。
+        format_segment(".rodata", format_load | format_readable)
+    )
+)
+
+// 从输入值算出结果。
+const INPUT: u64 = 35
+const DELTA: u64 = 7
+
+format_begin(image)
+
+format_segment_begin(image, ".text")
+start:
+    // 算入参：lea 在不改动标志位的前提下做加法。
+    lea r12, [INPUT + DELTA]
+
+    // write(1, message, length)
+    mov eax, 1
+    mov edi, 1
+    lea rsi, [rel message]
+    lea rdx, [rel message_end]
+    sub rdx, rsi
+    syscall
+
+    // exit(result)
+    mov edi, r12d
+    mov eax, 60
+    syscall
+format_segment_end(image, ".text")
+
+format_segment_begin(image, ".rodata")
+message:
+    db("xirasm: exit status carries the computed result", 10)
+// 尾部标号用来算长度，不用手数字节。
+message_end:
+format_segment_end(image, ".rodata")
+
+format_entry_mut(image, start)
+format_finish(image)

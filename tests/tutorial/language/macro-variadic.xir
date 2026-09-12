@@ -1,0 +1,7 @@
+macro bytes(...values) {
+    for item in values {
+        emit.u8(operand.eval(item))
+    }
+}
+
+bytes 1, 2, 3

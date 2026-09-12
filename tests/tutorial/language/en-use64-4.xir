@@ -1,0 +1,6 @@
+x86.use64()
+
+entry:
+    mov rax, 1
+    add rax, 2
+    ret

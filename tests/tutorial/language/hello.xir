@@ -1,0 +1,7 @@
+x86.use64()                 // compile-time call: select 64-bit x86 encoding
+
+const answer: u32 = 40 + 2  // computed while XIRASM assembles
+
+entry:                      // a label records this address; it emits no bytes
+    mov eax, answer         // instruction; `answer` becomes the immediate operand
+    ret

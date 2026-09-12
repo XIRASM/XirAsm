@@ -1,0 +1,25 @@
+packed struct Point {
+    x: u16
+    y: u16
+}
+
+union ValueBits {
+    raw: u32
+    point: Point
+}
+
+packed struct Record {
+    kind: u8
+    value: ValueBits
+}
+
+const record: Record = Record {
+    kind: 1,
+    value: ValueBits {
+        raw: 0xaabbccdd
+    }
+}
+
+assert(offset_of(Record, value) == 1)
+assert(offset_of(Record, value.point.y) == 3)
+emit.struct(record)

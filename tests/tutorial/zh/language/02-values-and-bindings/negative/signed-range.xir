@@ -1,0 +1,2 @@
+const offset: i32 = -1
+const too_big: i8 = 200      // 200 放不进 i8

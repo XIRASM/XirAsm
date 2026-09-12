@@ -1,0 +1,5 @@
+let offset: u32 = 0
+offset = offset + 16   // assignments run during assembly
+offset = offset + 4
+
+dd(offset)             // 20 = 0x14

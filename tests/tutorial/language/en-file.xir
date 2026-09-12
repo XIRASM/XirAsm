@@ -1,0 +1,8 @@
+const config: map = json.file("config.json")
+const values: list = map.get(config, "values")
+
+assert(map.get(config, "enabled"))
+emit.bytes(map.get(config, "name"))
+emit.u8(map.get(config, "bits"))
+emit.u8(list.get(values, 0))
+emit.u8(list.get(values, 1))

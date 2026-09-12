@@ -1,0 +1,15 @@
+# expect-error: format plan does not use an executable entry
+import("format/format.inc")
+
+// 目标文件没有入口地址，这里故意对它调用 format_entry_mut。
+let obj: map = format_coff64(list.of(
+    format_section(".text", format_code | format_readable | format_executable)
+))
+
+format_begin(obj)
+format_section_begin(obj, ".text")
+start:
+    ret
+format_section_end(obj, ".text")
+format_entry_mut(obj, start)
+format_finish(obj)

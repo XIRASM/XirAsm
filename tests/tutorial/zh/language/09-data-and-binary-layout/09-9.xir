@@ -1,0 +1,29 @@
+// Point 描述联合体的一种四字节解释方式。
+packed struct Point {
+    x: u16
+    y: u16
+}
+
+union ValueBits {
+    raw: u32
+    point: Point
+}
+
+// 紧凑记录把种类字节与联合体内容连续排列。
+packed struct Record {
+    kind: u8
+    value: ValueBits
+}
+
+// 此实例选择 raw 作为嵌套联合体的当前字段。
+const record: Record = Record {
+    kind: 1,
+    value: ValueBits {
+        raw: 0xaabbccdd
+    }
+}
+
+// 嵌套字段路径会累计外层和内层字段的偏移。
+assert(offset_of(Record, value) == 1)
+assert(offset_of(Record, value.point.y) == 3)
+emit.struct(record)

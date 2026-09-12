@@ -1,0 +1,2 @@
+const magic: u16 = 0x5a4d   // names a value; no byte is written yet
+dw(magic)                   // this is what writes `4d 5a`

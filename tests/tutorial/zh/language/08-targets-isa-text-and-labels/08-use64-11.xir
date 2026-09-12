@@ -1,0 +1,9 @@
+// 跳转目标稍后定义，位移由汇编器计算。
+x86.use64()
+
+entry:
+    jmp target
+    nop
+
+target:
+    ret

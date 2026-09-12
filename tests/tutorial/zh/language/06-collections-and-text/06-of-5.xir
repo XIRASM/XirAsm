@@ -1,0 +1,11 @@
+let items: list = list.of(1, 2, 3)
+list.push_mut(items, 4)
+list.set_mut(items, 1, 0xaa)
+const middle: list = list.slice(items, 1, 2)
+
+assert(list.eq(items, list.of(1, 0xaa, 3, 4)))
+assert(list.eq(middle, list.of(0xaa, 3)))
+
+for value in items {
+    db(value)              // 这里写出：01 aa 03 04
+}

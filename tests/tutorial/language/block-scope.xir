@@ -1,0 +1,8 @@
+const value = 1
+
+{
+    let value = 2   // shadows the outer `value` inside this block
+    db(value)       // 02
+}
+
+db(value)           // 01: the outer binding is visible again

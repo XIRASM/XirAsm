@@ -1,0 +1,2 @@
+db("a\\tb")    // 61 5c 74 62: the backslash is data
+db("a\tb")     // 61 09 62: the backslash is an escape

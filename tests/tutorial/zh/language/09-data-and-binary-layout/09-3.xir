@@ -1,0 +1,5 @@
+// packed 禁止在字段之间和结构体末尾自动插入填充。
+packed struct FileHeader {
+    tag: u8
+    size: u32
+}

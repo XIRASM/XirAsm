@@ -1,0 +1,5 @@
+// 两个捕获都叫 value：模式本身写错了，不是输入不匹配。
+const invalid: map = match.tokens(
+    "value:name value:int",
+    "left 42"
+)

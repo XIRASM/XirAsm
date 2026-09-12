@@ -1,0 +1,28 @@
+// 导入格式接口，并选择 64 位 x86 指令编码。
+import("format/format.inc")
+x86.use64()
+
+// 声明 ELF64 可执行映像及其唯一的可装载代码段。
+let image: map = format_elf64(
+    format_elf_exec,
+    list.of(
+        format_segment(
+            ".text",
+            format_load | format_readable | format_executable
+        )
+    )
+)
+format_begin(image)
+
+// 在声明的 .text 段中写入程序入口代码。
+format_segment_begin(image, ".text")
+start:
+    // 调用 Linux 退出系统调用，并把退出状态设为零。
+    mov eax, 60
+    xor edi, edi
+    syscall
+format_segment_end(image, ".text")
+
+// 绑定入口标号，随后完成文件头和表项。
+format_entry_mut(image, start)
+format_finish(image)

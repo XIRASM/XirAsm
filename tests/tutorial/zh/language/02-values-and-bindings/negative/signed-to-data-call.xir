@@ -1,0 +1,3 @@
+const offset: i32 = -1
+
+dd(offset)

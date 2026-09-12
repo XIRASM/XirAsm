@@ -1,0 +1,6 @@
+// SPIR-V 按模块写：这里是模块头部和类型声明，不是逐条机器指令。
+spv.use()
+
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+%1 = OpTypeVoid

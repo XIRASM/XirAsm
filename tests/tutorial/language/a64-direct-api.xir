@@ -1,0 +1,2 @@
+import("arm/a64.inc")
+a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))   // A64 words, whatever the native target

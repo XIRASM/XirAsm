@@ -1,0 +1,9 @@
+emit.u8(0)
+
+defer {
+    store.u8(0, 1)                // 先把第 0 字节改成 1
+}
+
+defer {
+    store.u8(0, load.u8(0) + 1)   // 读到的是上一个 defer 写下的 1
+}

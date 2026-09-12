@@ -1,0 +1,11 @@
+// 选择 64 位 x86 指令编码。
+x86.use64()
+
+// 两个 64 位寄存器槽位组成连续的保存区。
+packed struct SaveArea {
+    rax: u64
+    rcx: u64
+}
+
+// 根据结构体大小调整栈指针，避免硬编码保存区字节数。
+sub rsp, sizeof(SaveArea)

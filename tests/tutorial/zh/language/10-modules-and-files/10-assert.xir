@@ -1,0 +1,3 @@
+// 确认文件存在，再把它的全部字节写入输出。
+assert(fs.exists("payload.bin"))
+emit.bytes(fs.read_bytes("payload.bin"))

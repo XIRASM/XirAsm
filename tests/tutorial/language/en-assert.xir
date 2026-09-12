@@ -1,0 +1,2 @@
+assert(fs.exists("payload.bin"))
+emit.bytes(fs.read_bytes("payload.bin"))

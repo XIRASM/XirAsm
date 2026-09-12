@@ -1,0 +1,23 @@
+import("format/format.inc")
+
+// macOS 14 作为最低版本和 SDK 版本。
+const version: u64 = macho_exe_macos_version(14, 0, 0)
+
+// 可执行文件：首段必须是 __TEXT，且必须含一个代码节。
+let image: map = format_macho64_exe(
+    format_macho64_target_x86_64(version, version),
+    list.of(format_macho64_segment(
+        "__TEXT",
+        format_load | format_readable | format_executable,
+        list.of(format_section("__text", format_code | format_readable | format_executable))
+    ))
+)
+
+format_begin(image)
+format_section_begin(image, "__text")
+entry:
+    // 机器码由你给出：xor eax, eax; ret 的 x86-64 编码。
+    db(0x31, 0xc0, 0xc3)
+format_section_end(image, "__text")
+format_entry_mut(image, entry)
+format_finish(image)

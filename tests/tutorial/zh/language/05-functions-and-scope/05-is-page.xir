@@ -1,0 +1,11 @@
+// 返回类型可以是 bool，也可以是 bytes 这类非整数值。
+fn is_page(value: u64) -> bool {
+    return value == 0x1000
+}
+
+fn signature() -> bytes {
+    return b"XR"
+}
+
+assert(is_page(0x1000))
+db(signature())         // 这里写出：58 52

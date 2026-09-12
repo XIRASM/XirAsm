@@ -1,0 +1,46 @@
+import("format/format.inc")
+
+// AArch64 目标文件：指令字当数据写，重定位写清楚每一段占位。
+let object: map = format_elfobj64_aarch64(
+    list.of(
+        format_section(".text", format_code | format_readable | format_executable),
+        format_section(".data", format_data | format_readable | format_writeable)
+    )
+)
+format_begin(object)
+
+format_section_begin(object, ".text")
+text_start:
+    // bl printf：低 26 位留给链接器填。
+    bl_site:
+        emit.u32(0x94000000)
+    // adrp x0, answer：页基址部分。
+    page_site:
+        emit.u32(0x90000000)
+    // add x0, x0, :lo12:answer：低 12 位部分。
+    lo12_site:
+        emit.u32(0x91000000)
+format_section_end(object, ".text")
+
+format_section_begin(object, ".data")
+data_start:
+    // .xword printf：8 字节绝对地址，链接器整体回填。
+    ptr_slot:
+        emit.u64(0)
+format_section_end(object, ".data")
+
+const symbols: list = list.of(
+    format_elfobj_public("_start", ".text", text_start, bl_site, 16, elfobj_stt_func),
+    format_elfobj_public("answer", ".data", data_start, ptr_slot, 8, elfobj_stt_object),
+    format_elfobj_extern("printf", elfobj_stt_func)
+)
+
+// 每条重定位描述链接器要修正的占位字；AArch64 用 RELA，addend 显式给出。
+const relocs: list = list.of(
+    format_elfobj_reloc(".text", text_start, bl_site, "printf", elf_r_aarch64_call26, 0),
+    format_elfobj_reloc(".text", text_start, page_site, "answer", elf_r_aarch64_adr_prel_pg_hi21, 0),
+    format_elfobj_reloc(".text", text_start, lo12_site, "answer", elf_r_aarch64_add_abs_lo12_nc, 0),
+    format_elfobj_reloc(".data", data_start, ptr_slot, "printf", elf_r_aarch64_abs64, 0)
+)
+format_elfobj_tables_mut(object, symbols, relocs)
+format_finish(object)

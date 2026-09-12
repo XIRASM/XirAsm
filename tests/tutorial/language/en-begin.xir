@@ -1,0 +1,12 @@
+region.begin("header", 0x1000, 0)
+
+header:
+emit.bytes(b"HD")
+
+region.begin("payload", 0x2000, 0x10)
+
+payload:
+emit.bytes(b"DATA")
+
+assert(label_addr("header") == 0x1000)
+assert(label_addr("payload") == 0x2000)

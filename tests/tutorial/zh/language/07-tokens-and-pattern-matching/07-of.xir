@@ -1,0 +1,9 @@
+const source: string = "count + 0x2a"
+const source_tokens: list = tokens.of(source)
+
+assert(len(source_tokens) == 3)
+assert(list.get(source_tokens, 0) == "count")
+assert(list.get(source_tokens, 1) == "+")
+assert(list.get(source_tokens, 2) == "0x2a")
+
+emit.bytes(tokens.join(source_tokens))   // 规范化空格，不是原样输出

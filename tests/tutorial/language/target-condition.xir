@@ -1,0 +1,9 @@
+x86.use32()
+
+if target.isa == .x86_64 {
+    db(0x10)          // the family is still x86
+}
+
+if target.bits == 32 {
+    db(0x00)          // but the width is now 32
+}

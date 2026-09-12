@@ -1,0 +1,5 @@
+emit.u8(0xaa)
+
+assert(file_cursor_real() == 1)          // 一个字节真的进了文件
+assert(file_cursor_potential() == 1)
+assert(tail_reserve_size() == 0)         // 没有待落的预留

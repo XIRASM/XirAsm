@@ -1,0 +1,8 @@
+emit.bytes(b"AB")
+
+// 不给 origin：临时区域从当前地址接着算。
+virtual.begin()
+emit.bytes(b"CT")
+virtual.end()
+
+emit.bytes(b"D")       // 这里写出：41 42 44

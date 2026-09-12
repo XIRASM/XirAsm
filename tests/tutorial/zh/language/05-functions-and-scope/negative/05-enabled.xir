@@ -1,0 +1,6 @@
+// 声明说要 bool，这里返回的是整数字面量 1。
+fn enabled() -> bool {
+    return 1
+}
+
+const result = enabled()

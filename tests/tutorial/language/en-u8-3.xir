@@ -1,0 +1,7 @@
+emit.u8(0xaa)
+reserve(3)
+
+assert(here() == 4)
+assert(file_cursor_real() == 1)
+assert(file_cursor_potential() == 4)
+assert(tail_reserve_size() == 3)

@@ -1,0 +1,2 @@
+import("arm/a64.inc")
+a64_ldr(list.of(a64_reg("x0"), a64_mem("sp", 16)))   // 无论原生 target 是什么，写出的都是 A64 编码

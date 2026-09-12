@@ -1,0 +1,6 @@
+x86.use64()
+origin(0x1000)
+
+target:
+    mov rax, target + 4
+    ret
